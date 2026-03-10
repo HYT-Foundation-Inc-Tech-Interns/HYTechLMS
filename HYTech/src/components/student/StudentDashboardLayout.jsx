@@ -37,7 +37,7 @@ const StudentDashboardLayout = () => {
   const pageInfo = getPageInfo();
 
   return (
-    <div className="h-screen w-screen max-w-[1920px] max-h-[1080px] mx-auto bg-gray-50 flex flex-col overflow-hidden">
+    <div className="h-screen w-screen max-w-[1920px] max-h-[1080px] mx-auto bg-gray-50 flex flex-col transition-colors duration-200">
       {/* Fixed Navbar - Full Width */}
       <StudentNavbar title={pageInfo.title} subtitle={pageInfo.subtitle} />
       {/* Main Area - Sidebar + Content */}
@@ -45,7 +45,7 @@ const StudentDashboardLayout = () => {
         {/* Fixed Sidebar */}
         <StudentSidebar />
         {/* Scrollable Content */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50">
           <div className="animate-fade-in h-full">
             <Outlet />
           </div>

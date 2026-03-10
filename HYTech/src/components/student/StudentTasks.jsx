@@ -83,7 +83,7 @@ const StudentTasks = () => {
                 {missingOutputs.map((output) => (
                   <div 
                     key={output.id}
-                    className="flex items-center gap-3 p-3 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
+                    className="flex items-center gap-3 p-3 hover:bg-red-50:bg-red-900/20 rounded-lg cursor-pointer transition-colors"
                   >
                     <div className="p-2 bg-red-100 rounded-lg">
                       <FileText className="w-4 h-4 text-red-600" />
@@ -134,7 +134,7 @@ const StudentTasks = () => {
                 return (
                   <div 
                     key={task.id}
-                    className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-lg hover:border-gray-200 transition-all cursor-pointer"
+                    className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-lg hover:border-gray-200:border-gray-600 transition-all cursor-pointer"
                   >
                     <div className="flex items-start gap-4">
                       <div className={`p-2 rounded-lg ${task.iconBg}`}>
@@ -166,7 +166,7 @@ const StudentTasks = () => {
                 return (
                   <div 
                     key={task.id}
-                    className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-lg hover:border-gray-200 transition-all cursor-pointer"
+                    className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-lg hover:border-gray-200:border-gray-600 transition-all cursor-pointer"
                   >
                     <div className="flex items-start gap-4">
                       <div className={`p-2 rounded-lg ${task.iconBg}`}>
@@ -199,7 +199,7 @@ const StudentTasks = () => {
               return (
                 <div 
                   key={task.id}
-                  className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-lg hover:border-gray-200 transition-all cursor-pointer"
+                  className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-lg hover:border-gray-200:border-gray-600 transition-all cursor-pointer"
                 >
                   <div className="flex items-start gap-4">
                     <div className={`p-2 rounded-lg ${task.iconBg}`}>

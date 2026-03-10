@@ -464,7 +464,7 @@ const Course = () => {
               return (
                 <div 
                   key={item.id}
-                  className="p-5 hover:bg-gray-50/80 cursor-pointer transition-all group"
+                  className="p-5 hover:bg-gray-50/80:bg-gray-700/50 cursor-pointer transition-all group"
                 >
                   <div className="flex gap-4">
                     {/* Timeline Indicator */}
@@ -493,7 +493,7 @@ const Course = () => {
                             {item.time}
                           </p>
                         </div>
-                        <button className="p-2 opacity-0 group-hover:opacity-100 hover:bg-gray-100 rounded-lg transition-all">
+                        <button className="p-2 opacity-0 group-hover:opacity-100 hover:bg-gray-100:bg-gray-600 rounded-lg transition-all">
                           <MoreVertical className="w-4 h-4 text-gray-400" />
                         </button>
                       </div>

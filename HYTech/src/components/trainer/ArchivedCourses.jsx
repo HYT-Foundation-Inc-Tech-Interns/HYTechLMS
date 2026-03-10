@@ -78,7 +78,7 @@ const ArchivedCourses = () => {
             placeholder="Search archived courses..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 pr-4 py-2.5 w-64 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300"
+            className="pl-10 pr-4 py-2.5 w-64 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300:border-gray-500"
           />
         </div>
       </div>
@@ -89,7 +89,7 @@ const ArchivedCourses = () => {
           {filteredCourses.map(course => (
             <div 
               key={course.id} 
-              className="p-5 hover:bg-gray-50 transition-all duration-200 cursor-pointer group"
+              className="p-5 hover:bg-gray-50:bg-gray-700 transition-all duration-200 cursor-pointer group"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -118,14 +118,14 @@ const ArchivedCourses = () => {
                 <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button 
                     onClick={(e) => { e.stopPropagation(); setSelectedCourse(course); setShowRestoreModal(true); }}
-                    className="p-2.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200 hover:scale-105" 
+                    className="p-2.5 text-blue-600 hover:bg-blue-50:bg-blue-900/30 rounded-lg transition-all duration-200 hover:scale-105" 
                     title="Restore"
                   >
                     <RefreshCcw className="w-4 h-4" />
                   </button>
                   <button 
                     onClick={(e) => { e.stopPropagation(); setSelectedCourse(course); setShowDeleteModal(true); }}
-                    className="p-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 hover:scale-105" 
+                    className="p-2.5 text-red-600 hover:bg-red-50:bg-red-900/30 rounded-lg transition-all duration-200 hover:scale-105" 
                     title="Delete Permanently"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -168,7 +168,7 @@ const ArchivedCourses = () => {
             <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
               <button 
                 onClick={() => { setShowRestoreModal(false); setSelectedCourse(null); }}
-                className="px-5 py-2.5 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition-colors"
+                className="px-5 py-2.5 text-gray-700 hover:bg-gray-100:bg-gray-700 rounded-xl font-medium transition-colors"
               >
                 Cancel
               </button>
@@ -200,7 +200,7 @@ const ArchivedCourses = () => {
             <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
               <button 
                 onClick={() => { setShowDeleteModal(false); setSelectedCourse(null); }}
-                className="px-5 py-2.5 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition-colors"
+                className="px-5 py-2.5 text-gray-700 hover:bg-gray-100:bg-gray-700 rounded-xl font-medium transition-colors"
               >
                 Cancel
               </button>

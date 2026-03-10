@@ -112,7 +112,7 @@ const UserManagement = () => {
       <div className="card p-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3 w-full sm:w-auto">
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50:bg-gray-700 transition-colors">
               <Filter className="w-5 h-5 text-gray-500" />
             </button>
             <div className="relative flex-1 sm:w-80">
@@ -122,7 +122,7 @@ const UserManagement = () => {
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white"
               />
             </div>
           </div>
@@ -156,7 +156,7 @@ const UserManagement = () => {
               {paginatedUsers.map((user, index) => (
                 <tr 
                   key={user.id}
-                  className="hover:bg-gray-50 transition-colors animate-fade-in"
+                  className="hover:bg-gray-50:bg-gray-700 transition-colors animate-fade-in"
                   style={{ animationDelay: `${index * 0.05}s` }}
                 >
                   <td className="table-cell">

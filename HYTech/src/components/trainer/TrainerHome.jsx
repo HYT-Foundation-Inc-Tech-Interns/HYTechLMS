@@ -107,14 +107,14 @@ const TrainerHome = () => {
         {/* Actions */}
         <div className="flex items-center justify-end gap-2">
           <button 
-            className="p-2 hover:bg-blue-50 rounded-lg transition-all duration-200 text-gray-500 hover:text-blue-600 hover:scale-110"
+            className="p-2 hover:bg-blue-50:bg-gray-700 rounded-lg transition-all duration-200 text-gray-500 hover:text-blue-600:text-blue-400 hover:scale-110"
             onClick={(e) => handleViewProgress(e, course)}
             title="View Progress"
           >
             <TrendingUp className="w-5 h-5" />
           </button>
           <button 
-            className="p-2 hover:bg-blue-50 rounded-lg transition-all duration-200 text-gray-500 hover:text-blue-600 hover:scale-110"
+            className="p-2 hover:bg-blue-50:bg-gray-700 rounded-lg transition-all duration-200 text-gray-500 hover:text-blue-600:text-blue-400 hover:scale-110"
             onClick={(e) => handleCopyCode(e, course)}
             title="Copy Class Code"
           >
@@ -122,7 +122,7 @@ const TrainerHome = () => {
           </button>
           <div className="relative" ref={activeMenu === course.id ? menuRef : null}>
             <button 
-              className="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200 text-gray-500 hover:text-gray-700 hover:scale-110"
+              className="p-2 hover:bg-gray-100:bg-gray-700 rounded-lg transition-all duration-200 text-gray-500 hover:text-gray-700:text-gray-200 hover:scale-110"
               onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === course.id ? null : course.id); }}
             >
               <MoreVertical className="w-5 h-5" />
@@ -131,14 +131,14 @@ const TrainerHome = () => {
               <div className="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-20 animate-slide-down">
                 <button
                   onClick={(e) => { e.stopPropagation(); showToast('Edit feature coming soon!'); setActiveMenu(null); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50:bg-gray-700 transition-colors"
                 >
                   <Edit2 className="w-4 h-4" />
                   <span>Edit Course</span>
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); setSelectedCourse(course); setShowArchiveModal(true); setActiveMenu(null); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50:bg-gray-700 transition-colors"
                 >
                   <Archive className="w-4 h-4" />
                   <span>Archive</span>

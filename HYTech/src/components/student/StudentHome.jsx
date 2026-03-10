@@ -142,7 +142,7 @@ const StudentHome = () => {
                     className={`w-full text-left px-4 py-3 text-sm transition-colors ${
                       selectedSector === sector 
                         ? 'bg-blue-600 text-white' 
-                        : 'text-gray-700 hover:bg-gray-50'
+                        : 'text-gray-700 hover:bg-gray-50:bg-gray-700'
                     }`}
                   >
                     {sector}

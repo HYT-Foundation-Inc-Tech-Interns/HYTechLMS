@@ -116,7 +116,7 @@ const StudentCertificates = () => {
                   </button>
                   <button 
                     onClick={() => handleView(cert)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-50:bg-gray-700 transition-colors"
                   >
                     View
                   </button>

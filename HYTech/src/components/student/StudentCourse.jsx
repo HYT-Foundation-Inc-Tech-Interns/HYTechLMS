@@ -164,7 +164,7 @@ See you on Friday!`,
               {announcements.map((announcement) => (
                 <div 
                   key={announcement.id}
-                  className="p-5 hover:bg-gray-50 transition-colors"
+                  className="p-5 hover:bg-gray-50:bg-gray-700 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3 flex-1">
@@ -188,7 +188,7 @@ See you on Friday!`,
                       <p className="text-sm text-gray-400 mb-2">Posted {announcement.time}</p>
                       <button 
                         onClick={() => openAnnouncement(announcement)}
-                        className="px-4 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                        className="px-4 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50:bg-gray-700 transition-colors"
                       >
                         View
                       </button>
@@ -210,7 +210,7 @@ See you on Friday!`,
               {courseMaterials.map((material) => (
                 <div 
                   key={material.id}
-                  className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                  className="p-4 flex items-center justify-between hover:bg-gray-50:bg-gray-700 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-gray-100 rounded-lg">
@@ -243,7 +243,7 @@ See you on Friday!`,
               {quizzes.map((quiz) => (
                 <div 
                   key={quiz.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+                  className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100:bg-gray-600 transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-orange-100 rounded-lg">
@@ -301,7 +301,7 @@ See you on Friday!`,
                   <span className="text-sm text-gray-400">Posted {selectedAnnouncement.time}</span>
                   <button 
                     onClick={() => setShowAnnouncementModal(false)}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="p-2 hover:bg-gray-100:bg-gray-700 rounded-lg transition-colors"
                   >
                     <X className="w-5 h-5 text-gray-500" />
                   </button>

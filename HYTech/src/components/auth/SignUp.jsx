@@ -34,20 +34,20 @@ const SignUp = () => {
       <div 
         className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
         style={{
-          backgroundImage: 'url(/images/landing_page.png)',
+          backgroundImage: 'url(/images/sign_page.jpg)',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
       >
         {/* Overlay */}
-        <div className="absolute inset-0 bg-navy-500/70" />
+        <div className="absolute inset-0 bg-navy-500/60" />
         
         {/* Content */}
         <div className="relative z-10 flex flex-col items-center justify-center w-full p-12 text-white text-center">
-          {/* Logo */}
-          <div className="mb-8 animate-fade-in">
-            <div className="w-32 h-32 mx-auto mb-4 relative">
-              <div className="absolute inset-0 bg-white/10 rounded-full blur-xl" />
+          {/* Logo - Made Much Bigger */}
+          <div className="mb-10 animate-fade-in">
+            <div className="w-56 h-56 mx-auto mb-6 relative">
+              <div className="absolute inset-0 bg-white/10 rounded-full blur-2xl scale-110" />
               <img 
                 src="/images/hyt_logo.png" 
                 alt="HYT Global Institute Logo" 
@@ -56,15 +56,6 @@ const SignUp = () => {
                   e.target.style.display = 'none';
                 }}
               />
-            </div>
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                <span className="text-yellow-400 text-sm">🎓</span>
-              </div>
-              <span className="text-2xl font-bold tracking-wider">HYT</span>
-            </div>
-            <div className="bg-yellow-500/90 px-4 py-1 rounded-full inline-block">
-              <span className="text-xs font-semibold tracking-wider text-navy-900">GLOBAL INSTITUTE</span>
             </div>
           </div>
 

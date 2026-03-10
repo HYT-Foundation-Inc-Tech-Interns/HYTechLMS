@@ -31,21 +31,18 @@ const StudentNavbar = ({ title, subtitle }) => {
   };
 
   return (
-    <header className="text-white h-16 px-6 flex items-center justify-between shadow-lg relative z-20 flex-shrink-0" style={{ backgroundColor: '#0B005C' }}>
+    <header className="text-white h-16 px-6 flex items-center justify-between shadow-lg relative z-50 flex-shrink-0" style={{ backgroundColor: '#0B005C' }}>
       {/* Left Side - Breadcrumb */}
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center">
-          <img 
-            src="/images/hyt_logo.png" 
-            alt="HYT Logo" 
-            className="w-6 h-6 object-contain"
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.parentElement.innerHTML = '<span class="text-white font-bold text-xs">HYT</span>';
-            }}
-          />
-        </div>
-        <span className="font-semibold">HYTech</span>
+        <img 
+          src="/images/hyt_logo.png" 
+          alt="HYT Logo" 
+          className="w-10 h-10 object-contain"
+          onError={(e) => {
+            e.target.style.display = 'none';
+          }}
+        />
+        <span className="font-semibold text-lg">HYTech</span>
         {title && (
           <>
             <ChevronRight className="w-4 h-4 text-white/50" />
@@ -76,7 +73,7 @@ const StudentNavbar = ({ title, subtitle }) => {
           </button>
 
           {showDropdown && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden animate-slide-down">
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] animate-slide-down">
               <div className="p-4 border-b border-gray-100">
                 <p className="font-semibold text-gray-900">Gerald Andrei Lat</p>
                 <p className="text-sm text-gray-500">gerald.lat@email.com</p>
@@ -84,22 +81,22 @@ const StudentNavbar = ({ title, subtitle }) => {
               <div className="py-2">
                 <button 
                   onClick={() => { navigate('/student/settings'); setShowDropdown(false); }}
-                  className="w-full px-4 py-2.5 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                  className="w-full px-4 py-2.5 text-left text-gray-700 hover:bg-gray-50:bg-gray-700 flex items-center gap-3 transition-colors"
                 >
                   <User className="w-4 h-4" />
                   View Profile
                 </button>
                 <button 
                   onClick={() => { navigate('/student/settings'); setShowDropdown(false); }}
-                  className="w-full px-4 py-2.5 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                  className="w-full px-4 py-2.5 text-left text-gray-700 hover:bg-gray-50:bg-gray-700 flex items-center gap-3 transition-colors"
                 >
                   <Settings className="w-4 h-4" />
                   Settings
                 </button>
-                <hr className="my-2" />
+                <hr className="my-2 border-gray-200" />
                 <button 
                   onClick={handleLogout}
-                  className="w-full px-4 py-2.5 text-left text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
+                  className="w-full px-4 py-2.5 text-left text-red-600 hover:bg-red-50:bg-red-900/20 flex items-center gap-3 transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
                   Sign Out

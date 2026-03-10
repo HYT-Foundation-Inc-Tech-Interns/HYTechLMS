@@ -73,7 +73,7 @@ const SystemLogs = () => {
       <div className="card p-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3 w-full sm:w-auto">
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50:bg-gray-700 transition-colors">
               <Filter className="w-5 h-5 text-gray-500" />
             </button>
             <div className="relative flex-1 sm:w-80">
@@ -101,7 +101,7 @@ const SystemLogs = () => {
                 <th className="table-header">
                   <button 
                     onClick={() => handleSort('name')}
-                    className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                    className="flex items-center gap-1 hover:text-gray-700:text-gray-300 transition-colors"
                   >
                     NAME
                     <ArrowUpDown className="w-3 h-3" />
@@ -113,7 +113,7 @@ const SystemLogs = () => {
                 <th className="table-header">
                   <button 
                     onClick={() => handleSort('status')}
-                    className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                    className="flex items-center gap-1 hover:text-gray-700:text-gray-300 transition-colors"
                   >
                     STATUS
                     <ArrowUpDown className="w-3 h-3" />
@@ -125,7 +125,7 @@ const SystemLogs = () => {
               {paginatedLogs.map((log, index) => (
                 <tr 
                   key={log.id}
-                  className="hover:bg-gray-50 transition-colors animate-fade-in"
+                  className="hover:bg-gray-50:bg-gray-700 transition-colors animate-fade-in"
                   style={{ animationDelay: `${index * 0.05}s` }}
                 >
                   <td className="table-cell">
@@ -183,7 +183,7 @@ const SystemLogs = () => {
               <button
                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
-                className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1 rounded hover:bg-gray-100:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-5 h-5 text-gray-500" />
               </button>
@@ -191,7 +191,7 @@ const SystemLogs = () => {
               <button
                 onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages}
-                className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1 rounded hover:bg-gray-100:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="w-5 h-5 text-gray-500" />
               </button>

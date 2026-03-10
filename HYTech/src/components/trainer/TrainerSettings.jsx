@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Bell, Shield, Palette, Moon, Globe, Save, Camera, Check } from 'lucide-react';
+import { User, Bell, Shield, Palette, Globe, Save, Camera, Check } from 'lucide-react';
 
 const TrainerSettings = () => {
   const [activeTab, setActiveTab] = useState('profile');
@@ -35,7 +35,7 @@ const TrainerSettings = () => {
           <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-2xl font-bold">
             AU
           </div>
-          <button className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+          <button className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50:bg-gray-600 transition-colors">
             <Camera className="w-4 h-4 text-gray-600" />
           </button>
         </div>
@@ -51,7 +51,7 @@ const TrainerSettings = () => {
           <input 
             type="text" 
             defaultValue="Admin"
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
         <div>
@@ -59,7 +59,7 @@ const TrainerSettings = () => {
           <input 
             type="text" 
             defaultValue="User"
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
         <div>
@@ -67,7 +67,7 @@ const TrainerSettings = () => {
           <input 
             type="email" 
             defaultValue="admin@hytglobal.com"
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300"
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 bg-white"
           />
         </div>
         <div>
@@ -75,7 +75,7 @@ const TrainerSettings = () => {
           <input 
             type="tel" 
             defaultValue="+63 912 345 6789"
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300"
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 bg-white"
           />
         </div>
       </div>
@@ -85,7 +85,7 @@ const TrainerSettings = () => {
         <textarea 
           rows={4}
           placeholder="Tell us about yourself..."
-          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none hover:border-gray-300"
+          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none hover:border-gray-300 bg-white"
         />
       </div>
     </div>
@@ -119,20 +119,6 @@ const TrainerSettings = () => {
   const AppearanceSettings = () => (
     <div className="space-y-6">
       <div className="space-y-4">
-        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-          <div className="flex items-center gap-4">
-            <Moon className="w-5 h-5 text-gray-600" />
-            <div>
-              <h4 className="font-medium text-gray-900">Dark Mode</h4>
-              <p className="text-sm text-gray-500">Use dark theme across the platform</p>
-            </div>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" className="sr-only peer" />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-          </label>
-        </div>
-
         <div className="p-4 bg-gray-50 rounded-xl">
           <div className="flex items-center gap-4 mb-4">
             <Globe className="w-5 h-5 text-gray-600" />
@@ -160,21 +146,21 @@ const TrainerSettings = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
             <input 
               type="password"
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
             <input 
               type="password"
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
             <input 
               type="password"
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
             />
           </div>
         </div>
@@ -220,7 +206,7 @@ const TrainerSettings = () => {
                   className={`flex items-center gap-2 px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
                     activeTab === tab.id
                       ? 'text-blue-600 border-blue-600 bg-blue-50/50'
-                      : 'text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50'
+                      : 'text-gray-500 border-transparent hover:text-gray-700:text-gray-300 hover:bg-gray-50:bg-gray-700'
                   }`}
                 >
                   <Icon className="w-4 h-4" />

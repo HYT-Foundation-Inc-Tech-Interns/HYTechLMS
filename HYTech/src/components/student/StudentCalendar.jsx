@@ -132,7 +132,7 @@ const StudentCalendar = () => {
             <div className="flex items-center gap-2">
               <button 
                 onClick={goToPrevMonth}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100:bg-gray-700 rounded-lg transition-colors"
               >
                 <ChevronLeft className="w-5 h-5 text-gray-600" />
               </button>
@@ -144,7 +144,7 @@ const StudentCalendar = () => {
               </button>
               <button 
                 onClick={goToNextMonth}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100:bg-gray-700 rounded-lg transition-colors"
               >
                 <ChevronRight className="w-5 h-5 text-gray-600" />
               </button>
@@ -176,7 +176,7 @@ const StudentCalendar = () => {
                 <div 
                   key={day}
                   onClick={() => setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day))}
-                  className={`h-24 p-2 border border-gray-100 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${
+                  className={`h-24 p-2 border border-gray-100 rounded-lg cursor-pointer transition-all hover:bg-gray-50:bg-gray-700 ${
                     isToday(day) ? 'bg-blue-50 border-blue-200' : ''
                   } ${
                     selectedDate.getDate() === day && 

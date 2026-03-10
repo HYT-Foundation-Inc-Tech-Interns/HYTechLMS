@@ -158,7 +158,7 @@ const Sectors = () => {
 
                 {/* Actions */}
                 <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                  <button className="flex items-center gap-2 text-gray-500 hover:text-blue-600 transition-colors text-sm font-medium">
+                  <button className="flex items-center gap-2 text-gray-500 hover:text-blue-600:text-blue-400 transition-colors text-sm font-medium">
                     <Eye className="w-4 h-4" />
                     <span>View Courses</span>
                   </button>

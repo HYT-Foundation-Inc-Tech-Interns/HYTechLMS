@@ -127,7 +127,7 @@ const StudentArchivedCourses = () => {
                 </button>
                 <button 
                   onClick={() => handleDelete(course)}
-                  className="p-2.5 border border-red-200 text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+                  className="p-2.5 border border-red-200 text-red-500 rounded-lg hover:bg-red-50:bg-red-900/20 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>

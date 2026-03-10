@@ -69,7 +69,7 @@ const TrainerSectors = () => {
             className="pl-10 pr-4 py-2.5 w-full sm:w-64 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
           />
         </div>
-        <button className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors">
+        <button className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50:bg-gray-700 transition-colors">
           <Filter className="w-4 h-4" />
           Filter
         </button>
@@ -83,7 +83,7 @@ const TrainerSectors = () => {
             <div
               key={sector.id}
               onClick={() => navigate(`/dashboard/sectors/${sector.id}`)}
-              className="flex items-center justify-between p-5 hover:bg-blue-50/50 transition-all duration-200 cursor-pointer group"
+              className="flex items-center justify-between p-5 hover:bg-blue-50/50:bg-gray-700/50 transition-all duration-200 cursor-pointer group"
             >
               <div className="flex items-center gap-4">
                 <div className={`p-3 rounded-xl ${sector.color} group-hover:scale-110 transition-transform duration-200`}>
@@ -94,7 +94,7 @@ const TrainerSectors = () => {
                   <p className="text-sm text-gray-500 mt-0.5">{sector.trainings} Trainings</p>
                 </div>
               </div>
-              <button className="p-2 border border-gray-200 rounded-full text-blue-600 hover:bg-blue-50 transition-all duration-200 group-hover:border-blue-300 group-hover:scale-110">
+              <button className="p-2 border border-gray-200 rounded-full text-blue-600 hover:bg-blue-50:bg-blue-900/30 transition-all duration-200 group-hover:border-blue-300 group-hover:scale-110">
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </button>
             </div>

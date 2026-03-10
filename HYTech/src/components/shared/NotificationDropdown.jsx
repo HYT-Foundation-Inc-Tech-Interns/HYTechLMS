@@ -62,7 +62,7 @@ const NotificationDropdown = ({ notifications = [] }) => {
               </div>
               <button 
                 onClick={() => setShowNotifications(false)}
-                className="p-1 hover:bg-gray-100 rounded-lg transition-colors md:hidden"
+                className="p-1 hover:bg-gray-100:bg-gray-700 rounded-lg transition-colors md:hidden"
               >
                 <X className="w-5 h-5 text-gray-500" />
               </button>
@@ -74,7 +74,7 @@ const NotificationDropdown = ({ notifications = [] }) => {
                 notificationList.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer group ${
+                    className={`p-4 border-b border-gray-50 hover:bg-gray-50:bg-gray-700 transition-colors cursor-pointer group ${
                       notification.unread ? 'bg-blue-50/50' : ''
                     }`}
                   >
@@ -110,10 +110,10 @@ const NotificationDropdown = ({ notifications = [] }) => {
             {/* Footer */}
             {notificationList.length > 0 && (
               <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                <button className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors">
+                <button className="text-sm text-gray-500 hover:text-gray-700:text-gray-200 font-medium transition-colors">
                   Mark all as read
                 </button>
-                <button className="text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors">
+                <button className="text-sm text-orange-600 hover:text-orange-700:text-orange-300 font-medium transition-colors">
                   View all
                 </button>
               </div>

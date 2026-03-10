@@ -8,7 +8,8 @@ import {
   MapPin,
   Shield,
   ChevronRight,
-  Check
+  Check,
+  Palette
 } from 'lucide-react';
 
 const StudentSettings = () => {
@@ -108,7 +109,7 @@ const StudentSettings = () => {
                   type="text"
                   value={profileData.firstName}
                   onChange={(e) => setProfileData(prev => ({ ...prev, firstName: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all bg-white"
                 />
               </div>
               <div>
@@ -117,7 +118,7 @@ const StudentSettings = () => {
                   type="text"
                   value={profileData.lastName}
                   onChange={(e) => setProfileData(prev => ({ ...prev, lastName: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all bg-white"
                 />
               </div>
               <div className="md:col-span-2">
@@ -128,7 +129,7 @@ const StudentSettings = () => {
                     type="email"
                     value={profileData.email}
                     onChange={(e) => setProfileData(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all bg-white"
                   />
                 </div>
               </div>
@@ -140,7 +141,7 @@ const StudentSettings = () => {
                     type="tel"
                     value={profileData.phone}
                     onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all bg-white"
                   />
                 </div>
               </div>
@@ -152,7 +153,7 @@ const StudentSettings = () => {
                     type="text"
                     value={profileData.address}
                     onChange={(e) => setProfileData(prev => ({ ...prev, address: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all bg-white"
                   />
                 </div>
               </div>
@@ -222,7 +223,7 @@ const StudentSettings = () => {
             <h3 className="font-bold text-gray-900 mb-4">Quick Links</h3>
             
             <div className="space-y-2">
-              <button className="w-full flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl transition-colors text-left">
+              <button className="w-full flex items-center justify-between p-3 hover:bg-gray-50:bg-gray-700 rounded-xl transition-colors text-left">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-blue-100 rounded-lg">
                     <Shield className="w-4 h-4 text-blue-600" />
@@ -232,7 +233,7 @@ const StudentSettings = () => {
                 <ChevronRight className="w-4 h-4 text-gray-400" />
               </button>
               
-              <button className="w-full flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl transition-colors text-left">
+              <button className="w-full flex items-center justify-between p-3 hover:bg-gray-50:bg-gray-700 rounded-xl transition-colors text-left">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-purple-100 rounded-lg">
                     <User className="w-4 h-4 text-purple-600" />

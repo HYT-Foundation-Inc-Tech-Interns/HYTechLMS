@@ -80,7 +80,7 @@ const Tasks = () => {
             className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 ${
               filter === f.id
                 ? 'bg-blue-600 text-white shadow-md'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200:bg-gray-600'
             }`}
           >
             {f.label}
@@ -95,7 +95,7 @@ const Tasks = () => {
             <div 
               key={task.id}
               onClick={() => { setSelectedTask(task); setShowTaskModal(true); }}
-              className="p-5 hover:bg-blue-50/50 transition-all duration-200 cursor-pointer group"
+              className="p-5 hover:bg-blue-50/50:bg-gray-700/50 transition-all duration-200 cursor-pointer group"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
@@ -118,7 +118,7 @@ const Tasks = () => {
                     </span>
                   </div>
                 </div>
-                <button className="p-2 opacity-0 group-hover:opacity-100 hover:bg-blue-100 rounded-lg transition-all">
+                <button className="p-2 opacity-0 group-hover:opacity-100 hover:bg-blue-100:bg-blue-900/30 rounded-lg transition-all">
                   <Eye className="w-4 h-4 text-blue-600" />
                 </button>
               </div>
@@ -148,7 +148,7 @@ const Tasks = () => {
               <h2 className="text-xl font-bold text-gray-900">Task Details</h2>
               <button 
                 onClick={() => { setShowTaskModal(false); setSelectedTask(null); }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100:bg-gray-700 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-gray-500" />
               </button>
@@ -194,7 +194,7 @@ const Tasks = () => {
             <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
               <button 
                 onClick={() => { setShowTaskModal(false); setSelectedTask(null); }}
-                className="px-5 py-2.5 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition-colors"
+                className="px-5 py-2.5 text-gray-700 hover:bg-gray-100:bg-gray-700 rounded-xl font-medium transition-colors"
               >
                 Close
               </button>

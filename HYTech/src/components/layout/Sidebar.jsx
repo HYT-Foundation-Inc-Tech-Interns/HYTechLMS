@@ -105,11 +105,11 @@ const Sidebar = () => {
               <button
                 onClick={() => setIsCoursesExpanded(!isCoursesExpanded)}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-300
-                  ${isCoursePath || isCoursesExpanded
+                  ${isCoursePath
                     ? 'text-white shadow-lg'
                     : 'text-gray-600 hover:bg-blue-50 hover:text-blue-600'
                   }`}
-                style={isCoursePath || isCoursesExpanded ? { backgroundColor: '#0D4291' } : {}}
+                style={isCoursePath ? { backgroundColor: '#0D4291' } : {}}
               >
                 <div className="flex items-center gap-3">
                   <BookOpen className="w-5 h-5" />
