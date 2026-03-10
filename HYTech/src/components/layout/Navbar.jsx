@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, ChevronRight, LogOut, User, Settings } from 'lucide-react';
+import { ChevronRight, LogOut, User, Settings } from 'lucide-react';
+import NotificationDropdown from '../shared/NotificationDropdown';
 
 const Navbar = ({ title, subtitle }) => {
   const [showDropdown, setShowDropdown] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
   const dropdownRef = useRef(null);
-  const notificationRef = useRef(null);
   const navigate = useNavigate();
 
   // Close dropdowns when clicking outside
@@ -14,9 +13,6 @@ const Navbar = ({ title, subtitle }) => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowDropdown(false);
-      }
-      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
-        setShowNotifications(false);
       }
     };
 
@@ -66,41 +62,7 @@ const Navbar = ({ title, subtitle }) => {
       {/* Right Side - Actions */}
       <div className="flex items-center gap-4">
         {/* Notifications */}
-        <div className="relative" ref={notificationRef}>
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 hover:bg-white/10 rounded-lg transition-colors"
-          >
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-          </button>
-
-          {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden animate-slide-down">
-              <div className="p-4 border-b border-gray-100">
-                <h3 className="font-semibold text-gray-800">Notifications</h3>
-              </div>
-              <div className="max-h-80 overflow-y-auto">
-                {notifications.map((notification) => (
-                  <div
-                    key={notification.id}
-                    className={`p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer ${
-                      notification.unread ? 'bg-blue-50/50' : ''
-                    }`}
-                  >
-                    <p className="text-sm text-gray-700">{notification.text}</p>
-                    <p className="text-xs text-gray-400 mt-1">{notification.time}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="p-3 text-center border-t border-gray-100">
-                <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-                  View all notifications
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        <NotificationDropdown notifications={notifications} />
 
         {/* Profile Dropdown */}
         <div className="relative" ref={dropdownRef}>

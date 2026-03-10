@@ -324,7 +324,7 @@ const Course = () => {
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-br from-orange-400 to-pink-600 rounded-full blur-3xl" />
         </div>
 
-        <div className="relative z-10">
+        <div className="relative">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
             {/* Course Info */}
             <div className="flex-1">
@@ -464,7 +464,6 @@ const Course = () => {
               return (
                 <div 
                   key={item.id}
-                  onClick={() => showToast(`Viewing "${item.title}"`)}
                   className="p-5 hover:bg-gray-50/80 cursor-pointer transition-all group"
                 >
                   <div className="flex gap-4">
@@ -515,7 +514,7 @@ const Course = () => {
             </div>
             <div className="p-5 space-y-4">
               {modules.slice(0, 4).map(module => (
-                <div key={module.id} className="group cursor-pointer" onClick={() => showToast(`Opening ${module.title}`)}>
+                <div key={module.id} className="group cursor-pointer">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors truncate flex-1">
                       {module.title}
@@ -635,7 +634,6 @@ const Course = () => {
         {modules.map((module, index) => (
           <div 
             key={module.id}
-            onClick={() => showToast(`Opening ${module.title}`)}
             className={`bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:border-gray-200 transition-all cursor-pointer group ${
               viewMode === 'list' ? 'flex items-center' : ''
             }`}
@@ -773,7 +771,6 @@ const Course = () => {
             {trainers.map(trainer => (
               <div 
                 key={trainer.id} 
-                onClick={() => showToast(`Viewing ${trainer.name}'s profile`)}
                 className="flex items-center gap-4 p-3 hover:bg-gray-50 rounded-xl transition-colors cursor-pointer group"
               >
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold shadow-lg">
@@ -903,7 +900,6 @@ const Course = () => {
             {assessments.map(assessment => (
               <div 
                 key={assessment.id}
-                onClick={() => showToast(`Opening "${assessment.title}"`)}
                 className="p-5 hover:bg-gray-50 cursor-pointer transition-all group"
               >
                 <div className="flex items-center gap-5">
@@ -986,7 +982,7 @@ const Course = () => {
   return (
     <div className="min-h-full bg-gray-50/50">
       {/* Tabs Navigation - New Style */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
         <div className="flex items-center justify-between px-6">
           <div className="flex gap-1">
             {tabs.map(tab => {

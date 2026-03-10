@@ -164,7 +164,7 @@ const StudentCertificates = () => {
 
       {/* Certificate View Modal */}
       {showCertificateModal && selectedCertificate && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl animate-slide-up overflow-hidden relative">
             {/* Close Button */}
             <button 

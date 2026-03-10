@@ -1,0 +1,128 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Bell, X, Check, Clock } from 'lucide-react';
+
+const NotificationDropdown = ({ notifications = [] }) => {
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationRef = useRef(null);
+
+  // Default notifications if none provided
+  const defaultNotifications = [
+    { id: 1, text: 'Welcome to HYTech LMS!', time: 'Just now', unread: true },
+  ];
+
+  const notificationList = notifications.length > 0 ? notifications : defaultNotifications;
+  const unreadCount = notificationList.filter(n => n.unread).length;
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={notificationRef}>
+      {/* Bell Button */}
+      <button
+        onClick={() => setShowNotifications(!showNotifications)}
+        className="relative p-2 hover:bg-white/10 rounded-lg transition-colors"
+      >
+        <Bell className="w-5 h-5" />
+        {unreadCount > 0 && (
+          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+        )}
+      </button>
+
+      {/* Dropdown Panel */}
+      {showNotifications && (
+        <>
+          {/* Backdrop for mobile */}
+          <div 
+            className="fixed inset-0 z-40 bg-black/20 md:hidden"
+            onClick={() => setShowNotifications(false)}
+          />
+          
+          {/* Notification Panel */}
+          <div className="fixed md:absolute right-4 md:right-0 top-16 md:top-auto md:mt-2 w-[calc(100%-2rem)] md:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-slide-down">
+            {/* Header */}
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
+              <div className="flex items-center gap-2">
+                <Bell className="w-5 h-5 text-gray-700" />
+                <h3 className="font-semibold text-gray-900">Notifications</h3>
+                {unreadCount > 0 && (
+                  <span className="px-2 py-0.5 bg-orange-100 text-orange-600 text-xs font-medium rounded-full">
+                    {unreadCount} new
+                  </span>
+                )}
+              </div>
+              <button 
+                onClick={() => setShowNotifications(false)}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors md:hidden"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Notifications List */}
+            <div className="max-h-80 overflow-y-auto">
+              {notificationList.length > 0 ? (
+                notificationList.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className={`p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer group ${
+                      notification.unread ? 'bg-blue-50/50' : ''
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Unread indicator */}
+                      <div className="flex-shrink-0 mt-1.5">
+                        {notification.unread ? (
+                          <div className="w-2 h-2 bg-orange-500 rounded-full" />
+                        ) : (
+                          <Check className="w-3 h-3 text-gray-300" />
+                        )}
+                      </div>
+                      
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-700 leading-relaxed">{notification.text}</p>
+                        <div className="flex items-center gap-1 mt-1.5">
+                          <Clock className="w-3 h-3 text-gray-400" />
+                          <p className="text-xs text-gray-400">{notification.time}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center">
+                  <Bell className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+                  <p className="text-gray-500 text-sm">No notifications yet</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            {notificationList.length > 0 && (
+              <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                <button className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors">
+                  Mark all as read
+                </button>
+                <button className="text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors">
+                  View all
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+export default NotificationDropdown;
