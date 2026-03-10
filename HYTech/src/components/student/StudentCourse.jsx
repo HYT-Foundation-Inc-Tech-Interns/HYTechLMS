@@ -40,6 +40,7 @@ const StudentCourse = () => {
   const [quizResults, setQuizResults] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showWarningModal, setShowWarningModal] = useState(false);
   const quizContainerRef = useRef(null);
 
   // Mock active meeting (in real app, this would come from backend)
@@ -264,12 +265,28 @@ See you on Friday!`,
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && quizStarted && !quizSubmitted) {
-        // Could show warning or auto-submit
-        alert('Warning: Leaving the quiz page is not allowed during the exam!');
+        setShowWarningModal(true);
+      } else if (!document.hidden && quizStarted && !quizSubmitted) {
+        // When user comes back, re-enter fullscreen
+        enterFullscreen();
       }
     };
+
+    const handleBeforeUnload = (e) => {
+      if (quizStarted && !quizSubmitted) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, [quizStarted, quizSubmitted]);
 
   const handleStartQuiz = (quiz) => {
@@ -988,6 +1005,31 @@ See you on Friday!`,
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Warning Modal for Tab Switching */}
+      {showWarningModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-2xl border border-gray-200">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-600" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Warning!</h2>
+            <p className="text-gray-600 mb-6">
+              Leaving the quiz page is not allowed during the exam. 
+              Please stay on this page until you complete and submit your quiz.
+            </p>
+            <button
+              onClick={() => {
+                setShowWarningModal(false);
+                enterFullscreen();
+              }}
+              className="px-6 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors w-full"
+            >
+              Return to Quiz
+            </button>
           </div>
         </div>
       )}
