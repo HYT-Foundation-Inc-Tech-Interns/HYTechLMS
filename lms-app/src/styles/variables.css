@@ -1,0 +1,24 @@
+:root {
+  /* Colors */
+  --color-primary: #0d4291;
+  --color-accent: #ff7700;
+  --color-navy: #111f51;
+  --color-dark: #131d34;
+  --color-gray: #6b7280;
+  --color-light-gray: #c9c5c5;
+  --color-white: #ffffff;
+  --color-bg: #f9fafb;
+
+  /* Typography */
+  --font-poppins: 'Poppins', sans-serif;
+  --font-inter: 'Inter', sans-serif;
+
+  /* Border radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-full: 100px;
+
+  /* Shadows */
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.08);
+  --shadow-input: 0 1px 4px rgba(0, 0, 0, 0.06);
+}

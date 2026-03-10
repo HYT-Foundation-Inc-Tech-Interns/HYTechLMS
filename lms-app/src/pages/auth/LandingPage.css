@@ -1,0 +1,124 @@
+.landing {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  background-color: #0d4291;
+}
+
+.landing__bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  z-index: 0;
+}
+
+.landing__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    rgba(13, 66, 145, 0.85) 0%,
+    rgba(13, 66, 145, 0.6) 60%,
+    rgba(13, 66, 145, 0.2) 100%
+  );
+  z-index: 1;
+}
+
+.landing__content {
+  position: relative;
+  z-index: 2;
+  max-width: 650px;
+  margin-left: 8%;
+}
+
+.landing__title {
+  font-family: var(--font-poppins);
+  font-size: clamp(32px, 3.5vw, 56px);
+  font-weight: 600;
+  color: var(--color-white);
+  line-height: 1.2;
+  margin-bottom: 24px;
+}
+
+.landing__subtitle {
+  font-family: var(--font-poppins);
+  font-size: clamp(14px, 1.5vw, 24px);
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.5;
+  margin-bottom: 40px;
+  max-width: 875px;
+}
+
+.landing__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 32px;
+  background-color: var(--color-accent);
+  color: var(--color-white);
+  font-family: var(--font-poppins);
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  transition: background-color 0.2s, transform 0.2s;
+  min-width: 142px;
+  height: 52px;
+}
+
+.landing__btn:hover {
+  background-color: #e56a00;
+  transform: translateY(-1px);
+}
+
+/* Floating icon circles */
+.landing__icons {
+  position: absolute;
+  right: 8%;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  z-index: 2;
+}
+
+.landing__icon-circle {
+  width: 100px;
+  height: 100px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(13, 66, 145, 0.4);
+}
+
+/* Decorative dots */
+.landing__dots {
+  position: absolute;
+  bottom: 40px;
+  left: 8%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 2;
+}
+
+.landing__dot {
+  display: block;
+  height: 14px;
+  background-color: var(--color-primary);
+  border-radius: var(--radius-full);
+}
+
+.landing__dot--long  { width: 63px; }
+.landing__dot--sm    { width: 14px; }
+.landing__dot--md    { width: 23px; }
+.landing__dot--xl    { width: 72px; }
