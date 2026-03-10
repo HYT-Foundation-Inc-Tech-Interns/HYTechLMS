@@ -41,7 +41,9 @@ import {
   AlignLeft,
   ListChecks,
   GripVertical,
-  Image
+  Image,
+  Video,
+  ExternalLink
 } from 'lucide-react';
 
 const Course = () => {
@@ -69,6 +71,9 @@ const Course = () => {
   const [quizPoints, setQuizPoints] = useState('100');
   const [quizQuestions, setQuizQuestions] = useState([]);
   const [currentQuestionType, setCurrentQuestionType] = useState('multiple-choice');
+  const [showMeetingModal, setShowMeetingModal] = useState(false);
+  const [meetingLink, setMeetingLink] = useState('');
+  const [activeMeeting, setActiveMeeting] = useState(null);
   const createDropdownRef = useRef(null);
   const menuRef = useRef(null);
 
@@ -230,6 +235,38 @@ const Course = () => {
     e.preventDefault();
     showToast('Invitation sent successfully!');
     setShowInviteModal(false);
+  };
+
+  // Handle Google Meet
+  const handleStartMeeting = () => {
+    // Generate a random meeting ID
+    const meetingId = 'hyt-' + Math.random().toString(36).substring(2, 8) + '-' + Math.random().toString(36).substring(2, 5);
+    const link = `https://meet.google.com/${meetingId}`;
+    setMeetingLink(link);
+    setActiveMeeting({
+      id: meetingId,
+      link: link,
+      startTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      host: courseData.trainer
+    });
+    setShowMeetingModal(true);
+  };
+
+  const handleJoinMeeting = () => {
+    if (activeMeeting) {
+      window.open(activeMeeting.link, '_blank');
+    }
+  };
+
+  const handleEndMeeting = () => {
+    setActiveMeeting(null);
+    setMeetingLink('');
+    showToast('Meeting ended');
+  };
+
+  const copyMeetingLink = () => {
+    navigator.clipboard.writeText(activeMeeting?.link || meetingLink);
+    showToast('Meeting link copied!');
   };
 
   const tabs = [
@@ -405,18 +442,74 @@ const Course = () => {
           </div>
         </button>
 
-        <div className="flex items-center gap-3 p-4 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl text-white">
-          <div className="flex-1">
-            <p className="text-sm text-white/70">Class Code</p>
-            <p className="text-xl font-bold font-mono">{courseData.code}</p>
+        <button 
+          onClick={handleStartMeeting}
+          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-gray-100 hover:border-red-200 hover:shadow-lg hover:shadow-red-500/10 transition-all group"
+        >
+          <div className="p-2 bg-red-100 rounded-lg group-hover:bg-red-500 transition-colors">
+            <Video className="w-5 h-5 text-red-600 group-hover:text-white" />
           </div>
-          <button 
-            onClick={copyClassCode}
-            className={`p-2 rounded-lg transition-all ${copiedCode ? 'bg-green-500' : 'bg-white/10 hover:bg-white/20'}`}
-          >
-            {copiedCode ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-          </button>
+          <div className="text-left">
+            <p className="font-medium text-gray-900">Start Google Meet</p>
+            <p className="text-xs text-gray-500">Begin live session</p>
+          </div>
+        </button>
+      </div>
+
+      {/* Active Meeting Banner */}
+      {activeMeeting && (
+        <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-xl p-4 text-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white/20 rounded-xl">
+                <Video className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="font-semibold flex items-center gap-2">
+                  <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                  Live Meeting in Progress
+                </p>
+                <p className="text-sm text-white/80">Started at {activeMeeting.startTime}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={copyMeetingLink}
+                className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+              >
+                <Copy className="w-4 h-4" />
+                Copy Link
+              </button>
+              <button
+                onClick={handleJoinMeeting}
+                className="px-4 py-2 bg-white text-red-600 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/90 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Join Meeting
+              </button>
+              <button
+                onClick={handleEndMeeting}
+                className="px-4 py-2 bg-red-700 hover:bg-red-800 rounded-lg text-sm font-medium transition-colors"
+              >
+                End Meeting
+              </button>
+            </div>
+          </div>
         </div>
+      )}
+
+      {/* Class Code Card */}
+      <div className="flex items-center gap-3 p-4 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl text-white max-w-xs">
+        <div className="flex-1">
+          <p className="text-sm text-white/70">Class Code</p>
+          <p className="text-xl font-bold font-mono">{courseData.code}</p>
+        </div>
+        <button 
+          onClick={copyClassCode}
+          className={`p-2 rounded-lg transition-all ${copiedCode ? 'bg-green-500' : 'bg-white/10 hover:bg-white/20'}`}
+        >
+          {copiedCode ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+        </button>
       </div>
 
       {/* Main Content Grid */}
