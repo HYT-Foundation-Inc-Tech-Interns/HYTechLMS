@@ -1,0 +1,73 @@
+[FRAME] "TRAINER PEOPLE PAGE" id=2031:3246 1920x1080 fill=rgba(246,246,246,1.0)
+  [FRAME] "topbar" id=2031:3247 1920x119
+    [GROUP] "Group 30" id=2031:3248 744x63
+      [GROUP] "Group 17" id=2031:3249 172x63
+        [RECTANGLE] "image-removebg-preview 1" id=2031:3250 56x63
+        [TEXT] "HYTech" id=2031:3251 98x63 fill=rgba(255,255,255,1.0) text="HYTech" font=Poppins/24.0px/900 color=#ffffff
+      [FRAME] "mingcute:right-fill" id=2031:3252 24x24 fill=rgba(255,255,255,1.0)
+        [GROUP] "Group" id=2031:3253 24x24
+          [VECTOR] "Vector" id=2031:3254 24x24
+          [VECTOR] "Vector" id=2031:3255 8x14 fill=rgba(255,255,255,1.0)
+      [FRAME] "Frame 299" id=2031:3256 528x62
+        [TEXT] "Barista NCII" id=2031:3257 528x31 fill=rgba(255,255,255,1.0) text="Barista NCII" font=Poppins/22.0px/900 color=#ffffff
+        [TEXT] "Your earned certifications and progress toward new ones." id=2031:3258 528x31 fill=rgba(255,255,255,1.0) text="Your earned certifications and progress toward new ones." font=Poppins/15.0px/300 color=#ffffff
+    [FRAME] "span" id=2031:3259 50x50 fill=rgba(249,115,22,1.0) radius=100.0
+      [TEXT] "Text" id=2031:3260 50x40 fill=rgba(255,255,255,1.0) text="AU" font=Inter/20.0px/500 color=#ffffff
+  [FRAME] "content" id=2031:3261 1920x961
+    [INSTANCE] "sidebar" id=2031:3262 476x941
+      [INSTANCE] "Component 11" id=I2031:3262;1391:7159 437x78 radius=50.0
+        [FRAME] "ic:sharp-home" id=I2031:3262;1391:7159;1391:7293 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2031:3262;1391:7159;1391:7294 28x24 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I2031:3262;1391:7159;1391:6154 323x20
+          [TEXT] "Text" id=I2031:3262;1391:7159;1391:6155 323x20 fill=rgba(11,0,92,1.0) text="Home" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 17" id=I2031:3262;1594:5984 437x78 radius=50.0
+        [FRAME] "ic:round-book" id=I2031:3262;1594:5984;1594:5815 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2031:3262;1594:5984;1594:5816 20x25 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I2031:3262;1594:5984;1594:5817 269x20
+          [TEXT] "Text" id=I2031:3262;1594:5984;1594:5818 269x20 fill=rgba(11,0,92,1.0) text="My Courses" font=Poppins/20.0px/500 color=#0b005c
+        [FRAME] "mingcute:down-line" id=I2031:3262;1594:5984;1594:5819 30x30 fill=rgba(255,255,255,1.0)
+          [GROUP] "Group" id=I2031:3262;1594:5984;1594:5820 30x30
+      [INSTANCE] "Component 15" id=I2031:3262;1391:8157 437x78 radius=50.0
+        [FRAME] "material-symbols-light:task" id=I2031:3262;1391:8157;1391:7983 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2031:3262;1391:8157;1391:7984 19x25 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I2031:3262;1391:8157;1391:7048 323x20
+          [TEXT] "Text" id=I2031:3262;1391:8157;1391:7049 323x20 fill=rgba(11,0,92,1.0) text="Tasks" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 17" id=I2031:3262;1487:10202 437x78 radius=50.0
+        [FRAME] "raphael:books" id=I2031:3262;1487:10202;1391:7335 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2031:3262;1487:10202;1391:7336 23x27 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I2031:3262;1487:10202;1391:6117 323x20
+          [TEXT] "Text" id=I2031:3262;1487:10202;1391:6118 323x20 fill=rgba(11,0,92,1.0) text="Sectors" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 13" id=I2031:3262;1391:8185 437x78 radius=50.0
+        [FRAME] "mdi:book-arrow-down" id=I2031:3262;1391:8185;1391:7996 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2031:3262;1391:8185;1391:7997 22x26 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I2031:3262;1391:8185;1391:7052 323x20
+          [TEXT] "Text" id=I2031:3262;1391:8185;1391:7053 323x20 fill=rgba(11,0,92,1.0) text="Archived Courses" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 9" id=I2031:3262;1391:8079 437x78 radius=50.0
+        [FRAME] "ic:baseline-settings" id=I2031:3262;1391:8079;1391:7361 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2031:3262;1391:8079;1391:7362 23x24 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I2031:3262;1391:8079;1391:6125 323x20
+          [TEXT] "Text" id=I2031:3262;1391:8079;1391:6126 323x20 fill=rgba(11,0,92,1.0) text="Settings" font=Poppins/20.0px/500 color=#0b005c
+    [FRAME] "main frame" id=2031:3263 1444x941 fill=rgba(255,255,255,1.0)
+      [FRAME] "Button Container" id=2031:3264 1444x78 fill=rgba(255,255,255,1.0)
+        [INSTANCE] "Button Header" id=2031:3265 170x78 fill=rgba(255,255,255,1.0)
+          [TEXT] "Stream" id=I2031:3265;1429:1491 170x78 fill=rgba(0,0,0,1.0) text="Classwork" font=Poppins/18.0px/500 color=#000000
+        [INSTANCE] "Button Header" id=2031:3266 170x78 fill=rgba(255,255,255,1.0)
+          [TEXT] "Stream" id=I2031:3266;1429:1491 170x78 fill=rgba(34,100,229,1.0) text="Students" font=Poppins/18.0px/500 color=#2264e5
+        [INSTANCE] "Button Header" id=2031:3267 170x78 fill=rgba(255,255,255,1.0)
+          [TEXT] "Stream" id=I2031:3267;1429:1491 170x78 fill=rgba(0,0,0,1.0) text="Grades" font=Poppins/18.0px/500 color=#000000
+        [INSTANCE] "Button Header" id=2031:3268 170x78 fill=rgba(255,255,255,1.0)
+          [TEXT] "Stream" id=I2031:3268;1429:1491 170x78 fill=rgba(0,0,0,1.0) text="Stream" font=Poppins/18.0px/500 color=#000000
+      [FRAME] "Inner Frame" id=2031:3269 1444x863
+        [VECTOR] "Vector" id=2106:5703 16x12 fill=rgba(11,87,208,1.0)
+        [RECTANGLE] "Rectangle" id=2106:5687 712x72
+        [TEXT] "Trainers" id=2106:5688 131x40 fill=rgba(0,0,0,1.0) text="Trainers" font=Poppins/32.0px/500 color=#000000
+        [FRAME] "Frame" id=2106:5689 24x24 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=2106:5690 22x16 fill=rgba(68,71,70,1.0)
+        [RECTANGLE] "IMAGE" id=2106:5691 54x54 radius=100.0
+        [TEXT] "Maria Clara Garcia" id=2106:5692 133x20 fill=rgba(0,0,0,1.0) text="Maria Clara Garcia" font=Montserrat/14.0px/500 color=#000000
+        [RECTANGLE] "Rectangle" id=2106:5693 712x72
+        [TEXT] "Students" id=2106:5694 164x40 fill=rgba(0,0,0,1.0) text="Students" font=Poppins/32.0px/500 color=#000000
+        [FRAME] "Frame" id=2106:5695 24x24 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=2106:5696 22x16 fill=rgba(68,71,70,1.0)
+        [TEXT] "Add students to this class" id=2106:5697 191x20 fill=rgba(0,0,0,1.0) text="Add students to this class" font=Montserrat/14.0px/600 color=#000000
+        [TEXT] "Invite students" id=2106:5698 109x20 fill=rgba(11,87,208,1.0) text="Invite students" font=Montserrat/14.0px/500 color=#0b57d0

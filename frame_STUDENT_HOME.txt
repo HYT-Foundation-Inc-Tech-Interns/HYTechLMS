@@ -1,0 +1,36 @@
+[FRAME] name="STUDENT HOME" id=1374:4667 1920x1080 fill=rgba(246,246,246,1.0)
+  [FRAME] name="topbar" id=1487:8280 1920x119
+    [GROUP] name="Group 17" id=1487:8281 172x63
+      [RECTANGLE] name="image-removebg-preview 1" id=1487:8282 56x63
+      [TEXT] name="HYTech" id=1487:8283 98x63 fill=rgba(255,255,255,1.0) text="HYTech" font=Poppins/24.0px/900 color=#ffffff
+    [FRAME] name="span" id=1487:8284 50x50 fill=rgba(249,115,22,1.0) radius=100.0
+      [TEXT] name="Text" id=1487:8285 50x40 fill=rgba(255,255,255,1.0) text="AU" font=Inter/20.0px/500 color=#ffffff
+  [FRAME] name="content" id=1374:4670 1920x961
+    [FRAME] name="sidebar" id=1487:8043 476x941
+      [INSTANCE] name="Component 11" id=1487:8044 437x78 fill=rgba(13,66,145,1.0) radius=50.0
+        [FRAME] name="ic:sharp-home" id=I1487:8044;1391:7239 34x34 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I1487:8044;1391:6169 323x20
+      [INSTANCE] name="Component 12" id=1487:8045 437x78 radius=50.0
+        [FRAME] name="ion:calendar" id=I1487:8045;1391:7953 26x26 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I1487:8045;1391:7044 323x20
+      [INSTANCE] name="Component 14" id=1487:8046 437x78 radius=50.0
+        [FRAME] name="ic:round-book" id=I1487:8046;1391:7940 30x30 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I1487:8046;1391:7036 269x20
+        [FRAME] name="mingcute:down-line" id=I1487:8046;1391:7038 30x30 fill=rgba(255,255,255,1.0)
+      [INSTANCE] name="Component 15" id=1487:8047 437x78 radius=50.0
+        [FRAME] name="material-symbols-light:task" id=I1487:8047;1391:7983 34x34 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I1487:8047;1391:7048 323x20
+      [INSTANCE] name="Component 16" id=1487:8048 437x78 radius=50.0
+        [FRAME] name="fluent:certificate-16-filled" id=I1487:8048;1453:5093 29x29 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I1487:8048;1391:8237 323x20
+      [INSTANCE] name="Component 13" id=1487:8049 437x78 radius=50.0
+        [FRAME] name="mdi:book-arrow-down" id=I1487:8049;1391:7996 30x30 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I1487:8049;1391:7052 323x20
+      [INSTANCE] name="Component 9" id=1487:8050 437x78 radius=50.0
+        [FRAME] name="ic:baseline-settings" id=I1487:8050;1391:7361 30x30 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I1487:8050;1391:6125 323x20
+    [FRAME] name="Frame 79" id=1383:5520 1444x941
+      [FRAME] name="main frame" id=1374:4676 1444x941 fill=rgba(255,255,255,1.0)
+        [FRAME] name="div.grid" id=1383:5467 1384x168
+        [FRAME] name="Frame 40" id=1730:1380 996x32
+        [FRAME] name="Frame 859" id=1904:2951 1380x442

@@ -1,0 +1,75 @@
+[FRAME] "TRAINER MATERIAL PAGE" id=2186:5846 1920x1080 fill=rgba(246,246,246,1.0)
+  [FRAME] "topbar" id=2186:5847 1920x119
+    [GROUP] "Group 30" id=2186:5848 744x63
+      [GROUP] "Group 17" id=2186:5849 172x63
+        [RECTANGLE] "image-removebg-preview 1" id=2186:5850 56x63
+        [TEXT] "HYTech" id=2186:5851 98x63 fill=rgba(255,255,255,1.0) text="HYTech" font=Poppins/24.0px/900 color=#ffffff
+      [FRAME] "mingcute:right-fill" id=2186:5852 24x24 fill=rgba(255,255,255,1.0)
+        [GROUP] "Group" id=2186:5853 24x24
+          [VECTOR] "Vector" id=2186:5854 24x24
+          [VECTOR] "Vector" id=2186:5855 8x14 fill=rgba(255,255,255,1.0)
+      [FRAME] "Frame 299" id=2186:5856 528x62
+        [TEXT] "Barista NCII" id=2186:5857 528x31 fill=rgba(255,255,255,1.0) text="Barista NCII" font=Poppins/22.0px/900 color=#ffffff
+        [TEXT] "Your earned certifications and progress toward new ones." id=2186:5858 528x31 fill=rgba(255,255,255,1.0) text="Your earned certifications and progress toward new ones." font=Poppins/15.0px/300 color=#ffffff
+    [FRAME] "span" id=2186:5859 50x50 fill=rgba(249,115,22,1.0) radius=100.0
+      [TEXT] "Text" id=2186:5860 50x40 fill=rgba(255,255,255,1.0) text="AU" font=Inter/20.0px/500 color=#ffffff
+  [FRAME] "content" id=2186:5861 1920x961
+    [INSTANCE] "sidebar" id=2186:5862 476x941
+      [INSTANCE] "Component 11" id=I2186:5862;1391:7159 437x78 radius=50.0
+        [FRAME] "ic:sharp-home" id=I2186:5862;1391:7159;1391:7293 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2186:5862;1391:7159;1391:7294 28x24 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I2186:5862;1391:7159;1391:6154 323x20
+          [TEXT] "Text" id=I2186:5862;1391:7159;1391:6155 323x20 fill=rgba(11,0,92,1.0) text="Home" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 17" id=I2186:5862;1594:5984 437x78 radius=50.0
+        [FRAME] "ic:round-book" id=I2186:5862;1594:5984;1594:5815 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2186:5862;1594:5984;1594:5816 20x25 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I2186:5862;1594:5984;1594:5817 269x20
+          [TEXT] "Text" id=I2186:5862;1594:5984;1594:5818 269x20 fill=rgba(11,0,92,1.0) text="My Courses" font=Poppins/20.0px/500 color=#0b005c
+        [FRAME] "mingcute:down-line" id=I2186:5862;1594:5984;1594:5819 30x30 fill=rgba(255,255,255,1.0)
+          [GROUP] "Group" id=I2186:5862;1594:5984;1594:5820 30x30
+      [INSTANCE] "Component 15" id=I2186:5862;1391:8157 437x78 radius=50.0
+        [FRAME] "material-symbols-light:task" id=I2186:5862;1391:8157;1391:7983 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2186:5862;1391:8157;1391:7984 19x25 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I2186:5862;1391:8157;1391:7048 323x20
+          [TEXT] "Text" id=I2186:5862;1391:8157;1391:7049 323x20 fill=rgba(11,0,92,1.0) text="Tasks" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 17" id=I2186:5862;1487:10202 437x78 radius=50.0
+        [FRAME] "raphael:books" id=I2186:5862;1487:10202;1391:7335 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2186:5862;1487:10202;1391:7336 23x27 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I2186:5862;1487:10202;1391:6117 323x20
+          [TEXT] "Text" id=I2186:5862;1487:10202;1391:6118 323x20 fill=rgba(11,0,92,1.0) text="Sectors" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 13" id=I2186:5862;1391:8185 437x78 radius=50.0
+        [FRAME] "mdi:book-arrow-down" id=I2186:5862;1391:8185;1391:7996 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2186:5862;1391:8185;1391:7997 22x26 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I2186:5862;1391:8185;1391:7052 323x20
+          [TEXT] "Text" id=I2186:5862;1391:8185;1391:7053 323x20 fill=rgba(11,0,92,1.0) text="Archived Courses" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 9" id=I2186:5862;1391:8079 437x78 radius=50.0
+        [FRAME] "ic:baseline-settings" id=I2186:5862;1391:8079;1391:7361 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2186:5862;1391:8079;1391:7362 23x24 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I2186:5862;1391:8079;1391:6125 323x20
+          [TEXT] "Text" id=I2186:5862;1391:8079;1391:6126 323x20 fill=rgba(11,0,92,1.0) text="Settings" font=Poppins/20.0px/500 color=#0b005c
+    [FRAME] "main frame" id=2186:5863 1444x941 fill=rgba(255,255,255,1.0)
+      [FRAME] "Header" id=2186:5773 1444x292 fill=rgba(255,255,255,1.0)
+        [RECTANGLE] "Rectangle" id=2186:5774 1185x292 fill=rgba(255,255,255,1.0)
+        [RECTANGLE] "Rectangle" id=2186:5775 38x38 fill=rgba(66,133,244,1.0) radius=19.0
+        [FRAME] "Frame" id=2186:5776 24x24 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=2186:5777 16x20 fill=rgba(255,255,255,1.0)
+        [RECTANGLE] "Rectangle" id=2186:5778 760x85
+        [TEXT] "Material Barista 1" id=2186:5779 498x40 fill=rgba(0,0,0,1.0) text="Material Barista 1" font=Poppins/32.0px/600 color=#000000
+        [RECTANGLE] "Rectangle" id=2186:5780 40x40 radius=20.0
+        [RECTANGLE] "Rectangle" id=2186:5781 40x40 radius=20.0
+        [TEXT] "Maria Clara Garcia" id=2186:5783 127x20 fill=rgba(68,71,70,1.0) text="Maria Clara Garcia" font=Montserrat/14.0px/400 color=#444746
+        [TEXT] "•" id=2186:5784 5x20 fill=rgba(68,71,70,1.0) text="•" font=Montserrat/14.0px/400 color=#444746
+        [TEXT] "Mar 4" id=2186:5785 41x20 fill=rgba(68,71,70,1.0) text="Mar 4" font=Montserrat/14.0px/400 color=#444746
+        [TEXT] "Lorem Ipsum" id=2186:5786 95x20 fill=rgba(0,0,0,1.0) text="Lorem Ipsum" font=Montserrat/14.0px/400 color=#000000
+        [RECTANGLE] "Rectangle" id=2186:5787 760x111
+        [FRAME] "Frame" id=2186:5788 18x18 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=2186:5789 16x12 fill=rgba(95,99,104,1.0)
+        [TEXT] "Class comments" id=2186:5790 118x20 fill=rgba(0,0,0,1.0) text="Class comments" font=Montserrat/14.0px/500 color=#000000
+        [RECTANGLE] "IMAGE" id=2186:5791 32x32 radius=16.0
+        [RECTANGLE] "Rectangle" id=2186:5792 660x39 radius=24.0
+        [RECTANGLE] "Rectangle" id=2186:5793 659x38
+        [TEXT] "Add class comment…" id=2186:5794 133x16 fill=rgba(95,99,104,1.0) text="Add class comment…" font=Montserrat/12.0px/400 color=#5f6368
+        [RECTANGLE] "Rectangle" id=2186:5795 36x36 radius=20.0
+        [RECTANGLE] "Rectangle" id=2186:5796 36x36 radius=20.0
+        [FRAME] "Frame" id=2186:5797 24x24 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=2186:5798 20x18 fill=rgba(31,31,31,0.38)

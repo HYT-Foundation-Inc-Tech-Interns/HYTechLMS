@@ -1,0 +1,122 @@
+[FRAME] "TRAINER HOME MAIN" id=1493:717 1920x1080 fill=rgba(246,246,246,1.0)
+  [FRAME] "topbar" id=1487:8287 1920x119
+    [GROUP] "Group 17" id=1487:8288 172x63
+      [RECTANGLE] "image-removebg-preview 1" id=1487:8289 56x63
+      [TEXT] "HYTech" id=1487:8290 98x63 fill=rgba(255,255,255,1.0) text="HYTech" font=Poppins/24.0px/900 color=#ffffff
+    [FRAME] "span" id=1487:8291 50x50 fill=rgba(249,115,22,1.0) radius=100.0
+      [TEXT] "Text" id=1487:8292 50x40 fill=rgba(255,255,255,1.0) text="AU" font=Inter/20.0px/500 color=#ffffff
+  [FRAME] "content" id=1493:721 1920x961
+    [FRAME] "sidebar" id=1487:10166 476x941
+      [INSTANCE] "Component 11" id=1487:10167 437x78 fill=rgba(13,66,145,1.0) radius=50.0
+        [FRAME] "ic:sharp-home" id=I1487:10167;1391:7239 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10167;1391:7240 28x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "span" id=I1487:10167;1391:6169 323x20
+          [TEXT] "Text" id=I1487:10167;1391:6170 323x20 fill=rgba(255,255,255,1.0) text="Home" font=Poppins/20.0px/500 color=#ffffff
+      [INSTANCE] "Component 17" id=1594:5974 437x78 radius=50.0
+        [FRAME] "ic:round-book" id=I1594:5974;1594:5815 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1594:5974;1594:5816 20x25 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1594:5974;1594:5817 269x20
+          [TEXT] "Text" id=I1594:5974;1594:5818 269x20 fill=rgba(11,0,92,1.0) text="My Courses" font=Poppins/20.0px/500 color=#0b005c
+        [FRAME] "mingcute:down-line" id=I1594:5974;1594:5819 30x30 fill=rgba(255,255,255,1.0)
+          [GROUP] "Group" id=I1594:5974;1594:5820 30x30
+      [INSTANCE] "Component 15" id=1487:10169 437x78 radius=50.0
+        [FRAME] "material-symbols-light:task" id=I1487:10169;1391:7983 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10169;1391:7984 19x25 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1487:10169;1391:7048 323x20
+          [TEXT] "Text" id=I1487:10169;1391:7049 323x20 fill=rgba(11,0,92,1.0) text="Tasks" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 17" id=1487:10196 437x78 radius=50.0
+        [FRAME] "raphael:books" id=I1487:10196;1391:7335 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10196;1391:7336 23x27 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1487:10196;1391:6117 323x20
+          [TEXT] "Text" id=I1487:10196;1391:6118 323x20 fill=rgba(11,0,92,1.0) text="Sectors" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 13" id=1487:10170 437x78 radius=50.0
+        [FRAME] "mdi:book-arrow-down" id=I1487:10170;1391:7996 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10170;1391:7997 22x26 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1487:10170;1391:7052 323x20
+          [TEXT] "Text" id=I1487:10170;1391:7053 323x20 fill=rgba(11,0,92,1.0) text="Archived Courses" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 9" id=1487:10171 437x78 radius=50.0
+        [FRAME] "ic:baseline-settings" id=I1487:10171;1391:7361 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10171;1391:7362 23x24 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1487:10171;1391:6125 323x20
+          [TEXT] "Text" id=I1487:10171;1391:6126 323x20 fill=rgba(11,0,92,1.0) text="Settings" font=Poppins/20.0px/500 color=#0b005c
+    [FRAME] "main frame" id=1493:723 1444x941 fill=rgba(255,255,255,1.0)
+      [INSTANCE] "Barista Card Hover" id=1904:3055 446x442 fill=rgba(255,255,255,1.0) radius=10.0
+        [FRAME] "material-symbols:star-rounded" id=I1904:3055;1904:2953 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:star-rounded" id=I1904:3055;1904:2954 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:star-rounded" id=I1904:3055;1904:2955 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:star-rounded" id=I1904:3055;1904:2956 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:star-rounded" id=I1904:3055;1904:2957 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:play-lesson-outline" id=I1904:3055;1904:2958 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "gravity-ui:persons" id=I1904:3055;1904:2959 16x16 fill=rgba(255,255,255,1.0)
+        [FRAME] "Frame 145" id=I1904:3055;1904:2960 446x442 fill=rgba(255,255,255,1.0) radius=10.0
+          [FRAME] "material-symbols:star-rounded" id=I1904:3055;1904:2961 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:star-rounded" id=I1904:3055;1904:2962 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:star-rounded" id=I1904:3055;1904:2963 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:star-rounded" id=I1904:3055;1904:2964 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:star-rounded" id=I1904:3055;1904:2965 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:play-lesson-outline" id=I1904:3055;1904:2966 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "gravity-ui:persons" id=I1904:3055;1904:2967 16x16 fill=rgba(255,255,255,1.0)
+          [GROUP] "Group 23" id=I1904:3055;1904:2968 396x92
+          [VECTOR] "Vector" id=I1904:3055;1904:2972 15x12 fill=rgba(0,0,0,0.7)
+          [LINE] "Line 1" id=I1904:3055;1904:2973 400x1
+          [RECTANGLE] "image 13" id=I1904:3055;1904:2974 446x264
+          [FRAME] "Frame 146" id=I1904:3055;1904:2975 446x53
+      [INSTANCE] "Barista Card Hover" id=2031:2933 446x442 fill=rgba(255,255,255,1.0) radius=10.0
+        [FRAME] "material-symbols:star-rounded" id=I2031:2933;1904:2953 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:star-rounded" id=I2031:2933;1904:2954 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:star-rounded" id=I2031:2933;1904:2955 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:star-rounded" id=I2031:2933;1904:2956 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:star-rounded" id=I2031:2933;1904:2957 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:play-lesson-outline" id=I2031:2933;1904:2958 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "gravity-ui:persons" id=I2031:2933;1904:2959 16x16 fill=rgba(255,255,255,1.0)
+        [FRAME] "Frame 145" id=I2031:2933;1904:2960 446x442 fill=rgba(255,255,255,1.0) radius=10.0
+          [FRAME] "material-symbols:star-rounded" id=I2031:2933;1904:2961 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:star-rounded" id=I2031:2933;1904:2962 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:star-rounded" id=I2031:2933;1904:2963 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:star-rounded" id=I2031:2933;1904:2964 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:star-rounded" id=I2031:2933;1904:2965 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:play-lesson-outline" id=I2031:2933;1904:2966 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "gravity-ui:persons" id=I2031:2933;1904:2967 16x16 fill=rgba(255,255,255,1.0)
+          [GROUP] "Group 23" id=I2031:2933;1904:2968 396x92
+          [VECTOR] "Vector" id=I2031:2933;1904:2972 15x12 fill=rgba(0,0,0,0.7)
+          [LINE] "Line 1" id=I2031:2933;1904:2973 400x1
+          [RECTANGLE] "image 13" id=I2031:2933;1904:2974 446x264
+          [FRAME] "Frame 146" id=I2031:2933;1904:2975 446x53
+      [INSTANCE] "Barista Card Hover" id=2031:2965 446x442 fill=rgba(255,255,255,1.0) radius=10.0
+        [FRAME] "material-symbols:star-rounded" id=I2031:2965;1904:2953 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:star-rounded" id=I2031:2965;1904:2954 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:star-rounded" id=I2031:2965;1904:2955 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:star-rounded" id=I2031:2965;1904:2956 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:star-rounded" id=I2031:2965;1904:2957 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-symbols:play-lesson-outline" id=I2031:2965;1904:2958 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] "gravity-ui:persons" id=I2031:2965;1904:2959 16x16 fill=rgba(255,255,255,1.0)
+        [FRAME] "Frame 145" id=I2031:2965;1904:2960 446x442 fill=rgba(255,255,255,1.0) radius=10.0
+          [FRAME] "material-symbols:star-rounded" id=I2031:2965;1904:2961 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:star-rounded" id=I2031:2965;1904:2962 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:star-rounded" id=I2031:2965;1904:2963 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:star-rounded" id=I2031:2965;1904:2964 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:star-rounded" id=I2031:2965;1904:2965 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "material-symbols:play-lesson-outline" id=I2031:2965;1904:2966 24x24 fill=rgba(255,255,255,1.0)
+          [FRAME] "gravity-ui:persons" id=I2031:2965;1904:2967 16x16 fill=rgba(255,255,255,1.0)
+          [GROUP] "Group 23" id=I2031:2965;1904:2968 396x92
+          [VECTOR] "Vector" id=I2031:2965;1904:2972 15x12 fill=rgba(0,0,0,0.7)
+          [LINE] "Line 1" id=I2031:2965;1904:2973 400x1
+          [RECTANGLE] "image 13" id=I2031:2965;1904:2974 446x264
+          [FRAME] "Frame 146" id=I2031:2965;1904:2975 446x53
+      [FRAME] "div.grid" id=2342:3764 1384x168
+        [FRAME] "div.bg-card" id=2342:3765 334x148 fill=rgba(255,255,255,1.0) radius=24.0
+          [FRAME] "div.flex" id=2342:3766 302x40
+          [FRAME] "p.text-2xl" id=2342:3770 31x32
+          [FRAME] "p.text-sm" id=2342:3772 302x20
+        [FRAME] "div.bg-card" id=2342:3774 334x148 fill=rgba(255,255,255,1.0) radius=24.0
+          [FRAME] "div.flex" id=2342:3775 292x40
+          [FRAME] "p.text-2xl" id=2342:3780 292x32
+          [FRAME] "p.text-sm" id=2342:3782 292x20
+        [FRAME] "div.bg-card" id=2342:3784 334x148 fill=rgba(255,255,255,1.0) radius=24.0
+          [FRAME] "div.flex" id=2342:3785 292x40
+          [FRAME] "p.text-2xl" id=2342:3790 292x32
+          [FRAME] "p.text-sm" id=2342:3792 292x20
+        [FRAME] "div.bg-card" id=2342:3794 334x148 fill=rgba(255,255,255,1.0) radius=24.0
+          [FRAME] "div.flex" id=2342:3795 292x40
+          [FRAME] "p.text-2xl" id=2342:3800 292x32
+          [FRAME] "p.text-sm" id=2342:3802 292x20

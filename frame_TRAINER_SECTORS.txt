@@ -1,0 +1,141 @@
+[FRAME] "TRAINER SECTORS" id=1368:322 1920x1080 fill=rgba(246,246,246,1.0)
+  [FRAME] "topbar" id=1737:2271 1920x119
+    [GROUP] "Group 30" id=1737:2272 744x63
+      [GROUP] "Group 17" id=1737:2273 172x63
+        [RECTANGLE] "image-removebg-preview 1" id=1737:2274 56x63
+        [TEXT] "HYTech" id=1737:2275 98x63 fill=rgba(255,255,255,1.0) text="HYTech" font=Poppins/24.0px/900 color=#ffffff
+      [FRAME] "mingcute:right-fill" id=1737:2276 24x24 fill=rgba(255,255,255,1.0)
+        [GROUP] "Group" id=1737:2277 24x24
+          [VECTOR] "Vector" id=1737:2278 24x24
+          [VECTOR] "Vector" id=1737:2279 8x14 fill=rgba(255,255,255,1.0)
+      [FRAME] "Frame 299" id=1737:2280 528x62
+        [TEXT] "Sectors" id=1737:2281 528x31 fill=rgba(255,255,255,1.0) text="Sectors" font=Poppins/22.0px/900 color=#ffffff
+        [TEXT] "Training Regulations" id=1737:2282 528x31 fill=rgba(255,255,255,1.0) text="Training Regulations" font=Poppins/15.0px/300 color=#ffffff
+    [FRAME] "span" id=1737:2283 50x50 fill=rgba(249,115,22,1.0) radius=100.0
+      [TEXT] "Text" id=1737:2284 50x40 fill=rgba(255,255,255,1.0) text="AU" font=Inter/20.0px/500 color=#ffffff
+  [FRAME] "content" id=1368:325 1920x961
+    [FRAME] "sidebar" id=1487:10249 476x941
+      [INSTANCE] "Component 11" id=1487:10250 437x78 radius=50.0
+        [FRAME] "ic:sharp-home" id=I1487:10250;1391:7293 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10250;1391:7294 28x24 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1487:10250;1391:6154 323x20
+          [TEXT] "Text" id=I1487:10250;1391:6155 323x20 fill=rgba(11,0,92,1.0) text="Home" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 17" id=1594:6022 437x78 radius=50.0
+        [FRAME] "ic:round-book" id=I1594:6022;1594:5815 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1594:6022;1594:5816 20x25 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1594:6022;1594:5817 269x20
+          [TEXT] "Text" id=I1594:6022;1594:5818 269x20 fill=rgba(11,0,92,1.0) text="My Courses" font=Poppins/20.0px/500 color=#0b005c
+        [FRAME] "mingcute:down-line" id=I1594:6022;1594:5819 30x30 fill=rgba(255,255,255,1.0)
+          [GROUP] "Group" id=I1594:6022;1594:5820 30x30
+      [INSTANCE] "Component 15" id=1487:10252 437x78 radius=50.0
+        [FRAME] "material-symbols-light:task" id=I1487:10252;1391:7983 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10252;1391:7984 19x25 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1487:10252;1391:7048 323x20
+          [TEXT] "Text" id=I1487:10252;1391:7049 323x20 fill=rgba(11,0,92,1.0) text="Tasks" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 18" id=1487:10284 437x78 fill=rgba(13,66,145,1.0) radius=50.0
+        [FRAME] "raphael:books" id=I1487:10284;1391:7277 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10284;1391:7278 23x27 fill=rgba(255,255,255,1.0)
+        [FRAME] "span" id=I1487:10284;1391:6196 323x20
+          [TEXT] "Text" id=I1487:10284;1391:6197 323x20 fill=rgba(255,255,255,1.0) text="Sectors" font=Poppins/20.0px/500 color=#ffffff
+      [INSTANCE] "Component 13" id=1487:10254 437x78 radius=50.0
+        [FRAME] "mdi:book-arrow-down" id=I1487:10254;1391:7996 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10254;1391:7997 22x26 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1487:10254;1391:7052 323x20
+          [TEXT] "Text" id=I1487:10254;1391:7053 323x20 fill=rgba(11,0,92,1.0) text="Archived Courses" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 9" id=1487:10255 437x78 radius=50.0
+        [FRAME] "ic:baseline-settings" id=I1487:10255;1391:7361 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10255;1391:7362 23x24 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1487:10255;1391:6125 323x20
+          [TEXT] "Text" id=I1487:10255;1391:6126 323x20 fill=rgba(11,0,92,1.0) text="Settings" font=Poppins/20.0px/500 color=#0b005c
+    [FRAME] "main frame" id=1368:331 1444x941 fill=rgba(255,255,255,1.0)
+      [INSTANCE] "sectors" id=2038:4422 1269x91 fill=rgba(255,255,255,1.0)
+        [INSTANCE] "Component 47" id=I2038:4422;2038:4230 1269x91 fill=rgba(255,255,255,1.0)
+          [RECTANGLE] "Rectangle 60" id=I2038:4422;2038:4230;1399:6622 1269x91 radius=10.0
+          [INSTANCE] "material-symbols-light:play-arrow" id=I2038:4422;2038:4230;1449:7606 67x67 fill=rgba(255,255,255,1.0)
+          [INSTANCE] "arcticons:my-health" id=I2038:4422;2038:4230;1449:7607 51x51 fill=rgba(255,255,255,1.0)
+          [FRAME] "Frame 116" id=I2038:4422;2038:4230;1449:7605 537x40
+          [TEXT] "3 Trainings" id=I2038:4422;2038:4230;1449:7571 76x18 fill=rgba(0,0,0,1.0) text="2 Trainings" font=Montserrat/14.0px/400 color=#000000
+        [FRAME] "ei:arrow-up" id=I2038:4422;2038:4580 48x48 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2038:4422;2038:4581 32x32 fill=rgba(34,100,229,1.0)
+          [VECTOR] "Vector" id=I2038:4422;2038:4582 10x18 fill=rgba(34,100,229,1.0)
+          [VECTOR] "Vector" id=I2038:4422;2038:4583 16x1 fill=rgba(34,100,229,1.0)
+      [INSTANCE] "sectors" id=2038:4437 1269x91 fill=rgba(255,255,255,1.0)
+        [INSTANCE] "Component 47" id=I2038:4437;2038:4230 1269x91 fill=rgba(255,255,255,1.0)
+          [RECTANGLE] "Rectangle 60" id=I2038:4437;2038:4230;1399:6622 1269x91 radius=10.0
+          [INSTANCE] "material-symbols-light:play-arrow" id=I2038:4437;2038:4230;1449:7606 67x67 fill=rgba(255,255,255,1.0)
+          [INSTANCE] "arcticons:my-health" id=I2038:4437;2038:4230;1449:7607 51x51 fill=rgba(255,255,255,1.0)
+          [FRAME] "Frame 116" id=I2038:4437;2038:4230;1449:7605 537x40
+          [TEXT] "3 Trainings" id=I2038:4437;2038:4230;1449:7571 76x18 fill=rgba(0,0,0,1.0) text="1 Trainings" font=Montserrat/14.0px/400 color=#000000
+        [FRAME] "ei:arrow-up" id=I2038:4437;2038:4580 48x48 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2038:4437;2038:4581 32x32 fill=rgba(34,100,229,1.0)
+          [VECTOR] "Vector" id=I2038:4437;2038:4582 10x18 fill=rgba(34,100,229,1.0)
+          [VECTOR] "Vector" id=I2038:4437;2038:4583 16x1 fill=rgba(34,100,229,1.0)
+      [INSTANCE] "sectors" id=2038:4462 1269x91 fill=rgba(255,255,255,1.0)
+        [INSTANCE] "Component 47" id=I2038:4462;2038:4230 1269x91 fill=rgba(255,255,255,1.0)
+          [RECTANGLE] "Rectangle 60" id=I2038:4462;2038:4230;1399:6622 1269x91 radius=10.0
+          [INSTANCE] "material-symbols-light:play-arrow" id=I2038:4462;2038:4230;1449:7606 67x67 fill=rgba(255,255,255,1.0)
+          [INSTANCE] "arcticons:my-health" id=I2038:4462;2038:4230;1449:7607 51x51 fill=rgba(255,255,255,1.0)
+          [FRAME] "Frame 116" id=I2038:4462;2038:4230;1449:7605 537x40
+          [TEXT] "3 Trainings" id=I2038:4462;2038:4230;1449:7571 76x18 fill=rgba(0,0,0,1.0) text="3 Trainings" font=Montserrat/14.0px/400 color=#000000
+        [FRAME] "ei:arrow-up" id=I2038:4462;2038:4580 48x48 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2038:4462;2038:4581 32x32 fill=rgba(34,100,229,1.0)
+          [VECTOR] "Vector" id=I2038:4462;2038:4582 10x18 fill=rgba(34,100,229,1.0)
+          [VECTOR] "Vector" id=I2038:4462;2038:4583 16x1 fill=rgba(34,100,229,1.0)
+      [INSTANCE] "sectors" id=2038:4412 1269x91 fill=rgba(255,255,255,1.0)
+        [INSTANCE] "Component 47" id=I2038:4412;2038:4230 1269x91 fill=rgba(255,255,255,1.0)
+          [RECTANGLE] "Rectangle 60" id=I2038:4412;2038:4230;1399:6622 1269x91 radius=10.0
+          [INSTANCE] "material-symbols-light:play-arrow" id=I2038:4412;2038:4230;1449:7606 67x67 fill=rgba(255,255,255,1.0)
+          [INSTANCE] "arcticons:my-health" id=I2038:4412;2038:4230;1449:7607 51x51 fill=rgba(255,255,255,1.0)
+          [FRAME] "Frame 116" id=I2038:4412;2038:4230;1449:7605 537x40
+          [TEXT] "3 Trainings" id=I2038:4412;2038:4230;1449:7571 76x18 fill=rgba(0,0,0,1.0) text="2 Trainings" font=Montserrat/14.0px/400 color=#000000
+        [FRAME] "ei:arrow-up" id=I2038:4412;2038:4580 48x48 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2038:4412;2038:4581 32x32 fill=rgba(34,100,229,1.0)
+          [VECTOR] "Vector" id=I2038:4412;2038:4582 10x18 fill=rgba(34,100,229,1.0)
+          [VECTOR] "Vector" id=I2038:4412;2038:4583 16x1 fill=rgba(34,100,229,1.0)
+      [FRAME] "Frame 147" id=1521:5194 1269x49
+        [FRAME] "Frame 146" id=1521:5193 779x49
+        [FRAME] "Frame 150" id=1521:6345 490x49
+          [INSTANCE] "Frame 176" id=1521:6977 368x49 radius=8.0
+          [FRAME] "Frame 149" id=1521:6341 106x49 radius=8.0
+      [COMPONENT] "arcticons:electrodoc-pro" id=1473:7758 46x46 fill=rgba(255,255,255,1.0)
+        [VECTOR] "Vector" id=1473:7754 24x14
+        [VECTOR] "Vector" id=1473:7755 35x25
+        [VECTOR] "Vector" id=1473:7756 19x18
+        [VECTOR] "Vector" id=1473:7757 8x9
+      [COMPONENT] "arcticons:social-deal" id=1518:5153 46x46 fill=rgba(255,255,255,1.0)
+        [VECTOR] "Vector" id=1518:5150 26x37
+        [VECTOR] "Vector" id=1518:5151 12x12
+        [VECTOR] "Vector" id=1518:5152 12x12
+      [COMPONENT] "arcticons:transport" id=1518:5174 46x46 fill=rgba(255,255,255,1.0)
+        [VECTOR] "Vector" id=1518:5173 34x37
+      [COMPONENT] "arcticons:hotels-com" id=1518:5193 46x46 fill=rgba(255,255,255,1.0)
+        [VECTOR] "Vector" id=1518:5189 35x35
+        [VECTOR] "Vector" id=1518:5190 7x7
+        [VECTOR] "Vector" id=1518:5191 7x7
+        [VECTOR] "Vector" id=1518:5192 7x7
+      [INSTANCE] "sectors" id=2038:4260 1269x91 fill=rgba(255,255,255,1.0)
+        [INSTANCE] "Component 47" id=I2038:4260;2038:4230 1269x91 fill=rgba(255,255,255,1.0)
+          [RECTANGLE] "Rectangle 60" id=I2038:4260;2038:4230;1399:6622 1269x91 radius=10.0
+          [INSTANCE] "material-symbols-light:play-arrow" id=I2038:4260;2038:4230;1449:7606 67x67 fill=rgba(255,255,255,1.0)
+          [INSTANCE] "arcticons:my-health" id=I2038:4260;2038:4230;1449:7607 51x51 fill=rgba(255,255,255,1.0)
+          [FRAME] "Frame 116" id=I2038:4260;2038:4230;1449:7605 537x40
+          [TEXT] "3 Trainings" id=I2038:4260;2038:4230;1449:7571 76x18 fill=rgba(0,0,0,1.0) text="3 Trainings" font=Montserrat/14.0px/400 color=#000000
+        [FRAME] "ei:arrow-up" id=I2038:4260;2038:4580 48x48 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2038:4260;2038:4581 32x32 fill=rgba(34,100,229,1.0)
+          [VECTOR] "Vector" id=I2038:4260;2038:4582 10x18 fill=rgba(34,100,229,1.0)
+          [VECTOR] "Vector" id=I2038:4260;2038:4583 16x1 fill=rgba(34,100,229,1.0)
+      [INSTANCE] "sectors" id=2038:4397 1269x91 fill=rgba(255,255,255,1.0)
+        [INSTANCE] "Component 47" id=I2038:4397;2038:4230 1269x91 fill=rgba(255,255,255,1.0)
+          [RECTANGLE] "Rectangle 60" id=I2038:4397;2038:4230;1399:6622 1269x91 radius=10.0
+          [INSTANCE] "material-symbols-light:play-arrow" id=I2038:4397;2038:4230;1449:7606 67x67 fill=rgba(255,255,255,1.0)
+          [INSTANCE] "arcticons:my-health" id=I2038:4397;2038:4230;1449:7607 51x51 fill=rgba(255,255,255,1.0)
+          [FRAME] "Frame 116" id=I2038:4397;2038:4230;1449:7605 537x40
+          [TEXT] "3 Trainings" id=I2038:4397;2038:4230;1449:7571 76x18 fill=rgba(0,0,0,1.0) text="1 Trainings" font=Montserrat/14.0px/400 color=#000000
+        [FRAME] "ei:arrow-up" id=I2038:4397;2038:4580 48x48 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I2038:4397;2038:4581 32x32 fill=rgba(34,100,229,1.0)
+          [VECTOR] "Vector" id=I2038:4397;2038:4582 10x18 fill=rgba(34,100,229,1.0)
+          [VECTOR] "Vector" id=I2038:4397;2038:4583 16x1 fill=rgba(34,100,229,1.0)
+      [INSTANCE] "arcticons:emoji-building-construction" id=2038:4508 56x56 fill=rgba(255,255,255,1.0)
+        [VECTOR] "Vector" id=I2038:4508;1473:7718 41x6
+        [VECTOR] "Vector" id=I2038:4508;1473:7719 9x41
+        [VECTOR] "Vector" id=I2038:4508;1473:7720 43x27

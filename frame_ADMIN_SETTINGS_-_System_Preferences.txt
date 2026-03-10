@@ -1,0 +1,75 @@
+[FRAME] name="ADMIN SETTINGS - System Preferences" id=1930:2923 1920x1080 fill=rgba(246,246,246,1.0)
+  [FRAME] name="topbar" id=1930:2924 1920x119
+    [GROUP] name="Group 30" id=1930:2925 744x63
+      [GROUP] name="Group 17" id=1930:2926 172x63
+        [RECTANGLE] name="image-removebg-preview 1" id=1930:2927 56x63
+        [TEXT] name="HYTech" id=1930:2928 98x63 fill=rgba(255,255,255,1.0) text="HYTech" font=Poppins/24.0px/900 color=#ffffff
+      [FRAME] name="mingcute:right-fill" id=1930:2929 24x24 fill=rgba(255,255,255,1.0)
+        [GROUP] name="Group" id=1930:2930 24x24
+      [FRAME] name="Frame 299" id=1930:2933 528x62
+        [TEXT] name="Settings" id=1930:2934 528x31 fill=rgba(255,255,255,1.0) text="Settings" font=Poppins/22.0px/900 color=#ffffff
+        [TEXT] name="Configure your Learning Management System." id=1930:2935 528x31 fill=rgba(255,255,255,1.0) text="Configure your Learning Management System." font=Poppins/15.0px/300 color=#ffffff
+    [FRAME] name="span" id=1930:2936 50x50 fill=rgba(249,115,22,1.0) radius=100.0
+      [TEXT] name="Text" id=1930:2937 50x40 fill=rgba(255,255,255,1.0) text="AU" font=Inter/20.0px/500 color=#ffffff
+  [FRAME] name="content" id=1930:2938 1920x961
+    [FRAME] name="sidebar" id=2034:3801 476x941
+      [INSTANCE] name="Component 11" id=2034:3802 437x78 radius=50.0
+        [FRAME] name="ic:sharp-home" id=I2034:3802;1391:7293 34x34 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I2034:3802;1391:6154 323x20
+      [INSTANCE] name="Component 11" id=2034:3803 437x78 radius=50.0
+        [FRAME] name="streamline:user-multiple-group-solid" id=I2034:3803;1391:7306 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I2034:3803;1391:6109 323x20
+      [INSTANCE] name="Component 10" id=2034:3804 437x78 radius=50.0
+        [FRAME] name="raphael:books" id=I2034:3804;1391:7335 34x34 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I2034:3804;1391:6117 323x20
+      [INSTANCE] name="Component 7" id=2034:3805 437x78 radius=50.0
+        [FRAME] name="material-symbols:list-rounded" id=I2034:3805;1391:7348 34x34 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I2034:3805;1391:6121 323x20
+      [INSTANCE] name="Component 9" id=2034:3806 437x78 fill=rgba(13,66,145,1.0) radius=50.0
+        [FRAME] name="ic:baseline-settings" id=I2034:3806;1391:7285 30x30 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I2034:3806;1391:6214 323x20
+    [FRAME] name="main frame" id=1930:2945 1444x941 fill=rgba(255,255,255,1.0)
+      [GROUP] name="Group 871" id=1973:3083 827x47
+        [FRAME] name="Frame 196" id=1973:3084 214x47
+        [FRAME] name="Frame 199" id=1973:3088 92x47
+        [FRAME] name="Frame 197" id=1973:3091 168x47
+        [FRAME] name="Frame 198" id=1973:3095 168x47
+      [FRAME] name="Frame 130" id=1930:2946 1338x298 fill=rgba(255,255,255,1.0) radius=10.0
+        [TEXT] name="Access Control" id=1930:2947 219x35 fill=rgba(0,0,0,1.0) text="Access Control" font=Poppins/18.0px/500 color=#000000
+        [TEXT] name="Site Name" id=1930:2961 152x25 fill=rgba(0,0,0,1.0) text="Site Name" font=Poppins/16.0px/500 color=#000000
+        [TEXT] name="Welcome Message" id=1930:3129 200x25 fill=rgba(0,0,0,1.0) text="Welcome Message" font=Poppins/16.0px/500 color=#000000
+        [TEXT] name="Site Logo" id=1930:3113 152x25 fill=rgba(0,0,0,1.0) text="Site Logo" font=Poppins/16.0px/500 color=#000000
+        [TEXT] name="Control how users access the system." id=1930:2962 367x26 fill=rgba(0,0,0,1.0) text="Control how users access the system." font=Montserrat/14.0px/400 color=#000000
+        [FRAME] name="Frame 137" id=1930:2963 450x35 fill=rgba(255,255,255,1.0) radius=10.0
+        [FRAME] name="Frame 139" id=1930:3130 999x70 fill=rgba(255,255,255,1.0) radius=10.0
+        [FRAME] name="Frame 138" id=1930:3114 450x35 fill=rgba(255,255,255,1.0) radius=10.0
+        [TEXT] name="Recommended: 200×60px, PNG or SVG" id=1930:3115 242x18 fill=rgba(101,117,139,1.0) text="Recommended: 200×60px, PNG or SVG" font=Montserrat/12.0px/400 color=#65758b
+      [FRAME] name="Frame 139" id=1930:3134 1338x185 fill=rgba(255,255,255,1.0) radius=10.0
+        [TEXT] name="Language & Regional" id=1930:3135 219x35 fill=rgba(0,0,0,1.0) text="Language & Regional" font=Poppins/18.0px/500 color=#000000
+        [TEXT] name="Languange" id=1930:3136 152x25 fill=rgba(0,0,0,1.0) text="Languange" font=Poppins/16.0px/500 color=#000000
+        [TEXT] name="Timezone" id=1930:3253 152x25 fill=rgba(0,0,0,1.0) text="Timezone" font=Poppins/16.0px/500 color=#000000
+        [TEXT] name="Date Format" id=1930:3256 152x25 fill=rgba(0,0,0,1.0) text="Date Format" font=Poppins/16.0px/500 color=#000000
+        [TEXT] name="Set the default language and regional preferences." id=1930:3139 367x26 fill=rgba(0,0,0,1.0) text="Set the default language and regional preferences." font=Montserrat/14.0px/400 color=#000000
+        [FRAME] name="Frame 137" id=1930:3140 400x35 fill=rgba(255,255,255,1.0) radius=10.0
+        [FRAME] name="Frame 138" id=1930:3254 400x35 fill=rgba(255,255,255,1.0) radius=10.0
+        [FRAME] name="Frame 139" id=1930:3257 400x35 fill=rgba(255,255,255,1.0) radius=10.0
+      [FRAME] name="Frame 140" id=1930:3266 1338x509 fill=rgba(255,255,255,1.0) radius=10.0
+        [TEXT] name="Course & Training Settings" id=1930:3267 282x80 fill=rgba(0,0,0,1.0) text="Course & Training Settings" font=Poppins/18.0px/500 color=#000000
+        [TEXT] name="Max Enrollees per Course" id=1930:3268 217x25 fill=rgba(0,0,0,1.0) text="Max Enrollees per Course" font=Poppins/16.0px/500 color=#000000
+        [TEXT] name="Grading System" id=1930:3283 217x25 fill=rgba(0,0,0,1.0) text="Grading System" font=Poppins/16.0px/500 color=#000000
+        [TEXT] name="Max Upload File Size (MB)" id=1930:3270 236x25 fill=rgba(0,0,0,1.0) text="Max Upload File Size (MB)" font=Poppins/16.0px/500 color=#000000
+        [TEXT] name="Certificate Template" id=1930:3301 236x25 fill=rgba(0,0,0,1.0) text="Certificate Template" font=Poppins/16.0px/500 color=#000000
+        [TEXT] name="Configure defaults for courses and training programs." id=1930:3271 439x26 fill=rgba(0,0,0,1.0) text="Configure defaults for courses and training programs." font=Montserrat/14.0px/400 color=#000000
+        [FRAME] name="Frame 137" id=1930:3272 320x35 fill=rgba(255,255,255,1.0) radius=10.0
+        [FRAME] name="Frame 139" id=1930:3285 500x35 fill=rgba(255,255,255,1.0) radius=10.0
+        [FRAME] name="Frame 138" id=1930:3275 320x35 fill=rgba(255,255,255,1.0) radius=10.0
+        [FRAME] name="Frame 140" id=1930:3302 320x35 fill=rgba(255,255,255,1.0) radius=10.0
+        [FRAME] name="Frame 134" id=1930:3335 1274x65 fill=rgba(255,255,255,1.0) radius=10.0
+        [FRAME] name="Frame 135" id=1930:3339 1274x65 fill=rgba(255,255,255,1.0) radius=10.0
+        [FRAME] name="Frame 136" id=1930:3343 1274x65 fill=rgba(255,255,255,1.0) radius=10.0
+      [FRAME] name="Frame 138" id=1930:3116 142x35 fill=rgba(11,0,92,1.0) radius=10.0
+        [COMPONENT] name="material-symbols:upload" id=1930:3125 24x24 fill=rgba(255,255,255,1.0)
+        [TEXT] name="Upload Photo" id=1930:3126 94x20 fill=rgba(255,255,255,1.0) text="Upload Photo" font=Inter/14.0px/500 color=#ffffff
+      [FRAME] name="Frame 873" id=2034:3963 1297x32
+        [GROUP] name="Group 861" id=2034:3964 1150x28 radius=6.0
+        [GROUP] name="Group 872" id=2034:3966 147x32

@@ -1,0 +1,25 @@
+[FRAME] "Sign In" id=1504:711 1920x1080 fill=rgba(255,255,255,1.0)
+  [RECTANGLE] "image 16" id=1504:712 940x1080
+  [RECTANGLE] "Rectangle 1" id=1504:713 940x1080
+  [RECTANGLE] "Rectangle 75" id=1487:5545 158x41 fill=rgba(17,31,81,1.0)
+  [RECTANGLE] "image-removebg-preview 1" id=1504:714 294x304
+  [FRAME] "div.container" id=1504:715 727x196
+    [FRAME] "h1.text-5xl" id=1504:716 663x144
+      [TEXT] "Welcome to" id=1504:717 422x72 fill=rgba(255,255,255,1.0) text="Welcome to" font=Inter/72.0px/800 color=#ffffff
+      [FRAME] "span.text-gradient-primary" id=1504:718 663x72
+        [TEXT] "HYT Global Institute" id=1504:719 722x72 text="HYT Global Institute" font=Inter/72.0px/800
+    [FRAME] "p.text-lg" id=1504:720 672x28
+  [FRAME] "Frame 78" id=1504:721 523x842
+    [RECTANGLE] "9963615 1" id=1504:766 523x348
+    [FRAME] "Frame 20" id=1504:775 523x477
+      [GROUP] "Group 19" id=1504:773 474x477
+        [TEXT] "Hello" id=1504:722 400x37 fill=rgba(19,29,52,1.0) text="Hello" font=Poppins/48.0px/700 color=#131d34
+        [TEXT] "Good to see you back" id=1504:723 330x30 fill=rgba(107,114,128,1.0) text="Good to see you back" font=Poppins/24.0px/500 color=#6b7280
+        [FRAME] "Frame 24" id=1504:731 470x58 fill=rgba(255,255,255,1.0) radius=12.0
+        [FRAME] "Frame 23" id=1504:740 470x58 fill=rgba(255,255,255,1.0) radius=12.0
+        [INSTANCE] "Component 48" id=2063:3817 470x61 fill=rgba(255,255,255,1.0)
+        [FRAME] "ic:baseline-facebook" id=1504:748 48x48 fill=rgba(255,255,255,1.0)
+        [FRAME] "material-icon-theme:google" id=1504:750 48x48 fill=rgba(255,255,255,1.0)
+        [TEXT] "Dont have account? Sign up" id=1504:756 333x31 fill=rgba(107,114,128,1.0) text="Dont have account? Sign up" font=Poppins/24.0px/500 color=#6b7280
+        [TEXT] "Remember me next time" id=1504:757 226x21 fill=rgba(107,114,128,1.0) text="Remember me next time" font=Poppins/18.0px/500 color=#6b7280
+        [RECTANGLE] "Rectangle 73" id=1504:758 28x28 fill=rgba(201,197,197,1.0) radius=8.0

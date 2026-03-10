@@ -1,0 +1,50 @@
+[FRAME] "TRAINER ARCHIVED COURSES" id=1487:8429 1920x1080 fill=rgba(246,246,246,1.0)
+  [FRAME] "topbar" id=1768:5385 1920x119
+    [GROUP] "Group 30" id=1768:5386 744x63
+      [GROUP] "Group 17" id=1768:5387 172x63
+        [RECTANGLE] "image-removebg-preview 1" id=1768:5388 56x63
+        [TEXT] "HYTech" id=1768:5389 98x63 fill=rgba(255,255,255,1.0) text="HYTech" font=Poppins/24.0px/900 color=#ffffff
+      [FRAME] "mingcute:right-fill" id=1768:5390 24x24 fill=rgba(255,255,255,1.0)
+        [GROUP] "Group" id=1768:5391 24x24
+          [VECTOR] "Vector" id=1768:5392 24x24
+          [VECTOR] "Vector" id=1768:5393 8x14 fill=rgba(255,255,255,1.0)
+      [FRAME] "Frame 299" id=1768:5394 528x62
+        [TEXT] "Archived Courses" id=1768:5395 528x31 fill=rgba(255,255,255,1.0) text="Archived Courses" font=Poppins/22.0px/900 color=#ffffff
+        [TEXT] "Your earned certifications and progress toward new ones." id=1768:5396 528x31 fill=rgba(255,255,255,1.0) text="Your earned certifications and progress toward new ones." font=Poppins/15.0px/300 color=#ffffff
+    [FRAME] "span" id=1768:5397 50x50 fill=rgba(249,115,22,1.0) radius=100.0
+      [TEXT] "Text" id=1768:5398 50x40 fill=rgba(255,255,255,1.0) text="AU" font=Inter/20.0px/500 color=#ffffff
+  [FRAME] "content" id=1487:8442 1920x961
+    [FRAME] "sidebar" id=1487:10342 476x941
+      [INSTANCE] "Component 11" id=1487:10343 437x78 radius=50.0
+        [FRAME] "ic:sharp-home" id=I1487:10343;1391:7293 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10343;1391:7294 28x24 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1487:10343;1391:6154 323x20
+          [TEXT] "Text" id=I1487:10343;1391:6155 323x20 fill=rgba(11,0,92,1.0) text="Home" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 18" id=1594:6042 437x78 radius=50.0
+        [FRAME] "ic:round-book" id=I1594:6042;1594:5815 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1594:6042;1594:5816 20x25 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1594:6042;1594:5817 269x20
+          [TEXT] "Text" id=I1594:6042;1594:5818 269x20 fill=rgba(11,0,92,1.0) text="My Courses" font=Poppins/20.0px/500 color=#0b005c
+        [FRAME] "mingcute:down-line" id=I1594:6042;1594:5819 30x30 fill=rgba(255,255,255,1.0)
+          [GROUP] "Group" id=I1594:6042;1594:5820 30x30
+      [INSTANCE] "Component 15" id=1487:10345 437x78 radius=50.0
+        [FRAME] "material-symbols-light:task" id=I1487:10345;1391:7983 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10345;1391:7984 19x25 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1487:10345;1391:7048 323x20
+          [TEXT] "Text" id=I1487:10345;1391:7049 323x20 fill=rgba(11,0,92,1.0) text="Tasks" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 17" id=1487:10346 437x78 radius=50.0
+        [FRAME] "raphael:books" id=I1487:10346;1391:7335 34x34 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10346;1391:7336 23x27 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1487:10346;1391:6117 323x20
+          [TEXT] "Text" id=I1487:10346;1391:6118 323x20 fill=rgba(11,0,92,1.0) text="Sectors" font=Poppins/20.0px/500 color=#0b005c
+      [INSTANCE] "Component 13" id=1487:10347 437x78 fill=rgba(13,66,145,1.0) radius=50.0
+        [FRAME] "mdi:book-arrow-down" id=I1487:10347;1391:7918 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10347;1391:7919 22x26 fill=rgba(255,255,255,1.0)
+        [FRAME] "span" id=I1487:10347;1391:7430 323x20
+          [TEXT] "Text" id=I1487:10347;1391:7431 323x20 fill=rgba(255,255,255,1.0) text="Archived Courses" font=Poppins/20.0px/500 color=#ffffff
+      [INSTANCE] "Component 9" id=1487:10348 437x78 radius=50.0
+        [FRAME] "ic:baseline-settings" id=I1487:10348;1391:7361 30x30 fill=rgba(255,255,255,1.0)
+          [VECTOR] "Vector" id=I1487:10348;1391:7362 23x24 fill=rgba(11,0,92,1.0)
+        [FRAME] "span" id=I1487:10348;1391:6125 323x20
+          [TEXT] "Text" id=I1487:10348;1391:6126 323x20 fill=rgba(11,0,92,1.0) text="Settings" font=Poppins/20.0px/500 color=#0b005c
+    [FRAME] "main frame" id=1487:8444 1444x941 fill=rgba(255,255,255,1.0)

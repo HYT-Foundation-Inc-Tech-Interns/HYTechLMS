@@ -1,0 +1,40 @@
+[FRAME] name="ADMIN HOME" id=1301:5559 1920x1080 fill=rgba(246,246,246,1.0)
+  [FRAME] name="topbar" id=1487:5295 1920x119
+    [GROUP] name="Group 17" id=1487:5296 172x63
+      [RECTANGLE] name="image-removebg-preview 1" id=1487:5297 56x63
+      [TEXT] name="HYTech" id=1487:5298 98x63 fill=rgba(255,255,255,1.0) text="HYTech" font=Poppins/24.0px/900 color=#ffffff
+    [FRAME] name="span" id=1487:5399 50x50 fill=rgba(249,115,22,1.0) radius=100.0
+      [TEXT] name="Text" id=1487:5400 50x40 fill=rgba(255,255,255,1.0) text="AU" font=Inter/20.0px/500 color=#ffffff
+  [FRAME] name="content" id=1301:5566 1920x961
+    [COMPONENT] name="sidebar" id=1342:6209 476x941
+      [INSTANCE] name="Component 11" id=1391:6233 437x78 fill=rgba(13,66,145,1.0) radius=50.0
+        [FRAME] name="ic:sharp-home" id=I1391:6233;1391:7239 34x34 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I1391:6233;1391:6169 323x20
+      [INSTANCE] name="Component 11" id=1391:6234 437x78 radius=50.0
+        [FRAME] name="streamline:user-multiple-group-solid" id=I1391:6234;1391:7306 24x24 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I1391:6234;1391:6109 323x20
+      [INSTANCE] name="Component 10" id=1391:6236 437x78 radius=50.0
+        [FRAME] name="raphael:books" id=I1391:6236;1391:7335 34x34 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I1391:6236;1391:6117 323x20
+      [INSTANCE] name="Component 7" id=1391:6237 437x78 radius=50.0
+        [FRAME] name="material-symbols:list-rounded" id=I1391:6237;1391:7348 34x34 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I1391:6237;1391:6121 323x20
+      [INSTANCE] name="Component 9" id=1391:6238 437x78 radius=50.0
+        [FRAME] name="ic:baseline-settings" id=I1391:6238;1391:7361 30x30 fill=rgba(255,255,255,1.0)
+        [FRAME] name="span" id=I1391:6238;1391:6125 323x20
+    [FRAME] name="main frame" id=1301:5563 1444x941 fill=rgba(255,255,255,1.0)
+      [FRAME] name="header.flex" id=1384:7031 1384x94
+        [FRAME] name="div" id=1384:7032 418x54
+      [FRAME] name="div.grid" id=1384:5918 1384x148
+        [FRAME] name="div.bg-card" id=1384:5919 217x148 fill=rgba(255,255,255,1.0) radius=24.0
+        [FRAME] name="div.bg-card" id=1384:6098 217x148 fill=rgba(255,255,255,1.0) radius=24.0
+        [FRAME] name="div.bg-card" id=1384:6112 217x148 fill=rgba(255,255,255,1.0) radius=24.0
+        [FRAME] name="div.bg-card" id=1384:5929 217x148 fill=rgba(255,255,255,1.0) radius=24.0
+        [FRAME] name="div.bg-card" id=1384:6126 217x148 fill=rgba(255,255,255,1.0) radius=24.0
+        [FRAME] name="div.bg-card" id=1384:8727 217x148 fill=rgba(255,255,255,1.0) radius=24.0
+      [FRAME] name="Frame 94" id=1384:8538 1384x212
+        [FRAME] name="div.bg-card" id=1384:7038 1384x100 fill=rgba(254,123,2,0.15) radius=24.0
+        [FRAME] name="div.bg-card" id=1384:8503 1384x100 fill=rgba(50,115,220,0.1) radius=24.0
+      [FRAME] name="Frame 95" id=1384:8782 1384x355
+        [FRAME] name="div.bg-card" id=1384:7694 928x355 fill=rgba(255,255,255,1.0) radius=24.0
+        [FRAME] name="div.bg-card" id=1384:8747 440x355 fill=rgba(255,255,255,1.0) radius=24.0
