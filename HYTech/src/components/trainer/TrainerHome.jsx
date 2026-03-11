@@ -170,7 +170,7 @@ const TrainerHome = () => {
       onClick={() => navigate(`/dashboard/courses/${course.id}`)}
     >
       {/* Course Image */}
-      <div className="relative h-48 overflow-hidden">
+      <div className={`relative h-48 overflow-hidden bg-gradient-to-br ${course.color}`}>
         <img 
           src={course.image}
           alt={course.name}
@@ -179,10 +179,16 @@ const TrainerHome = () => {
             e.target.style.display = 'none';
           }}
         />
+        {/* Overlay for readability */}
+        <div className="absolute inset-0 bg-black/10" />
         {/* Student Count Badge */}
-        <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full group-hover:bg-white/30 transition-colors">
+        <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-full">
           <Users className="w-4 h-4 text-white" />
           <span className="text-sm font-medium text-white">{course.students} Students</span>
+        </div>
+        {/* Course Initial Fallback */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-0">
+          <span className="text-white text-6xl font-bold opacity-20">{course.className.charAt(0)}</span>
         </div>
       </div>
 
@@ -196,14 +202,14 @@ const TrainerHome = () => {
         {/* Actions */}
         <div className="flex items-center justify-end gap-2">
           <button 
-            className="p-2 hover:bg-blue-50:bg-gray-700 rounded-lg transition-all duration-200 text-gray-500 hover:text-blue-600:text-blue-400 hover:scale-110"
+            className="p-2 hover:bg-blue-50 rounded-lg transition-all duration-200 text-gray-400 hover:text-blue-600"
             onClick={(e) => handleViewProgress(e, course)}
             title="View Progress"
           >
             <TrendingUp className="w-5 h-5" />
           </button>
           <button 
-            className="p-2 hover:bg-blue-50:bg-gray-700 rounded-lg transition-all duration-200 text-gray-500 hover:text-blue-600:text-blue-400 hover:scale-110"
+            className="p-2 hover:bg-blue-50 rounded-lg transition-all duration-200 text-gray-400 hover:text-blue-600"
             onClick={(e) => handleCopyCode(e, course)}
             title="Copy Class Code"
           >
@@ -211,33 +217,34 @@ const TrainerHome = () => {
           </button>
           <div className="relative" ref={activeMenu === course.id ? menuRef : null}>
             <button 
-              className="p-2 hover:bg-gray-100:bg-gray-700 rounded-lg transition-all duration-200 text-gray-500 hover:text-gray-700:text-gray-200 hover:scale-110"
+              className="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200 text-gray-400 hover:text-gray-700"
               onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === course.id ? null : course.id); }}
             >
               <MoreVertical className="w-5 h-5" />
             </button>
             {activeMenu === course.id && (
-              <div className="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-20 animate-slide-down">
+              <div className="absolute right-0 mt-1 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-20">
                 <button
                   onClick={(e) => { e.stopPropagation(); showToast('Edit feature coming soon!'); setActiveMenu(null); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50:bg-gray-700 transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 transition-colors text-sm"
                 >
-                  <Edit2 className="w-4 h-4" />
+                  <Edit2 className="w-4 h-4 text-blue-500" />
                   <span>Edit Course</span>
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); setSelectedCourse(course); setShowArchiveModal(true); setActiveMenu(null); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50:bg-gray-700 transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 transition-colors text-sm"
                 >
-                  <Archive className="w-4 h-4" />
-                  <span>Archive</span>
+                  <Archive className="w-4 h-4 text-orange-500" />
+                  <span>Archive Course</span>
                 </button>
+                <div className="border-t border-gray-100" />
                 <button
                   onClick={(e) => { e.stopPropagation(); showToast('Delete feature coming soon!'); setActiveMenu(null); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 transition-colors text-sm"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>Delete</span>
+                  <span>Delete Course</span>
                 </button>
               </div>
             )}
@@ -278,8 +285,8 @@ const TrainerHome = () => {
 
       {/* Archive Confirmation Modal */}
       {showArchiveModal && selectedCourse && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-slide-up">
+        <div className="fixed top-0 left-0 right-0 bottom-0 bg-black/60 z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
             <div className="p-6 text-center">
               <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Archive className="w-8 h-8 text-orange-600" />
@@ -320,3 +327,6 @@ const TrainerHome = () => {
 };
 
 export default TrainerHome;
+
+
+

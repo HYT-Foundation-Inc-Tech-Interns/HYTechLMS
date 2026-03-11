@@ -36,19 +36,19 @@ const Sidebar = () => {
 
   // Mock enrolled courses
   const enrolledCourses = [
-    { id: 1, name: 'AUTOMOTIVE SERVICES NCII', code: 'KC' },
-    { id: 2, name: 'PLUMBING NCII', code: 'P' },
-    { id: 3, name: 'HILOT (WELLNESS)MASSAGE', code: 'HM' },
-    { id: 4, name: 'CAREGIVING NCII', code: 'CG' },
-    { id: 5, name: 'BEAUTY CARE (SKINCARE)', code: 'BS' },
-    { id: 6, name: 'BEAUTY CARE (NAIL CARE)', code: 'BN' },
-    { id: 7, name: 'VISUAL GRAPHICS DESIGN', code: 'VG' },
-    { id: 8, name: 'COMPUTER SYSTEM SERVICING', code: 'CS' },
-    { id: 9, name: 'BOOKKEEPING NCII', code: 'BK' },
-    { id: 10, name: 'HOUSEKEEPING NCII', code: 'HK' },
-    { id: 11, name: 'EVENT MANAGEMENT SERVICES', code: 'EM' },
-    { id: 12, name: 'BARISTA NCII', code: 'BA' },
-    { id: 13, name: 'FOOD AND BEVERAGE SERVICES', code: 'FB' }
+    { id: 1, name: 'AUTOMOTIVE SERVICES NCII', code: 'KC', color: 'bg-orange-100 text-orange-700' },
+    { id: 2, name: 'PLUMBING NCII', code: 'P', color: 'bg-blue-100 text-blue-700' },
+    { id: 3, name: 'HILOT (WELLNESS)MASSAGE', code: 'HM', color: 'bg-green-100 text-green-700' },
+    { id: 4, name: 'CAREGIVING NCII', code: 'CG', color: 'bg-teal-100 text-teal-700' },
+    { id: 5, name: 'BEAUTY CARE (SKINCARE)', code: 'BS', color: 'bg-pink-100 text-pink-700' },
+    { id: 6, name: 'BEAUTY CARE (NAIL CARE)', code: 'BN', color: 'bg-rose-100 text-rose-700' },
+    { id: 7, name: 'VISUAL GRAPHICS DESIGN', code: 'VG', color: 'bg-indigo-100 text-indigo-700' },
+    { id: 8, name: 'COMPUTER SYSTEM SERVICING', code: 'CS', color: 'bg-cyan-100 text-cyan-700' },
+    { id: 9, name: 'BOOKKEEPING NCII', code: 'BK', color: 'bg-purple-100 text-purple-700' },
+    { id: 10, name: 'HOUSEKEEPING NCII', code: 'HK', color: 'bg-yellow-100 text-yellow-700' },
+    { id: 11, name: 'EVENT MANAGEMENT SERVICES', code: 'EM', color: 'bg-sky-100 text-sky-700' },
+    { id: 12, name: 'BARISTA NCII', code: 'BA', color: 'bg-amber-100 text-amber-700' },
+    { id: 13, name: 'FOOD AND BEVERAGE SERVICES', code: 'FB', color: 'bg-emerald-100 text-emerald-700' }
   ];
 
   const NavItem = ({ item }) => {
@@ -150,7 +150,7 @@ const Sidebar = () => {
                       }
                       onClick={() => setIsMobileOpen(false)}
                     >
-                      <div className="w-7 h-7 bg-gray-200 rounded-full flex items-center justify-center text-xs font-semibold text-gray-600">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${course.color}`}>
                         {course.code}
                       </div>
                       <span className="text-sm font-medium">{course.name}</span>

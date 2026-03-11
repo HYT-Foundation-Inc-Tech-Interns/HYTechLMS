@@ -6,14 +6,24 @@ import {
   MapPin,
   Video,
   FileText,
-  Plus
+  Plus,
+  X,
+  Calendar
 } from 'lucide-react';
 
 const StudentCalendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
-
-  const events = [
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [newEvent, setNewEvent] = useState({
+    title: '',
+    date: '',
+    startTime: '',
+    endTime: '',
+    type: 'personal',
+    location: ''
+  });
+  const [events, setEvents] = useState([
     {
       id: 1,
       title: 'Barista NCII - Live Session',
@@ -48,7 +58,53 @@ const StudentCalendar = () => {
       type: 'deadline',
       color: 'red'
     }
-  ];
+  ]);
+
+  const handleAddEvent = () => {
+    if (newEvent.title && newEvent.date && newEvent.startTime) {
+      const [year, month, day] = newEvent.date.split('-').map(Number);
+      const [hours, minutes] = newEvent.startTime.split(':').map(Number);
+      
+      const eventColors = {
+        personal: 'purple',
+        meeting: 'blue',
+        deadline: 'red',
+        reminder: 'orange'
+      };
+
+      const newEventData = {
+        id: events.length + 1,
+        title: newEvent.title,
+        date: new Date(year, month - 1, day, hours, minutes),
+        endTime: newEvent.endTime || '',
+        type: newEvent.type,
+        location: newEvent.location || '',
+        color: eventColors[newEvent.type] || 'blue'
+      };
+
+      setEvents([...events, newEventData]);
+      setNewEvent({
+        title: '',
+        date: '',
+        startTime: '',
+        endTime: '',
+        type: 'personal',
+        location: ''
+      });
+      setShowEventModal(false);
+    }
+  };
+
+  const openAddEventModal = () => {
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    setNewEvent({
+      ...newEvent,
+      date: `${year}-${month}-${day}`
+    });
+    setShowEventModal(true);
+  };
 
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
@@ -105,6 +161,9 @@ const StudentCalendar = () => {
       case 'quiz': return <FileText className="w-4 h-4" />;
       case 'assessment': return <FileText className="w-4 h-4" />;
       case 'deadline': return <Clock className="w-4 h-4" />;
+      case 'personal': return <Calendar className="w-4 h-4" />;
+      case 'meeting': return <Video className="w-4 h-4" />;
+      case 'reminder': return <Clock className="w-4 h-4" />;
       default: return <Clock className="w-4 h-4" />;
     }
   };
@@ -115,6 +174,7 @@ const StudentCalendar = () => {
       case 'orange': return 'bg-orange-100 border-orange-500 text-orange-700';
       case 'green': return 'bg-green-100 border-green-500 text-green-700';
       case 'red': return 'bg-red-100 border-red-500 text-red-700';
+      case 'purple': return 'bg-purple-100 border-purple-500 text-purple-700';
       default: return 'bg-gray-100 border-gray-500 text-gray-700';
     }
   };
@@ -223,7 +283,10 @@ const StudentCalendar = () => {
               <h3 className="font-bold text-gray-900">
                 {selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </h3>
-              <button className="p-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors">
+              <button 
+                onClick={openAddEventModal}
+                className="p-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+              >
                 <Plus className="w-4 h-4" />
               </button>
             </div>
@@ -277,6 +340,7 @@ const StudentCalendar = () => {
                     event.color === 'blue' ? 'bg-blue-100' :
                     event.color === 'orange' ? 'bg-orange-100' :
                     event.color === 'green' ? 'bg-green-100' :
+                    event.color === 'purple' ? 'bg-purple-100' :
                     'bg-red-100'
                   }`}>
                     {getEventIcon(event.type)}
@@ -299,11 +363,11 @@ const StudentCalendar = () => {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-blue-500 rounded-full" />
-                <span className="text-sm text-gray-600">Live Sessions</span>
+                <span className="text-sm text-gray-600">Live Sessions / Meetings</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-orange-500 rounded-full" />
-                <span className="text-sm text-gray-600">Quizzes</span>
+                <span className="text-sm text-gray-600">Quizzes / Reminders</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-green-500 rounded-full" />
@@ -313,10 +377,129 @@ const StudentCalendar = () => {
                 <div className="w-3 h-3 bg-red-500 rounded-full" />
                 <span className="text-sm text-gray-600">Deadlines</span>
               </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-purple-500 rounded-full" />
+                <span className="text-sm text-gray-600">Personal Events</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Add Event Modal */}
+      {showEventModal && (
+        <div className="fixed top-0 left-0 right-0 bottom-0 bg-black/60 z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-100 rounded-lg">
+                  <Calendar className="w-5 h-5 text-orange-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">Add New Event</h2>
+              </div>
+              <button 
+                onClick={() => setShowEventModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-4">
+              {/* Event Title */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Event Title *</label>
+                <input
+                  type="text"
+                  value={newEvent.title}
+                  onChange={(e) => setNewEvent({...newEvent, title: e.target.value})}
+                  placeholder="Enter event title"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Date */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+                <input
+                  type="date"
+                  value={newEvent.date}
+                  onChange={(e) => setNewEvent({...newEvent, date: e.target.value})}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Time */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
+                  <input
+                    type="time"
+                    value={newEvent.startTime}
+                    onChange={(e) => setNewEvent({...newEvent, startTime: e.target.value})}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                  <input
+                    type="time"
+                    value={newEvent.endTime}
+                    onChange={(e) => setNewEvent({...newEvent, endTime: e.target.value})}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Event Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Event Type</label>
+                <select
+                  value={newEvent.type}
+                  onChange={(e) => setNewEvent({...newEvent, type: e.target.value})}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="personal">Personal</option>
+                  <option value="meeting">Meeting</option>
+                  <option value="deadline">Deadline</option>
+                  <option value="reminder">Reminder</option>
+                </select>
+              </div>
+
+              {/* Location */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                <input
+                  type="text"
+                  value={newEvent.location}
+                  onChange={(e) => setNewEvent({...newEvent, location: e.target.value})}
+                  placeholder="Enter location (optional)"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex gap-3 p-6 border-t border-gray-100">
+              <button 
+                onClick={() => setShowEventModal(false)}
+                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleAddEvent}
+                disabled={!newEvent.title || !newEvent.date || !newEvent.startTime}
+                className="flex-1 px-4 py-2.5 bg-[#0D4291] text-white rounded-xl font-medium hover:bg-[#0a3577] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                Add Event
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -6,11 +6,17 @@ import {
   CheckCircle2,
   Clock,
   Star,
-  Users
+  Users,
+  X,
+  BookOpen,
+  Award,
+  FileText,
+  Play
 } from 'lucide-react';
 
 const StudentArchivedCourses = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
 
   const archivedCourses = [
@@ -49,6 +55,11 @@ const StudentArchivedCourses = () => {
   const handleDelete = (course) => {
     setSelectedCourse(course);
     setShowDeleteModal(true);
+  };
+
+  const handleView = (course) => {
+    setSelectedCourse(course);
+    setShowViewModal(true);
   };
 
   const confirmDelete = () => {
@@ -121,7 +132,10 @@ const StudentArchivedCourses = () => {
 
               {/* Actions */}
               <div className="flex gap-2 pt-2">
-                <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0D4291] text-white rounded-lg font-medium hover:bg-[#0a3577] transition-colors">
+                <button 
+                  onClick={() => handleView(course)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0D4291] text-white rounded-lg font-medium hover:bg-[#0a3577] transition-colors"
+                >
                   <Eye className="w-4 h-4" />
                   View Course
                 </button>
@@ -146,10 +160,143 @@ const StudentArchivedCourses = () => {
         </div>
       )}
 
+      {/* View Course Modal */}
+      {showViewModal && selectedCourse && (
+        <div className="fixed top-0 left-0 right-0 bottom-0 bg-black/60 z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="relative h-48 bg-gradient-to-br from-[#0D4291] to-[#0B005C]">
+              <img 
+                src={selectedCourse.image} 
+                alt={selectedCourse.name}
+                className="w-full h-full object-cover opacity-60"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              <button 
+                onClick={() => setShowViewModal(false)}
+                className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+              <div className="absolute bottom-4 left-6 right-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Completed
+                  </span>
+                  <span className="px-3 py-1 bg-white text-[#0D4291] text-sm font-bold rounded-full">
+                    Grade: {selectedCourse.finalGrade}
+                  </span>
+                </div>
+                <h2 className="text-2xl font-bold text-white">{selectedCourse.name}</h2>
+                <p className="text-white/80">Instructor: {selectedCourse.instructor}</p>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-12rem)]">
+              {/* Course Stats */}
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="bg-gray-50 rounded-xl p-4 text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                    <span className="text-xl font-bold text-gray-900">{selectedCourse.rating}</span>
+                  </div>
+                  <p className="text-sm text-gray-500">Course Rating</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4 text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <Users className="w-5 h-5 text-blue-500" />
+                    <span className="text-xl font-bold text-gray-900">{selectedCourse.students}</span>
+                  </div>
+                  <p className="text-sm text-gray-500">Students</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4 text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <Clock className="w-5 h-5 text-green-500" />
+                    <span className="text-xl font-bold text-gray-900">100%</span>
+                  </div>
+                  <p className="text-sm text-gray-500">Completed</p>
+                </div>
+              </div>
+
+              {/* Course Description */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-[#0D4291]" />
+                  Course Overview
+                </h3>
+                <p className="text-gray-600 leading-relaxed">
+                  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+                </p>
+              </div>
+
+              {/* Learning Outcomes */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <Award className="w-5 h-5 text-[#0D4291]" />
+                  What You Learned
+                </h3>
+                <ul className="space-y-2">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-600">Lorem ipsum dolor sit amet, consectetur adipiscing elit</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-600">Sed do eiusmod tempor incididunt ut labore et dolore</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-600">Ut enim ad minim veniam, quis nostrud exercitation</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-600">Duis aute irure dolor in reprehenderit in voluptate</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Course Modules */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-[#0D4291]" />
+                  Course Modules
+                </h3>
+                <div className="space-y-2">
+                  {['Module 1: Introduction', 'Module 2: Fundamentals', 'Module 3: Advanced Concepts', 'Module 4: Practical Application', 'Module 5: Final Assessment'].map((module, index) => (
+                    <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      </div>
+                      <span className="text-gray-700 font-medium">{module}</span>
+                      <span className="ml-auto text-sm text-gray-500">Completed</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Completion Info */}
+              <div className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-200">
+                <div>
+                  <p className="text-sm text-green-600 font-medium">Completion Date</p>
+                  <p className="text-lg font-bold text-green-700">{selectedCourse.completedDate}</p>
+                </div>
+                <button className="flex items-center gap-2 px-4 py-2 bg-[#0D4291] text-white rounded-xl font-medium hover:bg-[#0a3577] transition-colors">
+                  <Award className="w-4 h-4" />
+                  View Certificate
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
       {showDeleteModal && selectedCourse && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-slide-up">
+        <div className="fixed top-0 left-0 right-0 bottom-0 bg-black/60 z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
             <div className="p-6 text-center">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Trash2 className="w-8 h-8 text-red-500" />

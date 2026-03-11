@@ -37,7 +37,7 @@ const StudentSidebar = () => {
 
   // Mock enrolled courses
   const enrolledCourses = [
-    { id: 1, name: 'Barista NCII', code: 'B' }
+    { id: 1, name: 'Barista NCII', code: 'B', color: 'bg-amber-100 text-amber-700' }
   ];
 
   const NavItem = ({ item }) => {
@@ -139,7 +139,7 @@ const StudentSidebar = () => {
                       }
                       onClick={() => setIsMobileOpen(false)}
                     >
-                      <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${course.color}`}>
                         {course.code}
                       </div>
                       <span className="text-sm font-medium">{course.name}</span>

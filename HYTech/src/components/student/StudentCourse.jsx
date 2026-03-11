@@ -383,16 +383,16 @@ See you on Friday!`,
 
   return (
     <div className="p-6 space-y-6">
-      {/* Download Toast */}
+      {/* Download Toast - fixed to bottom-right corner */}
       {showDownloadToast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-white rounded-xl shadow-2xl border border-gray-100 p-4 flex items-center gap-4 animate-slide-down">
-          <div>
+        <div className="fixed bottom-6 right-6 z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 p-4 flex items-center gap-4 min-w-[300px]">
+          <div className="flex-1">
             <p className="font-semibold text-gray-900">Download complete.</p>
             <p className="text-sm text-gray-500">{downloadFileName} (5mb)</p>
           </div>
           <button 
-            onClick={() => {}}
-            className="px-4 py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
+            onClick={() => setShowDownloadToast(false)}
+            className="px-4 py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors flex-shrink-0"
           >
             Open
           </button>
