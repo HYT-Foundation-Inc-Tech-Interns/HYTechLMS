@@ -30,7 +30,7 @@ const TrainerHome = () => {
   const courses = [
     {
       id: 1,
-      name: 'Automo',
+      name: 'K/C ',
       batch: 'Automotive Batch 01',
       className: 'Automotive Class',
       students: 45,

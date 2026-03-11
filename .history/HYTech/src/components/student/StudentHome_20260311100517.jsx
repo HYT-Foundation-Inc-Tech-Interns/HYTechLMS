@@ -60,7 +60,7 @@ const StudentHome = () => {
   const popularCourses = [
     {
       id: 1,
-      title: 'K/C SERVICING (DUNRAC) ',
+      title: 'K/C SERVICING (DUNRAC) NCII',
       instructor: 'Mr. Victor Santos',
       rating: 4.5,
       reviews: 29,

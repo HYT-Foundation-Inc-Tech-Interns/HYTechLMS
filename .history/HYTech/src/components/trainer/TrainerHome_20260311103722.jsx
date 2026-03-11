@@ -30,7 +30,7 @@ const TrainerHome = () => {
   const courses = [
     {
       id: 1,
-      name: 'Automo',
+      name: 'Automotive Servicing NCII',
       batch: 'Automotive Batch 01',
       className: 'Automotive Class',
       students: 45,
@@ -43,7 +43,7 @@ const TrainerHome = () => {
       batch: 'Construction Batch 01',
       className: 'Construction Class',
       students: 38,
-      image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=500&h=300&fit=crop',
+      image: 'https://repairsmith-prod-wordpress.s3.amazonaws.com/2023/05/engine-maintenance.jpgw=500&h=300&fit=crop',
       color: 'from-amber-600 to-amber-800'
     },
     {

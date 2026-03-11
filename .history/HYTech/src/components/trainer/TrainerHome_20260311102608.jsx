@@ -30,8 +30,8 @@ const TrainerHome = () => {
   const courses = [
     {
       id: 1,
-      name: 'Automo',
-      batch: 'Automotive Batch 01',
+      name: 'K/C SERVICING (DUNRAC) NCII',
+      batch: 'K',
       className: 'Automotive Class',
       students: 45,
       image: 'https://images.unsplash.com/photo-1487754180144-351b8e906e6c?w=500&h=300&fit=crop',

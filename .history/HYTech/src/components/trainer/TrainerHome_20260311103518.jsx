@@ -30,11 +30,11 @@ const TrainerHome = () => {
   const courses = [
     {
       id: 1,
-      name: 'Automo',
+      name: 'Automotive Servicing NCII',
       batch: 'Automotive Batch 01',
       className: 'Automotive Class',
       students: 45,
-      image: 'https://images.unsplash.com/photo-1487754180144-351b8e906e6c?w=500&h=300&fit=crop',
+      image: 'https://images.unsplash.com/photo-1487754180144-351b8e906e6c?w=500&h=300&fit=cropblob:https://www.facebook.com/5778450c-5ace-4d76-a615-86e9d7d904c6',
       color: 'from-blue-600 to-blue-800'
     },
     {

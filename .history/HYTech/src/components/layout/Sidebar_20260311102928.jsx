@@ -36,7 +36,7 @@ const Sidebar = () => {
 
   // Mock enrolled courses
   const enrolledCourses = [
-    { id: 1, name: 'AUTOMOTIVE SERVICES NCII', code: 'KC' },
+    { id: 1, name: 'AUTOMOTIVE ', code: 'KC' },
     { id: 2, name: 'PLUMBING NCII', code: 'P' },
     { id: 3, name: 'HILOT (WELLNESS)MASSAGE', code: 'HM' },
     { id: 4, name: 'CAREGIVING NCII', code: 'CG' },
