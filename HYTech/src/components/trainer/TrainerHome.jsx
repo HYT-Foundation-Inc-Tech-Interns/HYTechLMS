@@ -30,30 +30,120 @@ const TrainerHome = () => {
   const courses = [
     {
       id: 1,
-      name: 'Barista NCII',
-      batch: 'Dreamers Batch 16',
-      className: 'Sample Class',
-      students: 67,
-      image: '/images/barista_course.jpg',
+      name: 'K/C SERVICING (DUNRAC) NCII',
+      batch: 'Automotive Batch 01',
+      className: 'Automotive Class',
+      students: 45,
+      image: 'https://images.unsplash.com/photo-1487754180144-351b8e906e6c?w=500&h=300&fit=crop',
       color: 'from-blue-600 to-blue-800'
     },
     {
       id: 2,
-      name: 'Barista NCII',
-      batch: 'Dreamers Batch 16',
-      className: 'Sample Class',
-      students: 67,
-      image: '/images/barista_course.jpg',
-      color: 'from-purple-600 to-purple-800'
+      name: 'PLUMBING NCII',
+      batch: 'Construction Batch 01',
+      className: 'Construction Class',
+      students: 38,
+      image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=500&h=300&fit=crop',
+      color: 'from-amber-600 to-amber-800'
     },
     {
       id: 3,
-      name: 'Barista NCII',
-      batch: 'Dreamers Batch 16',
-      className: 'Sample Class',
-      students: 67,
-      image: '/images/barista_course.jpg',
-      color: 'from-teal-600 to-teal-800'
+      name: 'HILOT (WELLNESS)MASSAGE NCII',
+      batch: 'Health & Wellness Batch 01',
+      className: 'Wellness Class',
+      students: 52,
+      image: 'https://images.unsplash.com/photo-1544161515-81fded323381?w=500&h=300&fit=crop',
+      color: 'from-emerald-600 to-emerald-800'
+    },
+    {
+      id: 4,
+      name: 'CAREGIVING NCII',
+      batch: 'Health & Wellness Batch 02',
+      className: 'Caregiving Class',
+      students: 41,
+      image: 'https://images.unsplash.com/photo-1631217314831-dc4a8f63e9b1?w=500&h=300&fit=crop',
+      color: 'from-emerald-600 to-emerald-800'
+    },
+    {
+      id: 5,
+      name: 'BEAUTY CARE (SKINCARE) SERVICES NCII',
+      batch: 'Health & Wellness Batch 03',
+      className: 'Skincare Class',
+      students: 48,
+      image: 'https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=500&h=300&fit=crop',
+      color: 'from-emerald-600 to-emerald-800'
+    },
+    {
+      id: 6,
+      name: 'BEAUTY CARE (NAIL CARE) SERVICES NCII',
+      batch: 'Health & Wellness Batch 04',
+      className: 'Nail Care Class',
+      students: 44,
+      image: 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=500&h=300&fit=crop',
+      color: 'from-emerald-600 to-emerald-800'
+    },
+    {
+      id: 7,
+      name: 'VISUAL GRAPHICS DESIGN',
+      batch: 'IT Batch 01',
+      className: 'Graphics Design Class',
+      students: 56,
+      image: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=500&h=300&fit=crop',
+      color: 'from-indigo-600 to-indigo-800'
+    },
+    {
+      id: 8,
+      name: 'COMPUTER SYSTEM SERVICING NCII',
+      batch: 'IT Batch 02',
+      className: 'Computer Services Class',
+      students: 50,
+      image: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&h=300&fit=crop',
+      color: 'from-indigo-600 to-indigo-800'
+    },
+    {
+      id: 9,
+      name: 'BOOKKEEPING NCII',
+      batch: 'Community Services Batch 01',
+      className: 'Bookkeeping Class',
+      students: 35,
+      image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=500&h=300&fit=crop',
+      color: 'from-pink-600 to-pink-800'
+    },
+    {
+      id: 10,
+      name: 'HOUSEKEEPING NCII',
+      batch: 'Community Services Batch 02',
+      className: 'Housekeeping Class',
+      students: 39,
+      image: 'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=500&h=300&fit=crop',
+      color: 'from-pink-600 to-pink-800'
+    },
+    {
+      id: 11,
+      name: 'EVENT MANAGEMENT SERVICES NCIII',
+      batch: 'Tourism Batch 01',
+      className: 'Event Management Class',
+      students: 47,
+      image: 'https://images.unsplash.com/photo-1540575467063-178f50002cbc?w=500&h=300&fit=crop',
+      color: 'from-sky-600 to-sky-800'
+    },
+    {
+      id: 12,
+      name: 'BARISTA NCII',
+      batch: 'Hospitality Batch 01',
+      className: 'Barista Class',
+      students: 54,
+      image: 'https://images.unsplash.com/photo-1495521821757-a1efb6729352?w=500&h=300&fit=crop',
+      color: 'from-rose-600 to-rose-800'
+    },
+    {
+      id: 13,
+      name: 'FOOD AND BEVERAGE SERVICES NCII',
+      batch: 'Hospitality Batch 02',
+      className: 'F&B Services Class',
+      students: 59,
+      image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&h=300&fit=crop',
+      color: 'from-rose-600 to-rose-800'
     },
   ];
 
@@ -81,7 +171,6 @@ const TrainerHome = () => {
     >
       {/* Course Image */}
       <div className="relative h-48 overflow-hidden">
-        <div className={`absolute inset-0 bg-gradient-to-br ${course.color} opacity-80`} />
         <img 
           src={course.image}
           alt={course.name}

@@ -36,7 +36,19 @@ const Sidebar = () => {
 
   // Mock enrolled courses
   const enrolledCourses = [
-    { id: 1, name: 'Barista NCII', code: 'B' }
+    { id: 1, name: 'K/C SERVICING (DUNRAC)', code: 'KC' },
+    { id: 2, name: 'PLUMBING NCII', code: 'P' },
+    { id: 3, name: 'HILOT (WELLNESS)MASSAGE', code: 'HM' },
+    { id: 4, name: 'CAREGIVING NCII', code: 'CG' },
+    { id: 5, name: 'BEAUTY CARE (SKINCARE)', code: 'BS' },
+    { id: 6, name: 'BEAUTY CARE (NAIL CARE)', code: 'BN' },
+    { id: 7, name: 'VISUAL GRAPHICS DESIGN', code: 'VG' },
+    { id: 8, name: 'COMPUTER SYSTEM SERVICING', code: 'CS' },
+    { id: 9, name: 'BOOKKEEPING NCII', code: 'BK' },
+    { id: 10, name: 'HOUSEKEEPING NCII', code: 'HK' },
+    { id: 11, name: 'EVENT MANAGEMENT SERVICES', code: 'EM' },
+    { id: 12, name: 'BARISTA NCII', code: 'BA' },
+    { id: 13, name: 'FOOD AND BEVERAGE SERVICES', code: 'FB' }
   ];
 
   const NavItem = ({ item }) => {

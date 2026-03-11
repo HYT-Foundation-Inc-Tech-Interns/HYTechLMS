@@ -276,27 +276,179 @@ const Course = () => {
     { id: 'assessments', label: 'Assessments', icon: ClipboardList },
   ];
 
-  const courseData = {
-    name: 'Sample Class',
-    batch: 'Dreamers Batch 16',
-    code: 'HYTGLOBAL',
-    program: 'BARISTA NC II',
-    scholarship: 'TESDA',
-    progress: 65,
-    totalModules: 12,
-    completedModules: 8,
-    students: 67,
-    trainer: 'Ms. Maria Clara Garcia'
+  // Course data mapping for all 13 courses
+  const getAllCourseData = () => {
+    const coursesMap = {
+      1: {
+        name: 'Automotive Class',
+        batch: 'Automotive Batch 01',
+        code: 'AUTO01',
+        program: 'K/C SERVICING (DUNRAC) NCII',
+        scholarship: 'TESDA',
+        progress: 65,
+        totalModules: 10,
+        completedModules: 7,
+        students: 45,
+        trainer: 'Mr. Victor Santos'
+      },
+      2: {
+        name: 'Construction Class',
+        batch: 'Construction Batch 01',
+        code: 'CONS01',
+        program: 'PLUMBING NCII',
+        scholarship: 'TESDA',
+        progress: 58,
+        totalModules: 12,
+        completedModules: 7,
+        students: 38,
+        trainer: 'Mr. Ramon Cruz'
+      },
+      3: {
+        name: 'Wellness Class',
+        batch: 'Health & Wellness Batch 01',
+        code: 'WELL01',
+        program: 'HILOT (WELLNESS)MASSAGE NCII',
+        scholarship: 'TESDA',
+        progress: 72,
+        totalModules: 11,
+        completedModules: 8,
+        students: 52,
+        trainer: 'Ms. Angela Fernandez'
+      },
+      4: {
+        name: 'Caregiving Class',
+        batch: 'Health & Wellness Batch 02',
+        code: 'CARE01',
+        program: 'CAREGIVING NCII',
+        scholarship: 'TESDA',
+        progress: 68,
+        totalModules: 10,
+        completedModules: 7,
+        students: 41,
+        trainer: 'Ms. Grace Reyes'
+      },
+      5: {
+        name: 'Skincare Class',
+        batch: 'Health & Wellness Batch 03',
+        code: 'SKIN01',
+        program: 'BEAUTY CARE (SKINCARE) SERVICES NCII',
+        scholarship: 'TESDA',
+        progress: 74,
+        totalModules: 9,
+        completedModules: 7,
+        students: 48,
+        trainer: 'Ms. Maria Clara Garcia'
+      },
+      6: {
+        name: 'Nail Care Class',
+        batch: 'Health & Wellness Batch 04',
+        code: 'NAIL01',
+        program: 'BEAUTY CARE (NAIL CARE) SERVICES NCII',
+        scholarship: 'TESDA',
+        progress: 70,
+        totalModules: 8,
+        completedModules: 6,
+        students: 44,
+        trainer: 'Ms. Jessica Torres'
+      },
+      7: {
+        name: 'Graphics Design Class',
+        batch: 'IT Batch 01',
+        code: 'GFXD01',
+        program: 'VISUAL GRAPHICS DESIGN',
+        scholarship: 'TESDA',
+        progress: 62,
+        totalModules: 14,
+        completedModules: 9,
+        students: 56,
+        trainer: 'Mr. Robert Santos'
+      },
+      8: {
+        name: 'Computer Services Class',
+        batch: 'IT Batch 02',
+        code: 'COMP01',
+        program: 'COMPUTER SYSTEM SERVICING NCII',
+        scholarship: 'TESDA',
+        progress: 60,
+        totalModules: 13,
+        completedModules: 8,
+        students: 50,
+        trainer: 'Mr. Luis Diaz'
+      },
+      9: {
+        name: 'Bookkeeping Class',
+        batch: 'Community Services Batch 01',
+        code: 'BOOK01',
+        program: 'BOOKKEEPING NCII',
+        scholarship: 'TESDA',
+        progress: 66,
+        totalModules: 11,
+        completedModules: 7,
+        students: 35,
+        trainer: 'Ms. Patricia Lopez'
+      },
+      10: {
+        name: 'Housekeeping Class',
+        batch: 'Community Services Batch 02',
+        code: 'HUSK01',
+        program: 'HOUSEKEEPING NCII',
+        scholarship: 'TESDA',
+        progress: 64,
+        totalModules: 10,
+        completedModules: 7,
+        students: 39,
+        trainer: 'Ms. Rosa Rivera'
+      },
+      11: {
+        name: 'Event Management Class',
+        batch: 'Tourism Batch 01',
+        code: 'EVNT01',
+        program: 'EVENT MANAGEMENT SERVICES NCIII',
+        scholarship: 'TESDA',
+        progress: 71,
+        totalModules: 12,
+        completedModules: 9,
+        students: 47,
+        trainer: 'Mr. Daniel Romero'
+      },
+      12: {
+        name: 'Barista Class',
+        batch: 'Hospitality Batch 01',
+        code: 'BARI01',
+        program: 'BARISTA NCII',
+        scholarship: 'TESDA',
+        progress: 65,
+        totalModules: 12,
+        completedModules: 8,
+        students: 54,
+        trainer: 'Ms. Maria Clara Garcia'
+      },
+      13: {
+        name: 'F&B Services Class',
+        batch: 'Hospitality Batch 02',
+        code: 'FBSE01',
+        program: 'FOOD AND BEVERAGE SERVICES NCII',
+        scholarship: 'TESDA',
+        progress: 69,
+        totalModules: 13,
+        completedModules: 9,
+        students: 59,
+        trainer: 'Mr. Juan Dela Cruz'
+      }
+    };
+    return coursesMap[parseInt(courseId)] || coursesMap[1];
   };
+
+  const courseData = getAllCourseData();
 
   const activityFeed = [
     {
       id: 1,
       type: 'material',
-      author: 'Ms Garcia',
-      authorInitials: 'MG',
+      author: courseData.trainer.split(' ')[0],
+      authorInitials: courseData.trainer.split(' ').map(n => n[0]).join(''),
       action: 'uploaded new learning material',
-      title: 'Module 1: Introduction to Barista',
+      title: `Module 1: Introduction to ${courseData.program.split(' ')[0]}`,
       time: '2 hours ago',
       icon: FileText,
       gradient: 'from-blue-500 to-indigo-600'
@@ -304,10 +456,10 @@ const Course = () => {
     {
       id: 2,
       type: 'question',
-      author: 'Ms Garcia',
-      authorInitials: 'MG',
+      author: courseData.trainer.split(' ')[0],
+      authorInitials: courseData.trainer.split(' ').map(n => n[0]).join(''),
       action: 'posted a discussion topic',
-      title: 'What makes a perfect espresso shot?',
+      title: `Best practices in ${courseData.program}`,
       time: '3 hours ago',
       icon: MessageCircle,
       gradient: 'from-purple-500 to-pink-600'
@@ -315,10 +467,10 @@ const Course = () => {
     {
       id: 3,
       type: 'assignment',
-      author: 'Ms Garcia',
-      authorInitials: 'MG',
+      author: courseData.trainer.split(' ')[0],
+      authorInitials: courseData.trainer.split(' ').map(n => n[0]).join(''),
       action: 'created new assessment',
-      title: 'Practical Assessment: Latte Art',
+      title: `Practical Assessment: ${courseData.program}`,
       time: '5 hours ago',
       icon: ClipboardList,
       gradient: 'from-emerald-500 to-teal-600'
@@ -326,8 +478,8 @@ const Course = () => {
     {
       id: 4,
       type: 'announcement',
-      author: 'Ms Garcia',
-      authorInitials: 'MG',
+      author: courseData.trainer.split(' ')[0],
+      authorInitials: courseData.trainer.split(' ').map(n => n[0]).join(''),
       action: 'made an announcement',
       title: 'Class schedule update for next week',
       time: '1 day ago',
@@ -336,16 +488,114 @@ const Course = () => {
     },
   ];
 
-  const modules = [
-    { id: 1, title: 'Introduction to Coffee', lessons: 5, duration: '2h 30m', progress: 100, status: 'completed' },
-    { id: 2, title: 'Espresso Fundamentals', lessons: 8, duration: '4h 15m', progress: 100, status: 'completed' },
-    { id: 3, title: 'Milk Steaming & Texturing', lessons: 6, duration: '3h 45m', progress: 75, status: 'in-progress' },
-    { id: 4, title: 'Latte Art Basics', lessons: 10, duration: '5h 00m', progress: 0, status: 'locked' },
-    { id: 5, title: 'Customer Service Excellence', lessons: 4, duration: '2h 00m', progress: 0, status: 'locked' },
-  ];
+  // Course-specific modules
+  const getModulesForCourse = () => {
+    const modulesByProgram = {
+      1: [ // Automotive
+        { id: 1, title: 'AC System Basics', lessons: 5, duration: '2h 30m', progress: 100, status: 'completed' },
+        { id: 2, title: 'Refrigeration Fundamentals', lessons: 8, duration: '4h 15m', progress: 100, status: 'completed' },
+        { id: 3, title: 'Electrical Components', lessons: 6, duration: '3h 45m', progress: 75, status: 'in-progress' },
+        { id: 4, title: 'Troubleshooting & Maintenance', lessons: 10, duration: '5h 00m', progress: 0, status: 'locked' },
+        { id: 5, title: 'Safety Procedures', lessons: 4, duration: '2h 00m', progress: 0, status: 'locked' },
+      ],
+      2: [ // Construction
+        { id: 1, title: 'Plumbing Fundamentals', lessons: 5, duration: '2h 30m', progress: 100, status: 'completed' },
+        { id: 2, title: 'Water Supply Systems', lessons: 8, duration: '4h 15m', progress: 100, status: 'completed' },
+        { id: 3, title: 'Drainage & Sewage', lessons: 6, duration: '3h 45m', progress: 75, status: 'in-progress' },
+        { id: 4, title: 'Pipe Installation Techniques', lessons: 10, duration: '5h 00m', progress: 0, status: 'locked' },
+        { id: 5, title: 'Building Codes & Safety', lessons: 4, duration: '2h 00m', progress: 0, status: 'locked' },
+      ],
+      3: [ // Wellness
+        { id: 1, title: 'Massage Techniques Basics', lessons: 5, duration: '2h 30m', progress: 100, status: 'completed' },
+        { id: 2, title: 'Anatomy & Physiology', lessons: 8, duration: '4h 15m', progress: 100, status: 'completed' },
+        { id: 3, title: 'Wellness Assessment', lessons: 6, duration: '3h 45m', progress: 75, status: 'in-progress' },
+        { id: 4, title: 'Traditional Healing Methods', lessons: 10, duration: '5h 00m', progress: 0, status: 'locked' },
+        { id: 5, title: 'Client Care & Hygiene', lessons: 4, duration: '2h 00m', progress: 0, status: 'locked' },
+      ],
+      4: [ // Caregiving
+        { id: 1, title: 'Basic Care Fundamentals', lessons: 5, duration: '2h 30m', progress: 100, status: 'completed' },
+        { id: 2, title: 'Health & Hygiene Standards', lessons: 8, duration: '4h 15m', progress: 100, status: 'completed' },
+        { id: 3, title: 'Communication Skills', lessons: 6, duration: '3h 45m', progress: 75, status: 'in-progress' },
+        { id: 4, title: 'Emergency Response', lessons: 10, duration: '5h 00m', progress: 0, status: 'locked' },
+        { id: 5, title: 'Ethical Caregiving', lessons: 4, duration: '2h 00m', progress: 0, status: 'locked' },
+      ],
+      5: [ // Skincare
+        { id: 1, title: 'Skin Types & Analysis', lessons: 5, duration: '2h 30m', progress: 100, status: 'completed' },
+        { id: 2, title: 'Skincare Products & Ingredients', lessons: 8, duration: '4h 15m', progress: 100, status: 'completed' },
+        { id: 3, title: 'Facial Treatments', lessons: 6, duration: '3h 45m', progress: 75, status: 'in-progress' },
+        { id: 4, title: 'Advanced Skincare Techniques', lessons: 10, duration: '5h 00m', progress: 0, status: 'locked' },
+        { id: 5, title: 'Client Consultation', lessons: 4, duration: '2h 00m', progress: 0, status: 'locked' },
+      ],
+      6: [ // Nail Care
+        { id: 1, title: 'Nail Anatomy & Growth', lessons: 5, duration: '2h 30m', progress: 100, status: 'completed' },
+        { id: 2, title: 'Manicure & Pedicure Basics', lessons: 8, duration: '4h 15m', progress: 100, status: 'completed' },
+        { id: 3, title: 'Nail Art & Design', lessons: 6, duration: '3h 45m', progress: 75, status: 'in-progress' },
+        { id: 4, title: 'Advanced Nail Techniques', lessons: 10, duration: '5h 00m', progress: 0, status: 'locked' },
+        { id: 5, title: 'Salon Management', lessons: 4, duration: '2h 00m', progress: 0, status: 'locked' },
+      ],
+      7: [ // Graphics Design
+        { id: 1, title: 'Design Principles', lessons: 5, duration: '2h 30m', progress: 100, status: 'completed' },
+        { id: 2, title: 'Color Theory & Composition', lessons: 8, duration: '4h 15m', progress: 100, status: 'completed' },
+        { id: 3, title: 'Typography Basics', lessons: 6, duration: '3h 45m', progress: 75, status: 'in-progress' },
+        { id: 4, title: 'Design Software Tools', lessons: 10, duration: '5h 00m', progress: 0, status: 'locked' },
+        { id: 5, title: 'Portfolio Development', lessons: 4, duration: '2h 00m', progress: 0, status: 'locked' },
+      ],
+      8: [ // Computer Services
+        { id: 1, title: 'Computer Hardware Basics', lessons: 5, duration: '2h 30m', progress: 100, status: 'completed' },
+        { id: 2, title: 'Troubleshooting & Diagnostics', lessons: 8, duration: '4h 15m', progress: 100, status: 'completed' },
+        { id: 3, title: 'Operating System Management', lessons: 6, duration: '3h 45m', progress: 75, status: 'in-progress' },
+        { id: 4, title: 'Network Basics', lessons: 10, duration: '5h 00m', progress: 0, status: 'locked' },
+        { id: 5, title: 'Preventive Maintenance', lessons: 4, duration: '2h 00m', progress: 0, status: 'locked' },
+      ],
+      9: [ // Bookkeeping
+        { id: 1, title: 'Accounting Fundamentals', lessons: 5, duration: '2h 30m', progress: 100, status: 'completed' },
+        { id: 2, title: 'Double Entry Bookkeeping', lessons: 8, duration: '4h 15m', progress: 100, status: 'completed' },
+        { id: 3, title: 'Financial Statements', lessons: 6, duration: '3h 45m', progress: 75, status: 'in-progress' },
+        { id: 4, title: 'Tax Basics', lessons: 10, duration: '5h 00m', progress: 0, status: 'locked' },
+        { id: 5, title: 'Audit Procedures', lessons: 4, duration: '2h 00m', progress: 0, status: 'locked' },
+      ],
+      10: [ // Housekeeping
+        { id: 1, title: 'Cleaning Standards', lessons: 5, duration: '2h 30m', progress: 100, status: 'completed' },
+        { id: 2, title: 'Equipment & Supplies', lessons: 8, duration: '4h 15m', progress: 100, status: 'completed' },
+        { id: 3, title: 'Health & Safety', lessons: 6, duration: '3h 45m', progress: 75, status: 'in-progress' },
+        { id: 4, title: 'Time Management', lessons: 10, duration: '5h 00m', progress: 0, status: 'locked' },
+        { id: 5, title: 'Customer Service Excellence', lessons: 4, duration: '2h 00m', progress: 0, status: 'locked' },
+      ],
+      11: [ // Event Management
+        { id: 1, title: 'Event Planning Basics', lessons: 5, duration: '2h 30m', progress: 100, status: 'completed' },
+        { id: 2, title: 'Vendor & Budget Management', lessons: 8, duration: '4h 15m', progress: 100, status: 'completed' },
+        { id: 3, title: 'Logistics & Coordination', lessons: 6, duration: '3h 45m', progress: 75, status: 'in-progress' },
+        { id: 4, title: 'Marketing & Promotion', lessons: 10, duration: '5h 00m', progress: 0, status: 'locked' },
+        { id: 5, title: 'Risk Management', lessons: 4, duration: '2h 00m', progress: 0, status: 'locked' },
+      ],
+      12: [ // Barista
+        { id: 1, title: 'Introduction to Coffee', lessons: 5, duration: '2h 30m', progress: 100, status: 'completed' },
+        { id: 2, title: 'Espresso Fundamentals', lessons: 8, duration: '4h 15m', progress: 100, status: 'completed' },
+        { id: 3, title: 'Milk Steaming & Texturing', lessons: 6, duration: '3h 45m', progress: 75, status: 'in-progress' },
+        { id: 4, title: 'Latte Art Basics', lessons: 10, duration: '5h 00m', progress: 0, status: 'locked' },
+        { id: 5, title: 'Customer Service Excellence', lessons: 4, duration: '2h 00m', progress: 0, status: 'locked' },
+      ],
+      13: [ // Food & Beverage
+        { id: 1, title: 'Food Safety & Hygiene', lessons: 5, duration: '2h 30m', progress: 100, status: 'completed' },
+        { id: 2, title: 'Menu Knowledge', lessons: 8, duration: '4h 15m', progress: 100, status: 'completed' },
+        { id: 3, title: 'Beverage Service Standards', lessons: 6, duration: '3h 45m', progress: 75, status: 'in-progress' },
+        { id: 4, title: 'Table Service Etiquette', lessons: 10, duration: '5h 00m', progress: 0, status: 'locked' },
+        { id: 5, title: 'Customer Relations', lessons: 4, duration: '2h 00m', progress: 0, status: 'locked' },
+      ],
+    };
+    return modulesByProgram[parseInt(courseId)] || modulesByProgram[1];
+  };
+
+  const modules = getModulesForCourse();
 
   const trainers = [
-    { id: 1, name: 'Maria Clara Garcia', role: 'Lead Trainer', avatar: '', initials: 'MG' }
+    { 
+      id: 1, 
+      name: courseData.trainer, 
+      role: 'Lead Trainer', 
+      avatar: '', 
+      initials: courseData.trainer.split(' ').map(n => n[0]).join('') 
+    }
   ];
 
   const students = [];

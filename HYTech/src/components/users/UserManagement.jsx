@@ -17,6 +17,8 @@ const UserManagement = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -25,18 +27,18 @@ const UserManagement = () => {
 
   // Sample users data
   const [users, setUsers] = useState([
-    { id: 1, name: 'Ms. Grace', idNumber: '5684236526', role: 'Trainer', status: 'Active' },
-    { id: 2, name: 'Engr. James', idNumber: '5684236527', role: 'Admin', status: 'Active' },
-    { id: 3, name: 'Jhudiel', idNumber: '5684236528', role: 'Student', status: 'Active' },
-    { id: 4, name: 'Jomar', idNumber: '5684236529', role: 'Student', status: 'Active' },
-    { id: 5, name: 'Karylle', idNumber: '5684236530', role: 'Student', status: 'Active' },
-    { id: 6, name: 'Lenar', idNumber: '5684236531', role: 'Student', status: 'Active' },
-    { id: 7, name: 'Mikaela', idNumber: '5684236532', role: 'Student', status: 'Active' },
-    { id: 8, name: 'Kassandra', idNumber: '5684236533', role: 'Student', status: 'Active' },
-    { id: 9, name: 'Jean', idNumber: '5684236534', role: 'Student', status: 'Active' },
-    { id: 10, name: 'Ellaine', idNumber: '5684236535', role: 'Student', status: 'Active' },
-    { id: 11, name: 'Hart', idNumber: '5684236536', role: 'Student', status: 'Active' },
-    { id: 12, name: 'Ian', idNumber: '5684236537', role: 'Student', status: 'Active' },
+    { id: 1, name: 'Ms. Grace', idNumber: '5684236526', email: 'grace@hytech.com', role: 'Trainer', status: 'Active' },
+    { id: 2, name: 'Engr. James', idNumber: '5684236527', email: 'james@hytech.com', role: 'Admin', status: 'Active' },
+    { id: 3, name: 'Jhudiel', idNumber: '5684236528', email: 'jhudiel@hytech.com', role: 'Student', status: 'Active' },
+    { id: 4, name: 'Jomar', idNumber: '5684236529', email: 'jomar@hytech.com', role: 'Student', status: 'Active' },
+    { id: 5, name: 'Karylle', idNumber: '5684236530', email: 'karylle@hytech.com', role: 'Student', status: 'Active' },
+    { id: 6, name: 'Lenar', idNumber: '5684236531', email: 'lenar@hytech.com', role: 'Student', status: 'Active' },
+    { id: 7, name: 'Mikaela', idNumber: '5684236532', email: 'mikaela@hytech.com', role: 'Student', status: 'Active' },
+    { id: 8, name: 'Kassandra', idNumber: '5684236533', email: 'kassandra@hytech.com', role: 'Student', status: 'Active' },
+    { id: 9, name: 'Jean', idNumber: '5684236534', email: 'jean@hytech.com', role: 'Student', status: 'Active' },
+    { id: 10, name: 'Ellaine', idNumber: '5684236535', email: 'ellaine@hytech.com', role: 'Student', status: 'Active' },
+    { id: 11, name: 'Hart', idNumber: '5684236536', email: 'hart@hytech.com', role: 'Student', status: 'Active' },
+    { id: 12, name: 'Ian', idNumber: '5684236537', email: 'ian@hytech.com', role: 'Student', status: 'Active' },
   ]);
 
   // Form state for adding new user
@@ -45,6 +47,17 @@ const UserManagement = () => {
     middleName: '',
     lastName: '',
     nameExtension: '',
+    email: '',
+    role: '',
+  });
+
+  // Form state for editing user
+  const [editUser, setEditUser] = useState({
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    nameExtension: '',
+    email: '',
     role: '',
   });
 
@@ -81,11 +94,12 @@ const UserManagement = () => {
       id: newId,
       name: fullName,
       idNumber: newIdNumber,
+      email: newUser.email,
       role: newUser.role,
       status: 'Active',
     }]);
 
-    setNewUser({ firstName: '', middleName: '', lastName: '', nameExtension: '', role: '' });
+    setNewUser({ firstName: '', middleName: '', lastName: '', nameExtension: '', email: '', role: '' });
     setShowAddModal(false);
   };
 
@@ -95,6 +109,42 @@ const UserManagement = () => {
       setShowDeleteModal(false);
       setSelectedUser(null);
     }
+  };
+
+  const handleViewUser = (user) => {
+    setSelectedUser(user);
+    setShowViewModal(true);
+    setActiveDropdown(null);
+  };
+
+  const handleEditUser = (user) => {
+    const nameParts = user.name.split(' ');
+    setSelectedUser(user);
+    setEditUser({
+      firstName: nameParts[0] || '',
+      middleName: nameParts.length > 3 ? nameParts.slice(1, -1).join(' ') : (nameParts.length > 2 ? nameParts[1] : ''),
+      lastName: nameParts.length > 1 ? nameParts[nameParts.length - 1] : '',
+      nameExtension: '',
+      email: user.email || '',
+      role: user.role,
+    });
+    setShowEditModal(true);
+    setActiveDropdown(null);
+  };
+
+  const handleUpdateUser = (e) => {
+    e.preventDefault();
+    const fullName = `${editUser.firstName} ${editUser.middleName ? editUser.middleName + ' ' : ''}${editUser.lastName}${editUser.nameExtension ? ' ' + editUser.nameExtension : ''}`;
+    
+    setUsers(users.map(u => 
+      u.id === selectedUser.id 
+        ? { ...u, name: fullName, email: editUser.email, role: editUser.role }
+        : u
+    ));
+    
+    setShowEditModal(false);
+    setSelectedUser(null);
+    setEditUser({ firstName: '', middleName: '', lastName: '', nameExtension: '', email: '', role: '' });
   };
 
   const getRoleBadgeColor = (role) => {
@@ -187,11 +237,17 @@ const UserManagement = () => {
                     
                     {activeDropdown === user.id && (
                       <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-10 min-w-[120px] animate-slide-down">
-                        <button className="w-full flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-sm">
+                        <button 
+                          onClick={() => handleViewUser(user)}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-sm"
+                        >
                           <Eye className="w-4 h-4" />
                           <span>View</span>
                         </button>
-                        <button className="w-full flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-sm">
+                        <button 
+                          onClick={() => handleEditUser(user)}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-sm"
+                        >
                           <Edit2 className="w-4 h-4" />
                           <span>Edit</span>
                         </button>
@@ -330,6 +386,19 @@ const UserManagement = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  placeholder="user@hytech.com"
+                  className="input-field"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Role <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -390,6 +459,187 @@ const UserManagement = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* View User Modal */}
+      {showViewModal && selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowViewModal(false)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">User Details</h2>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Full Name</label>
+                <p className="text-gray-900 font-medium">{selectedUser.name}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">ID Number</label>
+                <p className="text-gray-900 font-medium">{selectedUser.idNumber}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Email</label>
+                <p className="text-gray-900 font-medium">{selectedUser.email}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Role</label>
+                <p className="text-gray-900 font-medium">
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(selectedUser.role)}`}>
+                    {selectedUser.role}
+                  </span>
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Status</label>
+                <p className="text-gray-900 font-medium">
+                  <span className="badge-success">{selectedUser.status}</span>
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  onClick={() => setShowViewModal(false)}
+                  className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {showEditModal && selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowEditModal(false)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-blue-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Edit User</h2>
+              </div>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateUser} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  First Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editUser.firstName}
+                  onChange={(e) => setEditUser({ ...editUser, firstName: e.target.value })}
+                  className="input-field"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Middle Name
+                </label>
+                <input
+                  type="text"
+                  value={editUser.middleName}
+                  onChange={(e) => setEditUser({ ...editUser, middleName: e.target.value })}
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Last Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editUser.lastName}
+                  onChange={(e) => setEditUser({ ...editUser, lastName: e.target.value })}
+                  className="input-field"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Name Extension
+                </label>
+                <input
+                  type="text"
+                  placeholder="Jr., Sr., III, etc."
+                  value={editUser.nameExtension}
+                  onChange={(e) => setEditUser({ ...editUser, nameExtension: e.target.value })}
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={editUser.email}
+                  onChange={(e) => setEditUser({ ...editUser, email: e.target.value })}
+                  placeholder="user@hytech.com"
+                  className="input-field"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Role <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={editUser.role}
+                    onChange={(e) => setEditUser({ ...editUser, role: e.target.value })}
+                    className="input-field appearance-none cursor-pointer"
+                    required
+                  >
+                    <option value="">Select</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Trainer">Trainer</option>
+                    <option value="Student">Student</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-5 py-2.5 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
