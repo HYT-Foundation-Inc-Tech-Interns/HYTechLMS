@@ -92,16 +92,7 @@ const handleSave = () => {
   >
     <Camera className="w-4 h-4 text-gray-600" />
   </button>
-            {avatarPreview && (
-    <button
-      type="button"
-      onClick={removeAvatar}
-      className="absolute -top-2 -right-2 p-1.5 bg-white rounded-full text-gray-700 hover:bg-gray-100 transition-colors border border-gray-200 shadow-sm"
-      title="Remove photo"
-    >
-      <X className="w-3.5 h-3.5" />
-    </button>
-  )}
+          
         </div>
         <div>
           <h3 className="font-semibold text-gray-900">Profile Photo</h3>

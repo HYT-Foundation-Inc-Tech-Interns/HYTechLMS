@@ -85,23 +85,9 @@ const handleSave = () => {
       AU
     </div>
   )}
-          <button
-    type="button"
-    onClick={handleAvatarButton}
-    className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
-  >
-    <Camera className="w-4 h-4 text-gray-600" />
-  </button>
-            {avatarPreview && (
-    <button
-      type="button"
-      onClick={removeAvatar}
-      className="absolute -top-2 -right-2 p-1.5 bg-white rounded-full text-gray-700 hover:bg-gray-100 transition-colors border border-gray-200 shadow-sm"
-      title="Remove photo"
-    >
-      <X className="w-3.5 h-3.5" />
-    </button>
-  )}
+          <button className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50:bg-gray-600 transition-colors">
+            <Camera className="w-4 h-4 text-gray-600" />
+          </button>
         </div>
         <div>
           <h3 className="font-semibold text-gray-900">Profile Photo</h3>

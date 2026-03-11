@@ -6,38 +6,8 @@ const TrainerSettings = () => {
   const [toast, setToast] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
-const fileInputRef = useRef(null);
-const [avatarPreview, setAvatarPreview] = useState(null);
-const [selectedAvatarFile, setSelectedAvatarFile] = useState(null);
 
-useEffect(() => {
-  const saved = localStorage.getItem('trainer-avatar');
-  if (saved) setAvatarPreview(saved);
-}, []);
-
-const handleAvatarButton = () => fileInputRef.current?.click();
-
-const handleAvatarChange = (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  if (!file.type.startsWith('image/')) {
-    alert('Please select an image file.');
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = () => {
-    setAvatarPreview(reader.result);
-    setSelectedAvatarFile(file);
-  };
-  reader.readAsDataURL(file);
-};
-
-const removeAvatar = () => {
-  setAvatarPreview(null);
-  setSelectedAvatarFile(null);
-  localStorage.removeItem('trainer-avatar');
-};
-
+  
   // Toast notification
   const showToast = (message) => {
     setToast(message);
@@ -45,18 +15,13 @@ const removeAvatar = () => {
   };
 
   // Handle save
-const handleSave = () => {
-  setIsSaving(true);
-  setTimeout(() => {
-    if (avatarPreview) {
-      localStorage.setItem('trainer-avatar', avatarPreview);
-    } else {
-      localStorage.removeItem('trainer-avatar');
-    }
-    setIsSaving(false);
-    showToast('Settings saved successfully!');
-  }, 1000);
-};
+  const handleSave = () => {
+    setIsSaving(true);
+    setTimeout(() => {
+      setIsSaving(false);
+      showToast('Settings saved successfully!');
+    }, 1000);
+  };
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
@@ -69,39 +34,12 @@ const handleSave = () => {
     <div className="space-y-6">
       <div className="flex items-center gap-6">
         <div className="relative">
-           <input
-    ref={fileInputRef}
-    type="file"
-    accept="image/*"
-    onChange={handleAvatarChange}
-    className="hidden"
-  />
-         {avatarPreview ? (
-    <div className="w-24 h-24 rounded-full overflow-hidden bg-white border flex items-center justify-center">
-      <img src={avatarPreview} alt="avatar preview" className="w-full h-full object-cover" />
-    </div>
-  ) : (
-    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-green-500 to-purple-500 flex items-center justify-center text-white text-2xl font-bold">
-      AU
-    </div>
-  )}
-          <button
-    type="button"
-    onClick={handleAvatarButton}
-    className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
-  >
-    <Camera className="w-4 h-4 text-gray-600" />
-  </button>
-            {avatarPreview && (
-    <button
-      type="button"
-      onClick={removeAvatar}
-      className="absolute -top-2 -right-2 p-1.5 bg-white rounded-full text-gray-700 hover:bg-gray-100 transition-colors border border-gray-200 shadow-sm"
-      title="Remove photo"
-    >
-      <X className="w-3.5 h-3.5" />
-    </button>
-  )}
+          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-green-500 to-purple-500 flex items-center justify-center text-white text-2xl font-bold">
+            AU
+          </div>
+          <button className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50:bg-gray-600 transition-colors">
+            <Camera className="w-4 h-4 text-gray-600" />
+          </button>
         </div>
         <div>
           <h3 className="font-semibold text-gray-900">Profile Photo</h3>

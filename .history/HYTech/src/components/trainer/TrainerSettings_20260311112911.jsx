@@ -92,7 +92,7 @@ const handleSave = () => {
   >
     <Camera className="w-4 h-4 text-gray-600" />
   </button>
-            {avatarPreview && (
+           {avatarPreview && (
     <button
       type="button"
       onClick={removeAvatar}
@@ -102,6 +102,7 @@ const handleSave = () => {
       <X className="w-3.5 h-3.5" />
     </button>
   )}
+</div>
         </div>
         <div>
           <h3 className="font-semibold text-gray-900">Profile Photo</h3>
