@@ -4,7 +4,7 @@ import { ChevronRight, LogOut, User, Settings } from 'lucide-react';
 import NotificationDropdown from '../shared/NotificationDropdown';
 import FlappyBirdGame from '../shared/FlappyBirdGame';
 
-const AdminNavbar = ({ title, subtitle }) => {
+const Navbar = ({ title, subtitle }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
@@ -16,8 +16,11 @@ const AdminNavbar = ({ title, subtitle }) => {
 
   const handleLogoClick = () => {
     logoClickCount.current += 1;
+    // Reset counter if user pauses more than 2 seconds between clicks
     clearTimeout(logoClickTimer.current);
-    logoClickTimer.current = setTimeout(() => { logoClickCount.current = 0; }, 2000);
+    logoClickTimer.current = setTimeout(() => {
+      logoClickCount.current = 0;
+    }, 2000);
     if (logoClickCount.current >= 5) {
       logoClickCount.current = 0;
       clearTimeout(logoClickTimer.current);
@@ -39,8 +42,8 @@ const AdminNavbar = ({ title, subtitle }) => {
 
   const notifications = [
     { id: 1, text: 'New trainee registered in Construction Sector', time: '1m ago', unread: true },
-    { id: 2, text: 'Trainer Ms. Grace updated course materials', time: '15m ago', unread: true },
-    { id: 3, text: 'System backup completed successfully', time: '1h ago', unread: false },
+    { id: 2, text: 'Started NC II: Driving', time: '15m ago', unread: true },
+    { id: 3, text: 'Completed National Certificate (NC II): Barista', time: '1h ago', unread: false },
   ];
 
   const handleLogout = () => {
@@ -48,7 +51,6 @@ const AdminNavbar = ({ title, subtitle }) => {
   };
 
   return (
-    <>
     <header className="text-white h-16 px-6 flex items-center justify-between shadow-lg relative z-50 flex-shrink-0" style={{ backgroundColor: '#0B005C' }}>
       {/* Left Side - Breadcrumb */}
       <div className="flex items-center gap-3">
@@ -57,10 +59,12 @@ const AdminNavbar = ({ title, subtitle }) => {
           alt="HYT Logo" 
           className="w-10 h-10 object-contain cursor-pointer select-none"
           onClick={handleLogoClick}
-          onError={(e) => { e.target.style.display = 'none'; }}
+          onError={(e) => {
+            e.target.style.display = 'none';
+          }}
           title="HYTech"
         />
-        <span className="font-semibold text-lg">HYTech Admin</span>
+        <span className="font-semibold text-lg">HYTech</span>
         {title && (
           <>
             <ChevronRight className="w-4 h-4 text-white/50" />
@@ -85,31 +89,39 @@ const AdminNavbar = ({ title, subtitle }) => {
             onClick={() => setShowDropdown(!showDropdown)}
             className="flex items-center gap-2 hover:bg-white/10 rounded-lg p-1 transition-colors"
           >
-            <div className="w-9 h-9 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center text-white font-medium text-sm">
-              AD
+            <div className="w-9 h-9 bg-orange-500 rounded-full flex items-center justify-center font-semibold text-sm shadow-lg">
+              AU
             </div>
           </button>
 
           {showDropdown && (
             <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] animate-slide-down">
               <div className="p-4 border-b border-gray-100">
-                <p className="font-semibold text-gray-900">Admin User</p>
+                <p className="font-semibold text-gray-800">Admin User</p>
                 <p className="text-sm text-gray-500">admin@hytglobal.com</p>
               </div>
-              <div className="py-2">
-                <button 
-                  onClick={() => { navigate('/admin/settings'); setShowDropdown(false); }}
-                  className="w-full px-4 py-2.5 text-left text-gray-700 hover:bg-gray-50:bg-gray-700 flex items-center gap-3 transition-colors"
+              <div className="p-2">
+                <button
+                  onClick={() => navigate('/dashboard/settings')}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-gray-700 hover:bg-gray-50:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <User className="w-4 h-4" />
+                  <span className="text-sm">View Profile</span>
+                </button>
+                <button
+                  onClick={() => navigate('/dashboard/settings')}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-gray-700 hover:bg-gray-50:bg-gray-700 rounded-lg transition-colors"
                 >
                   <Settings className="w-4 h-4" />
-                  Settings
+                  <span className="text-sm">Settings</span>
                 </button>
-                <button 
+                <hr className="my-2 border-gray-200" />
+                <button
                   onClick={handleLogout}
-                  className="w-full px-4 py-2.5 text-left text-red-600 hover:bg-red-50:bg-red-900/20 flex items-center gap-3 transition-colors"
+                  className="w-full flex items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50:bg-red-900/20 rounded-lg transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
-                  Sign Out
+                  <span className="text-sm">Logout</span>
                 </button>
               </div>
             </div>
@@ -118,9 +130,9 @@ const AdminNavbar = ({ title, subtitle }) => {
       </div>
     </header>
 
+    {/* Easter egg: Flappy Bird game */}
     {showGame && <FlappyBirdGame onClose={() => setShowGame(false)} />}
-    </>
   );
 };
 
-export default AdminNavbar;
+export default Navbar;
