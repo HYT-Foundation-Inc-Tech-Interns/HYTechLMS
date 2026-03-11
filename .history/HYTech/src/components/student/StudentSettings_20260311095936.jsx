@@ -53,7 +53,7 @@ const StudentSettings = () => {
       <button
         onClick={onChange}
         className={`relative w-12 h-6 rounded-full transition-colors ${
-          checked ? 'bg-green-500' : 'bg-gray-300'
+          checked ? 'bg-orange-500' : 'bg-gray-300'
         }`}
       >
         <span 
@@ -163,7 +163,7 @@ const StudentSettings = () => {
             <div className="flex justify-end mt-6">
               <button 
                 onClick={handleSaveChanges}
-                className="px-6 py-2.5 bg-green-500 text-white rounded-xl font-medium hover:bg-green-600 transition-colors"
+                className="px-6 py-2.5 bg-green-500 text-white rounded-xl font-medium hover:bg-orange-600 transition-colors"
               >
                 Save Changes
               </button>

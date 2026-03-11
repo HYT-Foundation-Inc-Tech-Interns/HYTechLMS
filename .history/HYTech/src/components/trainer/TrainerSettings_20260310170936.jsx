@@ -32,7 +32,7 @@ const TrainerSettings = () => {
     <div className="space-y-6">
       <div className="flex items-center gap-6">
         <div className="relative">
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-green-500 to-purple-500 flex items-center justify-center text-white text-2xl font-bold">
+          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-2xl font-bold">
             AU
           </div>
           <button className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50:bg-gray-600 transition-colors">
@@ -226,7 +226,7 @@ const TrainerSettings = () => {
             <button 
               onClick={handleSave}
               disabled={isSaving}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
               {isSaving ? (
                 <>

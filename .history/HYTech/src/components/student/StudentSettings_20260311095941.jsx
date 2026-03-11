@@ -53,7 +53,7 @@ const StudentSettings = () => {
       <button
         onClick={onChange}
         className={`relative w-12 h-6 rounded-full transition-colors ${
-          checked ? 'bg-green-500' : 'bg-gray-300'
+          checked ? 'bg-orange-500' : 'bg-gray-300'
         }`}
       >
         <span 

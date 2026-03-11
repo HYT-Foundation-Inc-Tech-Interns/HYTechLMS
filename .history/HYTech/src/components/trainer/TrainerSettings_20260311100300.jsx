@@ -226,7 +226,7 @@ const TrainerSettings = () => {
             <button 
               onClick={handleSave}
               disabled={isSaving}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
               {isSaving ? (
                 <>
