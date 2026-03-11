@@ -36,7 +36,7 @@ const Sectors = () => {
       color: 'from-blue-600 to-blue-800',
       bgImage: 'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=400',
       courses: [
-        { id: 1, name: 'K/C SERVICING (DUNRAC) NCII', description: 'Air-conditioning and refrigeration servicing for vehicles', level: 'NCII', status: 'On-going' },
+        { id: 1, name: 'K/C SERVICING (DUNRAC) NCII', description: 'Air-conditioning and refrigeration servicing for vehicles', level: 'NCII', status: 'On-going', image: 'https://images.unsplash.com/photo-1487754180144-351b8e906e6c?w=500&h=300&fit=crop' },
       ],
     },
     {
@@ -48,7 +48,7 @@ const Sectors = () => {
       color: 'from-amber-600 to-amber-800',
       bgImage: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400',
       courses: [
-        { id: 1, name: 'PLUMBING NCII', description: 'Installation and maintenance of plumbing systems', level: 'NCII', status: 'On-going' },
+        { id: 1, name: 'PLUMBING NCII', description: 'Installation and maintenance of plumbing systems', level: 'NCII', status: 'On-going', image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=500&h=300&fit=crop' },
       ],
     },
     {
@@ -70,10 +70,10 @@ const Sectors = () => {
       color: 'from-emerald-500 to-emerald-700',
       bgImage: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=400',
       courses: [
-        { id: 1, name: 'HILOT (WELLNESS)MASSAGE NCII', description: 'Traditional wellness massage and therapeutic services', level: 'NCII', status: 'On-going' },
-        { id: 2, name: 'CAREGIVING NCII', description: 'Personal care and support services for clients', level: 'NCII', status: 'On-going' },
-        { id: 3, name: 'BEAUTY CARE (SKINCARE) SERVICES NCII', description: 'Professional skincare and beauty treatment services', level: 'NCII', status: 'On-going' },
-        { id: 4, name: 'BEAUTY CARE (NAIL CARE) SERVICES NCII', description: 'Professional nail care and manicure/pedicure services', level: 'NCII', status: 'On-going' },
+        { id: 1, name: 'HILOT (WELLNESS)MASSAGE NCII', description: 'Traditional wellness massage and therapeutic services', level: 'NCII', status: 'On-going', image: 'https://images.unsplash.com/photo-1544161515-81fded323381?w=500&h=300&fit=crop' },
+        { id: 2, name: 'CAREGIVING NCII', description: 'Personal care and support services for clients', level: 'NCII', status: 'On-going', image: 'https://images.unsplash.com/photo-1631217314831-dc4a8f63e9b1?w=500&h=300&fit=crop' },
+        { id: 3, name: 'BEAUTY CARE (SKINCARE) SERVICES NCII', description: 'Professional skincare and beauty treatment services', level: 'NCII', status: 'On-going', image: 'https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=500&h=300&fit=crop' },
+        { id: 4, name: 'BEAUTY CARE (NAIL CARE) SERVICES NCII', description: 'Professional nail care and manicure/pedicure services', level: 'NCII', status: 'On-going', image: 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=500&h=300&fit=crop' },
       ],
     },
     {
@@ -95,8 +95,8 @@ const Sectors = () => {
       color: 'from-indigo-500 to-indigo-700',
       bgImage: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400',
       courses: [
-        { id: 1, name: 'VISUAL GRAPHICS DESIGN', description: 'Digital design and visual communication', level: 'NC', status: 'On-going' },
-        { id: 2, name: 'COMPUTER SYSTEM SERVICING NCII', description: 'Computer hardware maintenance and troubleshooting', level: 'NCII', status: 'On-going' },
+        { id: 1, name: 'VISUAL GRAPHICS DESIGN', description: 'Digital design and visual communication', level: 'NC', status: 'On-going', image: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=500&h=300&fit=crop' },
+        { id: 2, name: 'COMPUTER SYSTEM SERVICING NCII', description: 'Computer hardware maintenance and troubleshooting', level: 'NCII', status: 'On-going', image: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&h=300&fit=crop' },
       ],
     },
     {
@@ -108,8 +108,8 @@ const Sectors = () => {
       color: 'from-pink-500 to-pink-700',
       bgImage: 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?w=400',
       courses: [
-        { id: 1, name: 'BOOKKEEPING NCII', description: 'Financial record-keeping and accounting fundamentals', level: 'NCII', status: 'On-going' },
-        { id: 2, name: 'HOUSEKEEPING NCII', description: 'Residential and commercial cleaning and maintenance', level: 'NCII', status: 'On-going' },
+        { id: 1, name: 'BOOKKEEPING NCII', description: 'Financial record-keeping and accounting fundamentals', level: 'NCII', status: 'On-going', image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=500&h=300&fit=crop' },
+        { id: 2, name: 'HOUSEKEEPING NCII', description: 'Residential and commercial cleaning and maintenance', level: 'NCII', status: 'On-going', image: 'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=500&h=300&fit=crop' },
       ],
     },
     {
@@ -121,7 +121,7 @@ const Sectors = () => {
       color: 'from-sky-500 to-sky-700',
       bgImage: 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400',
       courses: [
-        { id: 1, name: 'EVENT MANAGEMENT SERVICES NCIII', description: 'Planning and organizing events and tourism experiences', level: 'NCIII', status: 'On-going' },
+        { id: 1, name: 'EVENT MANAGEMENT SERVICES NCIII', description: 'Planning and organizing events and tourism experiences', level: 'NCIII', status: 'On-going', image: 'https://images.unsplash.com/photo-1540575467063-178f50002cbc?w=500&h=300&fit=crop' },
       ],
     },
     {
@@ -133,8 +133,8 @@ const Sectors = () => {
       color: 'from-rose-500 to-rose-700',
       bgImage: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=400',
       courses: [
-        { id: 1, name: 'BARISTA NCII', description: 'Coffee preparation and beverage service expertise', level: 'NCII', status: 'On-going' },
-        { id: 2, name: 'FOOD AND BEVERAGE SERVICES NCII', description: 'Food preparation, service, and hospitality standards', level: 'NCII', status: 'On-going' },
+        { id: 1, name: 'BARISTA NCII', description: 'Coffee preparation and beverage service expertise', level: 'NCII', status: 'On-going', image: 'https://images.unsplash.com/photo-1495521821757-a1efb6729352?w=500&h=300&fit=crop' },
+        { id: 2, name: 'FOOD AND BEVERAGE SERVICES NCII', description: 'Food preparation, service, and hospitality standards', level: 'NCII', status: 'On-going', image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&h=300&fit=crop' },
       ],
     },
   ]);
@@ -499,12 +499,30 @@ const Sectors = () => {
               <div className="space-y-3">
                 {selectedSector.courses && selectedSector.courses.length > 0 ? (
                   selectedSector.courses.map((course, index) => (
-                    <div key={course.id} className="border border-gray-100 rounded-xl p-4 hover:shadow-md hover:border-blue-200 transition-all">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
+                    <div key={course.id} className="border border-gray-100 rounded-xl overflow-hidden hover:shadow-md hover:border-blue-200 transition-all">
+                      <div className="flex items-start gap-4 p-4">
+                        {/* Course Image */}
+                        <div className="w-20 h-20 rounded-lg flex-shrink-0 bg-gradient-to-br from-gray-200 to-gray-300 overflow-hidden">
+                          <img 
+                            src={course.image}
+                            alt={course.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.parentElement.innerHTML = `
+                                <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-100 to-indigo-200">
+                                  <span class="text-gray-400 text-2xl font-bold">${course.name.charAt(0)}</span>
+                                </div>
+                              `;
+                            }}
+                          />
+                        </div>
+                        
+                        {/* Course Info */}
+                        <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-gray-900">{course.name}</h3>
-                          <p className="text-sm text-gray-500 mt-1">{course.description}</p>
-                          <div className="flex items-center gap-2 mt-3">
+                          <p className="text-sm text-gray-500 mt-1 line-clamp-2">{course.description}</p>
+                          <div className="flex items-center gap-2 mt-3 flex-wrap">
                             <span className="px-2.5 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-md">
                               {course.level}
                             </span>
