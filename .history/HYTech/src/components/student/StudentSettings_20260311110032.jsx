@@ -117,14 +117,14 @@ const handleAvatarChange = (e) => {
             {/* Avatar */}
             <div className="flex items-center gap-4 mb-6">
               <div className="relative">
-                 <input
-                   ref={fileInputRef}
-                    type="file"
-                   accept="image/*"
-                   onChange={handleAvatarChange}
-                    className="hidden"
-                />
-              {avatarPreview ? (
+  <input
+    ref={fileInputRef}
+    type="file"
+    accept="image/*"
+    onChange={handleAvatarChange}
+    className="hidden"
+  />
+  {avatarPreview ? (
     <div className="w-20 h-20 rounded-full overflow-hidden bg-white border flex items-center justify-center">
       <img src={avatarPreview} alt="avatar preview" className="w-full h-full object-cover" />
     </div>
@@ -133,18 +133,14 @@ const handleAvatarChange = (e) => {
       {`${profileData.firstName?.[0] || ''}${profileData.lastName?.[0] || ''}`}
     </div>
   )}
-                <button
-                    type="button"
-                    onClick={handleAvatarButton}
-                    className="absolute -bottom-1 -right-1 p-1.5 bg-orange-500 rounded-full text-white hover:bg-orange-600 transition-colors border-2 border-white"
-                  >
-                     <Camera className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-900 text-lg">{profileData.firstName} {profileData.lastName}</h3>
-                <p className="text-sm text-gray-500">Student</p>
-              </div>
+  <button
+    type="button"
+    onClick={handleAvatarButton}
+    className="absolute -bottom-1 -right-1 p-1.5 bg-orange-500 rounded-full text-white hover:bg-orange-600 transition-colors border-2 border-white"
+  >
+    <Camera className="w-3.5 h-3.5" />
+  </button>
+</div>
             </div>
 
             {/* Form Fields */}

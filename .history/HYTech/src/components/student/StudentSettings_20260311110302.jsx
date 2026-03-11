@@ -118,27 +118,21 @@ const handleAvatarChange = (e) => {
             <div className="flex items-center gap-4 mb-6">
               <div className="relative">
                  <input
-                   ref={fileInputRef}
-                    type="file"
-                   accept="image/*"
+    ref={fileInputRef}
+    type="file"
+                  accept="image/*"
                    onChange={handleAvatarChange}
                     className="hidden"
                 />
-              {avatarPreview ? (
-    <div className="w-20 h-20 rounded-full overflow-hidden bg-white border flex items-center justify-center">
-      <img src={avatarPreview} alt="avatar preview" className="w-full h-full object-cover" />
-    </div>
-  ) : (
-    <div className="w-20 h-20 bg-gradient-to-br from-[#0D4291] to-[#0B005C] rounded-full flex items-center justify-center text-white text-2xl font-bold">
-      {`${profileData.firstName?.[0] || ''}${profileData.lastName?.[0] || ''}`}
-    </div>
-  )}
+                <div className="w-20 h-20 bg-gradient-to-br from-[#0D4291] to-[#0B005C] rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                  GL
+                </div>
                 <button
                     type="button"
                     onClick={handleAvatarButton}
                     className="absolute -bottom-1 -right-1 p-1.5 bg-orange-500 rounded-full text-white hover:bg-orange-600 transition-colors border-2 border-white"
                   >
-                     <Camera className="w-3.5 h-3.5" />
+    <Camera className="w-3.5 h-3.5" />
                 </button>
               </div>
               <div>

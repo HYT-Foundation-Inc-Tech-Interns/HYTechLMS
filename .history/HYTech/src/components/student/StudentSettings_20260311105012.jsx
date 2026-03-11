@@ -68,10 +68,13 @@ const handleAvatarChange = (e) => {
     }));
   };
 
-  const handleSaveChanges = () => {
-    setShowSaveToast(true);
-    setTimeout(() => setShowSaveToast(false), 3000);
-  };
+ const handleSaveChanges = () => {
+  if (avatarPreview) {
+    localStorage.setItem('student-avatar', avatarPreview);
+  }
+  setShowSaveToast(true);
+  setTimeout(() => setShowSaveToast(false), 3000);
+};
 
   const NotificationToggle = ({ label, description, checked, onChange }) => (
     <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
@@ -115,17 +118,16 @@ const handleAvatarChange = (e) => {
             </div>
 
             {/* Avatar */}
-            <div className="flex items-center gap-4 mb-6">
-              <div className="relative">
-                 <input
-                   ref={fileInputRef}
-                    type="file"
-                   accept="image/*"
-                   onChange={handleAvatarChange}
-                    className="hidden"
-                />
-              {avatarPreview ? (
-    <div className="w-20 h-20 rounded-full overflow-hidden bg-white border flex items-center justify-center">
+           <div className="relative">
+  <input
+    ref={fileInputRef}
+    type="file"
+    accept="image/*"
+    onChange={handleAvatarChange}
+    className="hidden"
+  />
+  {avatarPreview ? (
+    <div className="w-20 h-20 rounded-full overflow-hidden bg-white border">
       <img src={avatarPreview} alt="avatar preview" className="w-full h-full object-cover" />
     </div>
   ) : (
@@ -133,19 +135,14 @@ const handleAvatarChange = (e) => {
       {`${profileData.firstName?.[0] || ''}${profileData.lastName?.[0] || ''}`}
     </div>
   )}
-                <button
-                    type="button"
-                    onClick={handleAvatarButton}
-                    className="absolute -bottom-1 -right-1 p-1.5 bg-orange-500 rounded-full text-white hover:bg-orange-600 transition-colors border-2 border-white"
-                  >
-                     <Camera className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-900 text-lg">{profileData.firstName} {profileData.lastName}</h3>
-                <p className="text-sm text-gray-500">Student</p>
-              </div>
-            </div>
+  <button
+    type="button"
+    onClick={handleAvatarButton}
+    className="absolute bottom-0 right-0 p-1.5 bg-orange-500 rounded-full text-white hover:bg-orange-600 transition-colors"
+  >
+    <Camera className="w-3.5 h-3.5" />
+  </button>
+</div>
 
             {/* Form Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
