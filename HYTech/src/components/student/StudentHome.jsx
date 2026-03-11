@@ -60,33 +60,133 @@ const StudentHome = () => {
   const popularCourses = [
     {
       id: 1,
-      title: 'Barista NC II',
-      instructor: 'Vince Castillo',
+      title: 'K/C SERVICING (DUNRAC) NCII',
+      instructor: 'Mr. Victor Santos',
       rating: 4.5,
       reviews: 29,
-      lessons: 14,
-      students: 67,
-      image: '/images/barista_course.jpg'
+      lessons: 10,
+      students: 45,
+      image: 'https://images.unsplash.com/photo-1487754180144-351b8e906e6c?w=500&h=300&fit=crop'
     },
     {
       id: 2,
-      title: 'Barista NC II',
-      instructor: 'Vince Castillo',
-      rating: 4.5,
-      reviews: 29,
-      lessons: 14,
-      students: 67,
-      image: '/images/barista_course.jpg'
+      title: 'PLUMBING NCII',
+      instructor: 'Mr. Ramon Cruz',
+      rating: 4.3,
+      reviews: 24,
+      lessons: 12,
+      students: 38,
+      image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=500&h=300&fit=crop'
     },
     {
       id: 3,
-      title: 'Barista NC II',
-      instructor: 'Vince Castillo',
+      title: 'HILOT (WELLNESS)MASSAGE NCII',
+      instructor: 'Ms. Angela Fernandez',
+      rating: 4.7,
+      reviews: 35,
+      lessons: 11,
+      students: 52,
+      image: 'https://images.unsplash.com/photo-1544161515-81fded323381?w=500&h=300&fit=crop'
+    },
+    {
+      id: 4,
+      title: 'CAREGIVING NCII',
+      instructor: 'Ms. Grace Reyes',
+      rating: 4.4,
+      reviews: 28,
+      lessons: 10,
+      students: 41,
+      image: 'https://images.unsplash.com/photo-1631217314831-dc4a8f63e9b1?w=500&h=300&fit=crop'
+    },
+    {
+      id: 5,
+      title: 'BEAUTY CARE (SKINCARE) SERVICES NCII',
+      instructor: 'Ms. Maria Clara Garcia',
+      rating: 4.6,
+      reviews: 31,
+      lessons: 9,
+      students: 48,
+      image: 'https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=500&h=300&fit=crop'
+    },
+    {
+      id: 6,
+      title: 'BEAUTY CARE (NAIL CARE) SERVICES NCII',
+      instructor: 'Ms. Jessica Torres',
+      rating: 4.5,
+      reviews: 26,
+      lessons: 8,
+      students: 44,
+      image: 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=500&h=300&fit=crop'
+    },
+    {
+      id: 7,
+      title: 'VISUAL GRAPHICS DESIGN',
+      instructor: 'Mr. Robert Santos',
+      rating: 4.8,
+      reviews: 38,
+      lessons: 14,
+      students: 56,
+      image: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=500&h=300&fit=crop'
+    },
+    {
+      id: 8,
+      title: 'COMPUTER SYSTEM SERVICING NCII',
+      instructor: 'Mr. Luis Diaz',
+      rating: 4.4,
+      reviews: 27,
+      lessons: 13,
+      students: 50,
+      image: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&h=300&fit=crop'
+    },
+    {
+      id: 9,
+      title: 'BOOKKEEPING NCII',
+      instructor: 'Ms. Patricia Lopez',
+      rating: 4.3,
+      reviews: 22,
+      lessons: 11,
+      students: 35,
+      image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=500&h=300&fit=crop'
+    },
+    {
+      id: 10,
+      title: 'HOUSEKEEPING NCII',
+      instructor: 'Ms. Rosa Rivera',
+      rating: 4.2,
+      reviews: 20,
+      lessons: 10,
+      students: 39,
+      image: 'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=500&h=300&fit=crop'
+    },
+    {
+      id: 11,
+      title: 'EVENT MANAGEMENT SERVICES NCIII',
+      instructor: 'Mr. Daniel Romero',
+      rating: 4.6,
+      reviews: 33,
+      lessons: 12,
+      students: 47,
+      image: 'https://images.unsplash.com/photo-1540575467063-178f50002cbc?w=500&h=300&fit=crop'
+    },
+    {
+      id: 12,
+      title: 'BARISTA NCII',
+      instructor: 'Ms. Maria Clara Garcia',
       rating: 4.5,
       reviews: 29,
-      lessons: 14,
-      students: 67,
-      image: '/images/barista_course.jpg'
+      lessons: 12,
+      students: 54,
+      image: 'https://images.unsplash.com/photo-1495521821757-a1efb6729352?w=500&h=300&fit=crop'
+    },
+    {
+      id: 13,
+      title: 'FOOD AND BEVERAGE SERVICES NCII',
+      instructor: 'Mr. Juan Dela Cruz',
+      rating: 4.7,
+      reviews: 36,
+      lessons: 13,
+      students: 59,
+      image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&h=300&fit=crop'
     },
   ];
 

@@ -35,7 +35,9 @@ const Sectors = () => {
       status: 'On-going',
       color: 'from-blue-600 to-blue-800',
       bgImage: 'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=400',
-      courses: [],
+      courses: [
+        { id: 1, name: 'K/C SERVICING (DUNRAC) NCII', description: 'Air-conditioning and refrigeration servicing for vehicles', level: 'NCII', status: 'On-going' },
+      ],
     },
     {
       id: 2,
@@ -45,7 +47,9 @@ const Sectors = () => {
       status: 'On-going',
       color: 'from-amber-600 to-amber-800',
       bgImage: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400',
-      courses: [],
+      courses: [
+        { id: 1, name: 'PLUMBING NCII', description: 'Installation and maintenance of plumbing systems', level: 'NCII', status: 'On-going' },
+      ],
     },
     {
       id: 3,
@@ -65,7 +69,12 @@ const Sectors = () => {
       status: 'On-going',
       color: 'from-emerald-500 to-emerald-700',
       bgImage: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=400',
-      courses: [],
+      courses: [
+        { id: 1, name: 'HILOT (WELLNESS)MASSAGE NCII', description: 'Traditional wellness massage and therapeutic services', level: 'NCII', status: 'On-going' },
+        { id: 2, name: 'CAREGIVING NCII', description: 'Personal care and support services for clients', level: 'NCII', status: 'On-going' },
+        { id: 3, name: 'BEAUTY CARE (SKINCARE) SERVICES NCII', description: 'Professional skincare and beauty treatment services', level: 'NCII', status: 'On-going' },
+        { id: 4, name: 'BEAUTY CARE (NAIL CARE) SERVICES NCII', description: 'Professional nail care and manicure/pedicure services', level: 'NCII', status: 'On-going' },
+      ],
     },
     {
       id: 5,
@@ -85,7 +94,10 @@ const Sectors = () => {
       status: 'On-going',
       color: 'from-indigo-500 to-indigo-700',
       bgImage: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400',
-      courses: [],
+      courses: [
+        { id: 1, name: 'VISUAL GRAPHICS DESIGN', description: 'Digital design and visual communication', level: 'NC', status: 'On-going' },
+        { id: 2, name: 'COMPUTER SYSTEM SERVICING NCII', description: 'Computer hardware maintenance and troubleshooting', level: 'NCII', status: 'On-going' },
+      ],
     },
     {
       id: 7,
@@ -95,7 +107,10 @@ const Sectors = () => {
       status: 'On-going',
       color: 'from-pink-500 to-pink-700',
       bgImage: 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?w=400',
-      courses: [],
+      courses: [
+        { id: 1, name: 'BOOKKEEPING NCII', description: 'Financial record-keeping and accounting fundamentals', level: 'NCII', status: 'On-going' },
+        { id: 2, name: 'HOUSEKEEPING NCII', description: 'Residential and commercial cleaning and maintenance', level: 'NCII', status: 'On-going' },
+      ],
     },
     {
       id: 8,
@@ -105,7 +120,9 @@ const Sectors = () => {
       status: 'On-going',
       color: 'from-sky-500 to-sky-700',
       bgImage: 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400',
-      courses: [],
+      courses: [
+        { id: 1, name: 'EVENT MANAGEMENT SERVICES NCIII', description: 'Planning and organizing events and tourism experiences', level: 'NCIII', status: 'On-going' },
+      ],
     },
     {
       id: 9,
@@ -115,7 +132,10 @@ const Sectors = () => {
       status: 'On-going',
       color: 'from-rose-500 to-rose-700',
       bgImage: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=400',
-      courses: [],
+      courses: [
+        { id: 1, name: 'BARISTA NCII', description: 'Coffee preparation and beverage service expertise', level: 'NCII', status: 'On-going' },
+        { id: 2, name: 'FOOD AND BEVERAGE SERVICES NCII', description: 'Food preparation, service, and hospitality standards', level: 'NCII', status: 'On-going' },
+      ],
     },
   ]);
 
