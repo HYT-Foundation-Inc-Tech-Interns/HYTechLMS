@@ -3,6 +3,7 @@ import { Bell, X, Check, Clock } from 'lucide-react';
 
 const NotificationDropdown = ({ notifications = [] }) => {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isViewingAll, setIsViewingAll] = useState(false);
   const notificationRef = useRef(null);
 
   // Default notifications if none provided
@@ -10,14 +11,31 @@ const NotificationDropdown = ({ notifications = [] }) => {
     { id: 1, text: 'Welcome to HYTech LMS!', time: 'Just now', unread: true },
   ];
 
-  const notificationList = notifications.length > 0 ? notifications : defaultNotifications;
-  const unreadCount = notificationList.filter(n => n.unread).length;
+  const [notificationList, setNotificationList] = useState(
+    notifications.length > 0 ? notifications : defaultNotifications
+  );
+
+  useEffect(() => {
+    setNotificationList(notifications.length > 0 ? notifications : defaultNotifications);
+  }, [notifications]);
+
+  const unreadCount = notificationList.filter((n) => n.unread).length;
+  const visibleNotifications = isViewingAll ? notificationList : notificationList.slice(0, 3);
+
+  const handleMarkAllAsRead = () => {
+    setNotificationList((prev) => prev.map((notification) => ({ ...notification, unread: false })));
+  };
+
+  const handleViewAll = () => {
+    setIsViewingAll((prev) => !prev);
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target)) {
         setShowNotifications(false);
+        setIsViewingAll(false);
       }
     };
 
@@ -29,7 +47,12 @@ const NotificationDropdown = ({ notifications = [] }) => {
     <div className="relative" ref={notificationRef}>
       {/* Bell Button */}
       <button
-        onClick={() => setShowNotifications(!showNotifications)}
+        onClick={() => {
+          setShowNotifications(!showNotifications);
+          if (showNotifications) {
+            setIsViewingAll(false);
+          }
+        }}
         className="relative p-2 hover:bg-white/10 rounded-lg transition-colors"
       >
         <Bell className="w-5 h-5" />
@@ -44,7 +67,10 @@ const NotificationDropdown = ({ notifications = [] }) => {
           {/* Backdrop for mobile */}
           <div 
             className="fixed inset-0 z-40 bg-black/20 md:hidden"
-            onClick={() => setShowNotifications(false)}
+            onClick={() => {
+              setShowNotifications(false);
+              setIsViewingAll(false);
+            }}
           />
           
           {/* Notification Panel */}
@@ -61,7 +87,10 @@ const NotificationDropdown = ({ notifications = [] }) => {
                 )}
               </div>
               <button 
-                onClick={() => setShowNotifications(false)}
+                onClick={() => {
+                  setShowNotifications(false);
+                  setIsViewingAll(false);
+                }}
                 className="p-1 hover:bg-gray-100:bg-gray-700 rounded-lg transition-colors md:hidden"
               >
                 <X className="w-5 h-5 text-gray-500" />
@@ -69,9 +98,9 @@ const NotificationDropdown = ({ notifications = [] }) => {
             </div>
 
             {/* Notifications List */}
-            <div className="max-h-80 overflow-y-auto">
+            <div className={`${isViewingAll ? 'max-h-[70vh]' : 'max-h-80'} overflow-y-auto transition-all duration-200`}>
               {notificationList.length > 0 ? (
-                notificationList.map((notification) => (
+                visibleNotifications.map((notification) => (
                   <div
                     key={notification.id}
                     className={`p-4 border-b border-gray-50 hover:bg-gray-50:bg-gray-700 transition-colors cursor-pointer group ${
@@ -110,11 +139,18 @@ const NotificationDropdown = ({ notifications = [] }) => {
             {/* Footer */}
             {notificationList.length > 0 && (
               <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                <button className="text-sm text-gray-500 hover:text-gray-700:text-gray-200 font-medium transition-colors">
+                <button
+                  onClick={handleMarkAllAsRead}
+                  disabled={unreadCount === 0}
+                  className="text-sm text-gray-500 hover:text-gray-700:text-gray-200 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   Mark all as read
                 </button>
-                <button className="text-sm text-orange-600 hover:text-orange-700:text-orange-300 font-medium transition-colors">
-                  View all
+                <button
+                  onClick={handleViewAll}
+                  className="text-sm text-orange-600 hover:text-orange-700:text-orange-300 font-medium transition-colors"
+                >
+                  {isViewingAll ? 'Show less' : 'View all'}
                 </button>
               </div>
             )}
