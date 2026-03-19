@@ -36,5 +36,6 @@ Desktop.ini
 
 # Misc local files
 *.local
+!.env.local
 *.tmp
 *.swp
