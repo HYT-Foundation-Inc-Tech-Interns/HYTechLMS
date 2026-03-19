@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, User, Settings } from 'lucide-react';
+import { signOut } from 'firebase/auth';
 import NotificationDropdown from '../shared/NotificationDropdown';
 import FlappyBirdGame from '../shared/FlappyBirdGame';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
+import { auth } from '../../firebase';
 
 const AdminNavbar = ({ title, subtitle }) => {
   const [showDropdown, setShowDropdown] = useState(false);
@@ -39,8 +41,17 @@ const AdminNavbar = ({ title, subtitle }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    navigate('/signin');
+  const handleLogout = async () => {
+    try {
+      if (auth) {
+        await signOut(auth);
+      }
+    } catch {
+      // Ignore sign-out errors and continue navigating to sign-in.
+    } finally {
+      setShowDropdown(false);
+      navigate('/signin', { replace: true });
+    }
   };
 
   return (
