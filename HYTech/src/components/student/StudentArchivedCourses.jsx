@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Archive,
   Eye,
@@ -11,46 +11,114 @@ import {
   BookOpen,
   Award,
   FileText,
-  Play
+  BarChart3
 } from 'lucide-react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../../firebase';
+
+const DEFAULT_ARCHIVED_COURSES = [
+  {
+    id: 1,
+    name: 'Barista NCII',
+    instructor: 'Anna Reyes',
+    completedDate: 'Dec 15, 2025',
+    rating: 4.5,
+    students: 30,
+    image: '/images/barista.png',
+    finalGrade: 'A',
+    recipientName: 'Gerald Andrei Lat',
+    credentialId: 'CERT-2025-001',
+    scores: {
+      quizzes: 92,
+      assignments: 94,
+      exams: 90,
+    },
+  },
+  {
+    id: 2,
+    name: 'Visual Graphics Design',
+    instructor: 'Mark Silva',
+    completedDate: 'Nov 20, 2025',
+    rating: 4.2,
+    students: 25,
+    image: '/images/graphics.png',
+    finalGrade: 'A-',
+    recipientName: 'Gerald Andrei Lat',
+    credentialId: 'CERT-2025-002',
+    scores: {
+      quizzes: 88,
+      assignments: 91,
+      exams: 87,
+    },
+  },
+  {
+    id: 3,
+    name: 'Food Safety Management',
+    instructor: 'Patricia Santos',
+    completedDate: 'Oct 5, 2025',
+    rating: 4.8,
+    students: 45,
+    image: '/images/food_safety.png',
+    finalGrade: 'B+',
+    recipientName: 'Gerald Andrei Lat',
+    credentialId: 'CERT-2025-003',
+    scores: {
+      quizzes: 84,
+      assignments: 86,
+      exams: 83,
+    },
+  },
+];
 
 const StudentArchivedCourses = () => {
+  const [uid, setUid] = useState('guest');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
+  const [archivedCourses, setArchivedCourses] = useState(DEFAULT_ARCHIVED_COURSES);
 
-  const archivedCourses = [
-    {
-      id: 1,
-      name: 'Barista NCII',
-      instructor: 'Anna Reyes',
-      completedDate: 'Dec 15, 2025',
-      rating: 4.5,
-      students: 30,
-      image: '/images/barista.png',
-      finalGrade: 'A'
-    },
-    {
-      id: 2,
-      name: 'Visual Graphics Design',
-      instructor: 'Mark Silva',
-      completedDate: 'Nov 20, 2025',
-      rating: 4.2,
-      students: 25,
-      image: '/images/graphics.png',
-      finalGrade: 'A-'
-    },
-    {
-      id: 3,
-      name: 'Food Safety Management',
-      instructor: 'Patricia Santos',
-      completedDate: 'Oct 5, 2025',
-      rating: 4.8,
-      students: 45,
-      image: '/images/food_safety.png',
-      finalGrade: 'B+'
+  const archivedStorageKey = `hyt:student:archived-courses:${uid}`;
+
+  useEffect(() => {
+    if (!auth) {
+      setUid('guest');
+      return () => {};
     }
-  ];
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUid(user?.uid || 'guest');
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(archivedStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setArchivedCourses(parsed);
+          return;
+        }
+      }
+      setArchivedCourses(DEFAULT_ARCHIVED_COURSES);
+    } catch {
+      setArchivedCourses(DEFAULT_ARCHIVED_COURSES);
+    }
+  }, [archivedStorageKey]);
+
+  useEffect(() => {
+    localStorage.setItem(archivedStorageKey, JSON.stringify(archivedCourses));
+  }, [archivedCourses, archivedStorageKey]);
+
+  const getOverallProgress = (course) => {
+    const values = [course?.scores?.quizzes, course?.scores?.assignments, course?.scores?.exams]
+      .map((value) => Number(value || 0));
+    const total = values.reduce((sum, value) => sum + value, 0);
+    return Math.round(total / values.length);
+  };
 
   const handleDelete = (course) => {
     setSelectedCourse(course);
@@ -63,7 +131,9 @@ const StudentArchivedCourses = () => {
   };
 
   const confirmDelete = () => {
-    // Handle delete logic
+    if (selectedCourse) {
+      setArchivedCourses((prev) => prev.filter((course) => course.id !== selectedCourse.id));
+    }
     setShowDeleteModal(false);
     setSelectedCourse(null);
   };
@@ -283,11 +353,87 @@ const StudentArchivedCourses = () => {
                   <p className="text-sm text-green-600 font-medium">Completion Date</p>
                   <p className="text-lg font-bold text-green-700">{selectedCourse.completedDate}</p>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-[#0D4291] text-white rounded-xl font-medium hover:bg-[#0a3577] transition-colors">
+                <button
+                  onClick={() => setShowCertificateModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#0D4291] text-white rounded-xl font-medium hover:bg-[#0a3577] transition-colors"
+                >
                   <Award className="w-4 h-4" />
                   View Certificate
                 </button>
               </div>
+
+              <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <BarChart3 className="w-5 h-5 text-blue-700" />
+                  <h4 className="font-bold text-blue-900">Overall Progress Statistics</h4>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="bg-white rounded-lg p-3 border border-blue-100">
+                    <p className="text-xs text-gray-500">Quizzes</p>
+                    <p className="text-xl font-bold text-gray-900">{selectedCourse.scores?.quizzes || 0}%</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-blue-100">
+                    <p className="text-xs text-gray-500">Assignments</p>
+                    <p className="text-xl font-bold text-gray-900">{selectedCourse.scores?.assignments || 0}%</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-blue-100">
+                    <p className="text-xs text-gray-500">Exams</p>
+                    <p className="text-xl font-bold text-gray-900">{selectedCourse.scores?.exams || 0}%</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-blue-100">
+                    <p className="text-xs text-gray-500">Overall</p>
+                    <p className="text-xl font-bold text-blue-700">{getOverallProgress(selectedCourse)}%</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCertificateModal && selectedCourse && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">Certificate of Completion</h3>
+              <button
+                onClick={() => setShowCertificateModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+            <div className="p-6 bg-white">
+              <div className="border-4 border-[#1e3a8a] rounded-xl p-6">
+                <div className="border border-[#1e3a8a] rounded-lg p-8 text-center">
+                  <Award className="w-12 h-12 text-[#1e3a8a] mx-auto mb-3" />
+                  <h4 className="text-2xl font-black text-[#1e3a8a] tracking-wide">CERTIFICATE OF COMPLETION</h4>
+                  <p className="text-sm text-gray-500 mt-4">This certifies that</p>
+                  <p className="text-3xl text-[#1e3a8a] mt-1" style={{ fontFamily: "'Pinyon Script', cursive" }}>
+                    {selectedCourse.recipientName || 'Student'}
+                  </p>
+                  <p className="text-sm text-gray-500 mt-4">has successfully completed</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1">{selectedCourse.name}</p>
+                  <div className="grid grid-cols-2 gap-4 mt-8 text-sm text-left">
+                    <div>
+                      <p className="text-gray-500">Date Issued</p>
+                      <p className="font-semibold text-gray-900">{selectedCourse.completedDate}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Credential ID</p>
+                      <p className="font-semibold text-gray-900">{selectedCourse.credentialId || `CERT-${selectedCourse.id}`}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => setShowCertificateModal(false)}
+                className="px-5 py-2.5 bg-[#0D4291] text-white rounded-xl font-medium hover:bg-[#0a3577] transition-colors"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -309,7 +455,7 @@ const StudentArchivedCourses = () => {
 
               <div className="flex gap-3">
                 <button 
-                  onClick={() => setShowDeleteModal(false)}
+                  onClick={() => { setShowDeleteModal(false); setSelectedCourse(null); }}
                   className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
                 >
                   Cancel
