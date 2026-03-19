@@ -13,11 +13,12 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
+import { uploadUserAvatar } from '../../utils/avatarStorage';
 
 const StudentSettings = () => {
   const { addToast } = useToast();
   const { setAvatar } = useProfileAvatar('student');
-  const { settingsData, saveSettings } = useUserSettings('student');
+  const { uid, settingsData, saveSettings } = useUserSettings('student');
   const [profileData, setProfileData] = useState({
     firstName: 'Gerald Andrei',
     lastName: 'Lat',
@@ -56,9 +57,10 @@ useEffect(() => {
   if (settingsData.privacyForm) {
     setPrivacyForm((prev) => ({ ...prev, ...settingsData.privacyForm }));
   }
-  if (settingsData.avatarPreview) {
-    setAvatarPreview(settingsData.avatarPreview);
-    setAvatar(settingsData.avatarPreview);
+  if (settingsData.avatarUrl || settingsData.avatarPreview) {
+    const syncedAvatar = settingsData.avatarUrl || settingsData.avatarPreview;
+    setAvatarPreview(syncedAvatar);
+    setAvatar(syncedAvatar);
   }
 }, [settingsData, setAvatar]);
 
@@ -98,17 +100,27 @@ const handleAvatarChange = (e) => {
   };
 
   const handleSaveChanges = async () => {
-    if (avatarPreview) {
-      setAvatar(avatarPreview);
-    }
-
     try {
+      let avatarUrl = settingsData?.avatarUrl || null;
+
+      if (selectedAvatarFile) {
+        const result = await uploadUserAvatar({ uid, role: 'student', file: selectedAvatarFile });
+        avatarUrl = result.url;
+      }
+
+      if (!avatarPreview) {
+        avatarUrl = null;
+      }
+
       await saveSettings({
         profileData,
         notifications,
         privacyForm,
-        avatarPreview: avatarPreview || null,
+        avatarUrl,
       });
+      setAvatar(avatarUrl || null);
+      setAvatarPreview(avatarUrl || null);
+      setSelectedAvatarFile(null);
       addToast('Profile changes saved successfully.', 'success');
     } catch {
       addToast('Unable to save settings to Firestore.', 'error');

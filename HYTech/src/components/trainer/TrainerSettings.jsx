@@ -3,12 +3,13 @@ import { User, Bell, Shield, Palette, Globe, Save, Camera, X } from 'lucide-reac
 import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
+import { uploadUserAvatar } from '../../utils/avatarStorage';
 
 const TrainerSettings = () => {
   const [activeTab, setActiveTab] = useState('profile');
   const { addToast } = useToast();
   const { setAvatar } = useProfileAvatar('trainer');
-  const { settingsData, saveSettings } = useUserSettings('trainer');
+  const { uid, settingsData, saveSettings } = useUserSettings('trainer');
   const [isSaving, setIsSaving] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -59,9 +60,10 @@ useEffect(() => {
   if (settingsData.privacySettings) {
     setPrivacySettings((prev) => ({ ...prev, ...settingsData.privacySettings }));
   }
-  if (settingsData.avatarPreview) {
-    setAvatarPreview(settingsData.avatarPreview);
-    setAvatar(settingsData.avatarPreview);
+  if (settingsData.avatarUrl || settingsData.avatarPreview) {
+    const syncedAvatar = settingsData.avatarUrl || settingsData.avatarPreview;
+    setAvatarPreview(syncedAvatar);
+    setAvatar(syncedAvatar);
   }
 }, [settingsData, setAvatar]);
 
@@ -90,24 +92,37 @@ const removeAvatar = () => {
 };
 
   // Handle save
-const handleSave = () => {
+const handleSave = async () => {
   setIsSaving(true);
-  saveSettings({
-    profileForm,
-    trainerNotificationSettings,
-    appearanceSettings,
-    privacySettings,
-    avatarPreview: avatarPreview || null,
-  })
-    .then(() => {
-      setAvatar(avatarPreview || null);
-      setIsSaving(false);
-      addToast('Settings saved successfully!', 'success');
-    })
-    .catch(() => {
-      setIsSaving(false);
-      addToast('Unable to save settings.', 'error');
+  try {
+    let avatarUrl = settingsData?.avatarUrl || null;
+
+    if (selectedAvatarFile) {
+      const result = await uploadUserAvatar({ uid, role: 'trainer', file: selectedAvatarFile });
+      avatarUrl = result.url;
+    }
+
+    if (!avatarPreview) {
+      avatarUrl = null;
+    }
+
+    await saveSettings({
+      profileForm,
+      trainerNotificationSettings,
+      appearanceSettings,
+      privacySettings,
+      avatarUrl,
     });
+
+    setAvatar(avatarUrl || null);
+    setAvatarPreview(avatarUrl || null);
+    setSelectedAvatarFile(null);
+    setIsSaving(false);
+    addToast('Settings saved successfully!', 'success');
+  } catch {
+    setIsSaving(false);
+    addToast('Unable to save settings.', 'error');
+  }
 };
 
   const handlePasswordSave = () => {

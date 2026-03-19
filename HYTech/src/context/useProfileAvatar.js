@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { auth, db } from '../firebase';
 
 const normalizeRole = (role) => {
   if (role === 'dashboard') {
@@ -39,6 +40,29 @@ export const useProfileAvatar = (role) => {
 
   useEffect(() => {
     setAvatarState(readAvatar(normalizedRole, uid));
+  }, [normalizedRole, uid]);
+
+  useEffect(() => {
+    if (!db || !uid) {
+      return () => {};
+    }
+
+    const settingsRef = doc(db, 'userSettings', uid);
+    const unsubscribe = onSnapshot(
+      settingsRef,
+      (snapshot) => {
+        const roleSettings = snapshot.exists() ? snapshot.data()?.[normalizedRole] || null : null;
+        const remoteAvatar = roleSettings?.avatarUrl || roleSettings?.avatarPreview || null;
+
+        if (remoteAvatar) {
+          localStorage.setItem(getKey(normalizedRole, uid), remoteAvatar);
+          setAvatarState(remoteAvatar);
+        }
+      },
+      () => {}
+    );
+
+    return () => unsubscribe();
   }, [normalizedRole, uid]);
 
   useEffect(() => {

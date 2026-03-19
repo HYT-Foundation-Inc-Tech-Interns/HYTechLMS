@@ -16,17 +16,19 @@ import { useEffect, useRef } from 'react';
 import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
+import { uploadUserAvatar } from '../../utils/avatarStorage';
 
 const Settings = () => {
   const { addToast } = useToast();
   const { setAvatar } = useProfileAvatar('admin');
-  const { settingsData, saveSettings } = useUserSettings('admin');
+  const { uid, settingsData, saveSettings } = useUserSettings('admin');
   const avatarInputRef = useRef(null);
   const [activeTab, setActiveTab] = useState('account');
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState(null);
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState(null);
 
   // Account form state
   const [accountForm, setAccountForm] = useState({
@@ -95,9 +97,10 @@ const Settings = () => {
       return;
     }
 
-    if (settingsData.avatarPreview) {
-      setAvatarPreview(settingsData.avatarPreview);
-      setAvatar(settingsData.avatarPreview);
+    if (settingsData.avatarUrl || settingsData.avatarPreview) {
+      const syncedAvatar = settingsData.avatarUrl || settingsData.avatarPreview;
+      setAvatarPreview(syncedAvatar);
+      setAvatar(syncedAvatar);
     }
     if (settingsData.accountForm) {
       setAccountForm((prev) => ({ ...prev, ...settingsData.accountForm }));
@@ -134,6 +137,7 @@ const Settings = () => {
     const reader = new FileReader();
     reader.onload = () => {
       setAvatarPreview(reader.result);
+      setSelectedAvatarFile(file);
       addToast('Profile photo selected. Save changes to apply.', 'info');
     };
     reader.readAsDataURL(file);
@@ -141,6 +145,7 @@ const Settings = () => {
 
   const handleRemoveAvatar = () => {
     setAvatarPreview(null);
+    setSelectedAvatarFile(null);
     setAvatar(null);
     addToast('Profile photo removed.', 'info');
   };
@@ -170,22 +175,35 @@ const Settings = () => {
     addToast('Password updated successfully.', 'success');
   };
 
-  const handleSaveAll = () => {
-    saveSettings({
-      avatarPreview: avatarPreview || null,
-      accountForm,
-      accessSettings,
-      notificationSettings,
-      systemPrefs,
-      securitySettings,
-    })
-      .then(() => {
-        setAvatar(avatarPreview || null);
-        addToast('Settings saved successfully.', 'success');
-      })
-      .catch(() => {
-        addToast('Unable to save settings.', 'error');
+  const handleSaveAll = async () => {
+    try {
+      let avatarUrl = settingsData?.avatarUrl || null;
+
+      if (selectedAvatarFile) {
+        const result = await uploadUserAvatar({ uid, role: 'admin', file: selectedAvatarFile });
+        avatarUrl = result.url;
+      }
+
+      if (!avatarPreview) {
+        avatarUrl = null;
+      }
+
+      await saveSettings({
+        avatarUrl,
+        accountForm,
+        accessSettings,
+        notificationSettings,
+        systemPrefs,
+        securitySettings,
       });
+
+      setAvatar(avatarUrl || null);
+      setAvatarPreview(avatarUrl || null);
+      setSelectedAvatarFile(null);
+      addToast('Settings saved successfully.', 'success');
+    } catch {
+      addToast('Unable to save settings.', 'error');
+    }
   };
 
   const Toggle = ({ enabled, onChange, label, description }) => (
