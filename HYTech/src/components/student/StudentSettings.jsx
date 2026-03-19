@@ -12,10 +12,12 @@ import {
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
+import { useUserSettings } from '../../context/useUserSettings';
 
 const StudentSettings = () => {
   const { addToast } = useToast();
   const { setAvatar } = useProfileAvatar('student');
+  const { settingsData, saveSettings } = useUserSettings('student');
   const [profileData, setProfileData] = useState({
     firstName: 'Gerald Andrei',
     lastName: 'Lat',
@@ -40,11 +42,25 @@ const [privacyForm, setPrivacyForm] = useState({
   allowProgressInsights: true,
 });
 
-// load saved avatar (data URL) on mount
 useEffect(() => {
-  const saved = localStorage.getItem('student-avatar');
-  if (saved) setAvatarPreview(saved);
-}, []);
+  if (!settingsData) {
+    return;
+  }
+
+  if (settingsData.profileData) {
+    setProfileData((prev) => ({ ...prev, ...settingsData.profileData }));
+  }
+  if (settingsData.notifications) {
+    setNotifications((prev) => ({ ...prev, ...settingsData.notifications }));
+  }
+  if (settingsData.privacyForm) {
+    setPrivacyForm((prev) => ({ ...prev, ...settingsData.privacyForm }));
+  }
+  if (settingsData.avatarPreview) {
+    setAvatarPreview(settingsData.avatarPreview);
+    setAvatar(settingsData.avatarPreview);
+  }
+}, [settingsData, setAvatar]);
 
 // open file picker
 const handleAvatarButton = () => fileInputRef.current?.click();
@@ -54,7 +70,7 @@ const handleAvatarChange = (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
   if (!file.type.startsWith('image/')) {
-    alert('Please select an image file.');
+    addToast('Please select a valid image file.', 'error');
     return;
   }
   const reader = new FileReader();
@@ -81,11 +97,22 @@ const handleAvatarChange = (e) => {
     }));
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
     if (avatarPreview) {
       setAvatar(avatarPreview);
     }
-    addToast('Profile changes saved successfully.', 'success');
+
+    try {
+      await saveSettings({
+        profileData,
+        notifications,
+        privacyForm,
+        avatarPreview: avatarPreview || null,
+      });
+      addToast('Profile changes saved successfully.', 'success');
+    } catch {
+      addToast('Unable to save settings to Firestore.', 'error');
+    }
   };
 
   const handleSavePassword = () => {
@@ -110,9 +137,14 @@ const handleAvatarChange = (e) => {
     addToast('Password updated successfully.', 'success');
   };
 
-  const handleSavePrivacy = () => {
+  const handleSavePrivacy = async () => {
     setShowPrivacyModal(false);
-    addToast('Privacy settings updated.', 'success');
+    try {
+      await saveSettings({ privacyForm });
+      addToast('Privacy settings updated.', 'success');
+    } catch {
+      addToast('Unable to save privacy settings.', 'error');
+    }
   };
 
   const NotificationToggle = ({ label, description, checked, onChange }) => (

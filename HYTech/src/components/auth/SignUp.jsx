@@ -1,9 +1,19 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Lock, Eye, EyeOff } from 'lucide-react';
+import {
+  browserLocalPersistence,
+  browserSessionPersistence,
+  createUserWithEmailAndPassword,
+  setPersistence,
+} from 'firebase/auth';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { auth, db, firebaseInitError } from '../../firebase';
+import { useToast } from '../../context/ToastContext';
 
 const SignUp = () => {
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [formData, setFormData] = useState({
@@ -21,11 +31,62 @@ const SignUp = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
+
+    try {
+      if (!auth || !db) {
+        addToast(firebaseInitError || 'Firebase is not configured correctly.', 'error');
+        return;
+      }
+
+      if (formData.password.length < 8) {
+        addToast('Password must be at least 8 characters.', 'error');
+        return;
+      }
+
+      await setPersistence(
+        auth,
+        rememberMe ? browserLocalPersistence : browserSessionPersistence
+      );
+
+      const credential = await createUserWithEmailAndPassword(
+        auth,
+        formData.email.trim(),
+        formData.password
+      );
+
+      await setDoc(doc(db, 'users', credential.user.uid), {
+        uid: credential.user.uid,
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+        role: 'student',
+        status: 'Active',
+        createdAt: serverTimestamp(),
+      });
+
+      addToast('Student account created successfully. You can now sign in.', 'success');
       navigate('/signin');
-    }, 1500);
+    } catch (error) {
+      const errorMessages = {
+        'auth/invalid-api-key': 'Invalid Firebase API key. Check your VITE_FIREBASE_API_KEY value.',
+        'auth/email-already-in-use': 'This email is already registered.',
+        'auth/invalid-email': 'Please enter a valid email address.',
+        'auth/weak-password': 'Please choose a stronger password.',
+        'auth/operation-not-allowed': 'Email/password signup is disabled. Enable it in Firebase Authentication > Sign-in method.',
+        'auth/too-many-requests': 'Too many attempts. Please try again later.',
+        'auth/network-request-failed': 'Network error. Please check your internet connection.',
+        'auth/unauthorized-domain': 'This domain is not authorized in Firebase Auth settings.',
+        'auth/admin-restricted-operation': 'Signup is restricted by project settings.',
+      };
+
+      const fallbackMessage = error?.code
+        ? `Unable to create account (${error.code}).`
+        : 'Unable to create account. Please try again.';
+      const message = errorMessages[error?.code] || fallbackMessage;
+      addToast(message, 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -97,6 +158,9 @@ const SignUp = () => {
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold text-gray-800 mb-2">Getting Started</h2>
             <p className="text-gray-500">Create account to continue!</p>
+            <p className="text-xs text-gray-500 mt-2">
+              Public sign up is for student accounts only. Admin and trainer accounts are managed in User Management.
+            </p>
           </div>
 
           {/* Social Login */}

@@ -1,11 +1,47 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, X, User, GraduationCap, Shield } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import {
+  browserLocalPersistence,
+  browserSessionPersistence,
+  createUserWithEmailAndPassword,
+  fetchSignInMethodsForEmail,
+  setPersistence,
+  signInWithEmailAndPassword,
+} from 'firebase/auth';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from 'firebase/firestore';
+import { auth, db, firebaseInitError } from '../../firebase';
+import { useToast } from '../../context/ToastContext';
+
+const INITIAL_STAFF_ACCOUNTS = [
+  {
+    email: 'admin@hytech.com',
+    password: 'admin1234',
+    role: 'admin',
+    name: 'Initial Admin',
+  },
+  {
+    email: 'trainer@hytech.com',
+    password: 'trainer1234',
+    role: 'trainer',
+    name: 'Initial Trainer',
+  },
+];
 
 const SignIn = () => {
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
-  const [showRoleModal, setShowRoleModal] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
@@ -17,34 +53,116 @@ const SignIn = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setShowRoleModal(true);
+  const resolveUserRole = async (uid) => {
+    const directUserDoc = await getDoc(doc(db, 'users', uid));
+    if (directUserDoc.exists()) {
+      return directUserDoc.data()?.role || null;
+    }
+
+    const usersByUidQuery = query(collection(db, 'users'), where('uid', '==', uid), limit(1));
+    const userResults = await getDocs(usersByUidQuery);
+    if (!userResults.empty) {
+      return userResults.docs[0].data()?.role || null;
+    }
+
+    return null;
   };
 
-  const handleRoleSelect = (role) => {
+  const findInitialStaffMatch = (email, password) =>
+    INITIAL_STAFF_ACCOUNTS.find(
+      (account) => account.email === email.toLowerCase() && account.password === password
+    );
+
+  const ensureInitialStaffAccount = async (email, password) => {
+    const initialAccount = findInitialStaffMatch(email, password);
+    if (!initialAccount) {
+      return null;
+    }
+
+    const signInMethods = await fetchSignInMethodsForEmail(auth, email);
+    if (signInMethods.length > 0) {
+      return null;
+    }
+
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    await setDoc(doc(db, 'users', credential.user.uid), {
+      uid: credential.user.uid,
+      name: initialAccount.name,
+      email,
+      phone: '',
+      role: initialAccount.role,
+      status: 'Active',
+      isDefaultAccount: true,
+      createdAt: serverTimestamp(),
+    });
+
+    addToast(`${initialAccount.role === 'admin' ? 'Admin' : 'Trainer'} account initialized.`, 'info');
+    return credential;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setIsLoading(true);
-    setShowRoleModal(false);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      // Route based on role
+
+    try {
+      if (!auth || !db) {
+        addToast(firebaseInitError || 'Firebase is not configured correctly.', 'error');
+        return;
+      }
+
+      const normalizedEmail = formData.email.trim().toLowerCase();
+      await setPersistence(
+        auth,
+        rememberMe ? browserLocalPersistence : browserSessionPersistence
+      );
+
+      let credential;
+
+      try {
+        credential = await signInWithEmailAndPassword(
+          auth,
+          normalizedEmail,
+          formData.password
+        );
+      } catch (error) {
+        const createdCredential = await ensureInitialStaffAccount(
+          normalizedEmail,
+          formData.password
+        );
+
+        if (!createdCredential) {
+          throw error;
+        }
+
+        credential = createdCredential;
+      }
+
+      const rawRole = await resolveUserRole(credential.user.uid);
+      const role = String(rawRole || '').toLowerCase();
+
       if (role === 'admin') {
         navigate('/admin');
       } else if (role === 'trainer') {
         navigate('/dashboard');
       } else {
-        // Student dashboard
         navigate('/student');
       }
-    }, 1000);
-  };
+    } catch (error) {
+      const errorMessages = {
+        'auth/invalid-api-key': 'Invalid Firebase API key. Check your VITE_FIREBASE_API_KEY value.',
+        'auth/invalid-credential': 'Invalid email or password.',
+        'auth/user-not-found': 'User account not found.',
+        'auth/wrong-password': 'Invalid email or password.',
+        'auth/too-many-requests': 'Too many attempts. Please try again later.',
+        'auth/network-request-failed': 'Network error. Please check your internet connection.',
+      };
 
-  const roles = [
-    { id: 'admin', name: 'Admin', icon: Shield, color: 'bg-purple-100 text-purple-600' },
-    { id: 'trainer', name: 'Trainer', icon: User, color: 'bg-blue-100 text-blue-600' },
-    { id: 'student', name: 'Student', icon: GraduationCap, color: 'bg-green-100 text-green-600' },
-  ];
+      const message = errorMessages[error?.code] || 'Unable to sign in. Please try again.';
+      addToast(message, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex">
@@ -251,67 +369,6 @@ const SignIn = () => {
         </div>
       </div>
 
-      {/* Role Selection Modal */}
-      {showRoleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in"
-            onClick={() => setShowRoleModal(false)}
-          />
-          
-          {/* Modal */}
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
-            {/* Header */}
-            <div className="bg-navy-500 text-white px-6 py-4 flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
-                <img 
-                  src="/images/hyt_logo.png" 
-                  alt="HYT Logo" 
-                  className="w-8 h-8 object-contain"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.parentElement.innerHTML = '<span class="text-white font-bold text-sm">HYT</span>';
-                  }}
-                />
-              </div>
-              <span className="font-semibold text-lg">HYTech</span>
-              <button 
-                onClick={() => setShowRoleModal(false)}
-                className="ml-auto p-1 hover:bg-white/10 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-6">
-              <h3 className="text-xl font-bold text-gray-800 text-center mb-6">Sign in as:</h3>
-              
-              <div className="space-y-3">
-                {roles.map((role, index) => {
-                  const Icon = role.icon;
-                  return (
-                    <button
-                      key={role.id}
-                      onClick={() => handleRoleSelect(role.id)}
-                      className="w-full flex items-center gap-4 px-4 py-4 bg-white border-2 border-orange-400 rounded-xl hover:bg-orange-50 hover:border-orange-500 transition-all duration-200 group"
-                      style={{ animationDelay: `${index * 0.1}s` }}
-                    >
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${role.color} group-hover:scale-110 transition-transform`}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <span className="font-semibold text-orange-500 group-hover:text-orange-600">
-                        {role.name}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

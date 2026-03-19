@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../firebase';
 
 const normalizeRole = (role) => {
   if (role === 'dashboard') {
@@ -7,11 +9,11 @@ const normalizeRole = (role) => {
   return role || 'student';
 };
 
-const getKey = (role) => `${normalizeRole(role)}-avatar`;
+const getKey = (role, uid) => `${normalizeRole(role)}-avatar-${uid || 'guest'}`;
 
-const readAvatar = (role) => {
+const readAvatar = (role, uid) => {
   try {
-    return localStorage.getItem(getKey(role));
+    return localStorage.getItem(getKey(role, uid));
   } catch {
     return null;
   }
@@ -19,25 +21,42 @@ const readAvatar = (role) => {
 
 export const useProfileAvatar = (role) => {
   const normalizedRole = useMemo(() => normalizeRole(role), [role]);
-  const [avatar, setAvatarState] = useState(() => readAvatar(normalizedRole));
+  const [uid, setUid] = useState(() => auth?.currentUser?.uid || null);
+  const [avatar, setAvatarState] = useState(() => readAvatar(normalizedRole, auth?.currentUser?.uid || null));
 
   useEffect(() => {
-    setAvatarState(readAvatar(normalizedRole));
-  }, [normalizedRole]);
+    if (!auth) {
+      setUid(null);
+      return () => {};
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUid(user?.uid || null);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    setAvatarState(readAvatar(normalizedRole, uid));
+  }, [normalizedRole, uid]);
 
   useEffect(() => {
     const syncAvatar = (event) => {
       if (event.detail?.role !== normalizedRole) {
         return;
       }
-      setAvatarState(readAvatar(normalizedRole));
+      if (event.detail?.uid !== uid) {
+        return;
+      }
+      setAvatarState(readAvatar(normalizedRole, uid));
     };
 
     const syncStorage = (event) => {
-      if (event.key && event.key !== getKey(normalizedRole)) {
+      if (event.key && event.key !== getKey(normalizedRole, uid)) {
         return;
       }
-      setAvatarState(readAvatar(normalizedRole));
+      setAvatarState(readAvatar(normalizedRole, uid));
     };
 
     window.addEventListener('hyt:avatar-updated', syncAvatar);
@@ -47,18 +66,20 @@ export const useProfileAvatar = (role) => {
       window.removeEventListener('hyt:avatar-updated', syncAvatar);
       window.removeEventListener('storage', syncStorage);
     };
-  }, [normalizedRole]);
+  }, [normalizedRole, uid]);
 
   const setAvatar = (imageData) => {
+    const storageKey = getKey(normalizedRole, uid);
+
     if (imageData) {
-      localStorage.setItem(getKey(normalizedRole), imageData);
+      localStorage.setItem(storageKey, imageData);
     } else {
-      localStorage.removeItem(getKey(normalizedRole));
+      localStorage.removeItem(storageKey);
     }
 
     setAvatarState(imageData || null);
     window.dispatchEvent(
-      new CustomEvent('hyt:avatar-updated', { detail: { role: normalizedRole } })
+      new CustomEvent('hyt:avatar-updated', { detail: { role: normalizedRole, uid } })
     );
   };
 

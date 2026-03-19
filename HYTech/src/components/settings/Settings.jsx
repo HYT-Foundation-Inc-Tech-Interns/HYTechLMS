@@ -15,10 +15,12 @@ import {
 import { useEffect, useRef } from 'react';
 import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
+import { useUserSettings } from '../../context/useUserSettings';
 
 const Settings = () => {
   const { addToast } = useToast();
   const { setAvatar } = useProfileAvatar('admin');
+  const { settingsData, saveSettings } = useUserSettings('admin');
   const avatarInputRef = useRef(null);
   const [activeTab, setActiveTab] = useState('account');
   const [showPassword, setShowPassword] = useState(false);
@@ -89,11 +91,30 @@ const Settings = () => {
   ];
 
   useEffect(() => {
-    const savedAvatar = localStorage.getItem('admin-avatar');
-    if (savedAvatar) {
-      setAvatarPreview(savedAvatar);
+    if (!settingsData) {
+      return;
     }
-  }, []);
+
+    if (settingsData.avatarPreview) {
+      setAvatarPreview(settingsData.avatarPreview);
+      setAvatar(settingsData.avatarPreview);
+    }
+    if (settingsData.accountForm) {
+      setAccountForm((prev) => ({ ...prev, ...settingsData.accountForm }));
+    }
+    if (settingsData.accessSettings) {
+      setAccessSettings((prev) => ({ ...prev, ...settingsData.accessSettings }));
+    }
+    if (settingsData.notificationSettings) {
+      setNotificationSettings((prev) => ({ ...prev, ...settingsData.notificationSettings }));
+    }
+    if (settingsData.systemPrefs) {
+      setSystemPrefs((prev) => ({ ...prev, ...settingsData.systemPrefs }));
+    }
+    if (settingsData.securitySettings) {
+      setSecuritySettings((prev) => ({ ...prev, ...settingsData.securitySettings }));
+    }
+  }, [settingsData, setAvatar]);
 
   const handleAvatarPick = () => {
     avatarInputRef.current?.click();
@@ -150,11 +171,21 @@ const Settings = () => {
   };
 
   const handleSaveAll = () => {
-    if (avatarPreview) {
-      localStorage.setItem('admin-avatar', avatarPreview);
-      setAvatar(avatarPreview);
-    }
-    addToast('Settings saved successfully.', 'success');
+    saveSettings({
+      avatarPreview: avatarPreview || null,
+      accountForm,
+      accessSettings,
+      notificationSettings,
+      systemPrefs,
+      securitySettings,
+    })
+      .then(() => {
+        setAvatar(avatarPreview || null);
+        addToast('Settings saved successfully.', 'success');
+      })
+      .catch(() => {
+        addToast('Unable to save settings.', 'error');
+      });
   };
 
   const Toggle = ({ enabled, onChange, label, description }) => (
