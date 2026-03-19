@@ -1,13 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, User, Settings } from 'lucide-react';
+import { signOut } from 'firebase/auth';
 import NotificationDropdown from '../shared/NotificationDropdown';
 import FlappyBirdGame from '../shared/FlappyBirdGame';
+import { useProfileAvatar } from '../../context/useProfileAvatar';
+import { auth } from '../../firebase';
 
 const AdminNavbar = ({ title, subtitle }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
+  const { avatar } = useProfileAvatar('admin');
 
   // Easter egg: show Flappy Bird after 5 logo clicks
   const [showGame, setShowGame] = useState(false);
@@ -37,14 +41,17 @@ const AdminNavbar = ({ title, subtitle }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const notifications = [
-    { id: 1, text: 'New trainee registered in Construction Sector', time: '1m ago', unread: true },
-    { id: 2, text: 'Trainer Ms. Grace updated course materials', time: '15m ago', unread: true },
-    { id: 3, text: 'System backup completed successfully', time: '1h ago', unread: false },
-  ];
-
-  const handleLogout = () => {
-    navigate('/signin');
+  const handleLogout = async () => {
+    try {
+      if (auth) {
+        await signOut(auth);
+      }
+    } catch {
+      // Ignore sign-out errors and continue navigating to sign-in.
+    } finally {
+      setShowDropdown(false);
+      navigate('/signin', { replace: true });
+    }
   };
 
   return (
@@ -74,7 +81,7 @@ const AdminNavbar = ({ title, subtitle }) => {
       {/* Right Side - Actions */}
       <div className="flex items-center gap-2 sm:gap-4 pl-2">
         {/* Notifications */}
-        <NotificationDropdown notifications={notifications} />
+        <NotificationDropdown role="admin" />
 
         {/* Profile Dropdown */}
         <div className="relative" ref={dropdownRef}>
@@ -82,9 +89,13 @@ const AdminNavbar = ({ title, subtitle }) => {
             onClick={() => setShowDropdown(!showDropdown)}
             className="flex items-center gap-2 hover:bg-white/10 rounded-lg p-1 transition-colors"
           >
-            <div className="w-9 h-9 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center text-white font-medium text-sm">
-              AD
-            </div>
+            {avatar ? (
+              <img src={avatar} alt="Admin profile" className="w-9 h-9 rounded-full object-cover border border-white/20" />
+            ) : (
+              <div className="w-9 h-9 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center text-white font-medium text-sm">
+                AD
+              </div>
+            )}
           </button>
 
           {showDropdown && (

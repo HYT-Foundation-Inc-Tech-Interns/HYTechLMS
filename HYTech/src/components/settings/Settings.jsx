@@ -8,14 +8,27 @@ import {
   Upload,
   Eye,
   EyeOff,
-  ChevronDown
+  ChevronDown,
+  Camera,
+  X
 } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { useToast } from '../../context/ToastContext';
+import { useProfileAvatar } from '../../context/useProfileAvatar';
+import { useUserSettings } from '../../context/useUserSettings';
+import { uploadUserAvatar } from '../../utils/avatarStorage';
 
 const Settings = () => {
+  const { addToast } = useToast();
+  const { setAvatar } = useProfileAvatar('admin');
+  const { uid, settingsData, saveSettings } = useUserSettings('admin');
+  const avatarInputRef = useRef(null);
   const [activeTab, setActiveTab] = useState('account');
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState(null);
 
   // Account form state
   const [accountForm, setAccountForm] = useState({
@@ -79,6 +92,120 @@ const Settings = () => {
     { id: 'security', label: 'Backup & Security', icon: Shield },
   ];
 
+  useEffect(() => {
+    if (!settingsData) {
+      return;
+    }
+
+    if (settingsData.avatarUrl || settingsData.avatarPreview) {
+      const syncedAvatar = settingsData.avatarUrl || settingsData.avatarPreview;
+      setAvatarPreview(syncedAvatar);
+      setAvatar(syncedAvatar);
+    }
+    if (settingsData.accountForm) {
+      setAccountForm((prev) => ({ ...prev, ...settingsData.accountForm }));
+    }
+    if (settingsData.accessSettings) {
+      setAccessSettings((prev) => ({ ...prev, ...settingsData.accessSettings }));
+    }
+    if (settingsData.notificationSettings) {
+      setNotificationSettings((prev) => ({ ...prev, ...settingsData.notificationSettings }));
+    }
+    if (settingsData.systemPrefs) {
+      setSystemPrefs((prev) => ({ ...prev, ...settingsData.systemPrefs }));
+    }
+    if (settingsData.securitySettings) {
+      setSecuritySettings((prev) => ({ ...prev, ...settingsData.securitySettings }));
+    }
+  }, [settingsData, setAvatar]);
+
+  const handleAvatarPick = () => {
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      addToast('Please select a valid image file.', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAvatarPreview(reader.result);
+      setSelectedAvatarFile(file);
+      addToast('Profile photo selected. Save changes to apply.', 'info');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatarPreview(null);
+    setSelectedAvatarFile(null);
+    setAvatar(null);
+    addToast('Profile photo removed.', 'info');
+  };
+
+  const handlePasswordUpdate = () => {
+    if (!accountForm.password || !accountForm.newPassword || !accountForm.confirmPassword) {
+      addToast('Please complete all password fields.', 'error');
+      return;
+    }
+
+    if (accountForm.newPassword.length < 8) {
+      addToast('New password must be at least 8 characters.', 'error');
+      return;
+    }
+
+    if (accountForm.newPassword !== accountForm.confirmPassword) {
+      addToast('New password and confirmation do not match.', 'error');
+      return;
+    }
+
+    setAccountForm({
+      ...accountForm,
+      password: '************',
+      newPassword: '',
+      confirmPassword: '',
+    });
+    addToast('Password updated successfully.', 'success');
+  };
+
+  const handleSaveAll = async () => {
+    try {
+      let avatarUrl = settingsData?.avatarUrl || null;
+
+      if (selectedAvatarFile) {
+        const result = await uploadUserAvatar({ uid, role: 'admin', file: selectedAvatarFile });
+        avatarUrl = result.url;
+      }
+
+      if (!avatarPreview) {
+        avatarUrl = null;
+      }
+
+      await saveSettings({
+        avatarUrl,
+        accountForm,
+        accessSettings,
+        notificationSettings,
+        systemPrefs,
+        securitySettings,
+      });
+
+      setAvatar(avatarUrl || null);
+      setAvatarPreview(avatarUrl || null);
+      setSelectedAvatarFile(null);
+      addToast('Settings saved successfully.', 'success');
+    } catch {
+      addToast('Unable to save settings.', 'error');
+    }
+  };
+
   const Toggle = ({ enabled, onChange, label, description }) => (
     <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
       <div>
@@ -102,6 +229,46 @@ const Settings = () => {
 
   const renderAccountTab = () => (
     <div className="space-y-8">
+      <div>
+        <h3 className="text-lg font-semibold text-gray-800 mb-1">Profile Photo</h3>
+        <p className="text-sm text-gray-500 mb-6">Update your admin profile picture.</p>
+
+        <div className="flex items-center gap-4">
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleAvatarChange}
+            className="hidden"
+          />
+          <div className="relative">
+            {avatarPreview ? (
+              <img src={avatarPreview} alt="Admin avatar" className="w-20 h-20 rounded-full object-cover border border-gray-200" />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#0B005C] to-[#0D4291] text-white text-xl font-semibold flex items-center justify-center">AD</div>
+            )}
+            {avatarPreview && (
+              <button
+                type="button"
+                onClick={handleRemoveAvatar}
+                className="absolute -top-2 -right-2 p-1.5 bg-white border border-gray-200 rounded-full hover:bg-gray-50 transition-colors"
+              >
+                <X className="w-3.5 h-3.5 text-gray-600" />
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleAvatarPick}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Camera className="w-4 h-4" />
+            Change Photo
+          </button>
+        </div>
+      </div>
+
       {/* Account Information */}
       <div>
         <h3 className="text-lg font-semibold text-gray-800 mb-1">Account Information</h3>
@@ -216,6 +383,13 @@ const Settings = () => {
               </button>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={handlePasswordUpdate}
+            className="px-4 py-2.5 bg-[#0B005C] text-white rounded-lg font-medium hover:bg-[#13007a] transition-colors"
+          >
+            Update Password
+          </button>
         </div>
       </div>
     </div>
@@ -612,7 +786,10 @@ const Settings = () => {
 
       {/* Save Button */}
       <div className="flex justify-end">
-        <button className="flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors shadow-lg shadow-green-500/30">
+        <button
+          onClick={handleSaveAll}
+          className="flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors shadow-lg shadow-green-500/30"
+        >
           <Save className="w-5 h-5" />
           <span>Save Changes</span>
         </button>

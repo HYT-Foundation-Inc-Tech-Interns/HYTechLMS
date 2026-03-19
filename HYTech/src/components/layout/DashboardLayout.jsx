@@ -32,6 +32,9 @@ const DashboardLayout = () => {
     if (path === '/dashboard/settings') {
       return { title: 'Settings', subtitle: 'Configure your Learning Management System.' };
     }
+    if (path === '/dashboard/notifications') {
+      return { title: 'Notifications', subtitle: 'View all trainer notifications and updates.' };
+    }
     return { title: '', subtitle: '' };
   };
 

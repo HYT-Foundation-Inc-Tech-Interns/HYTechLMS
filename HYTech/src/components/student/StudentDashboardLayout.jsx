@@ -31,6 +31,9 @@ const StudentDashboardLayout = () => {
     if (path === '/student/settings') {
       return { title: 'Settings', subtitle: 'Configure your account and preferences.' };
     }
+    if (path === '/student/notifications') {
+      return { title: 'Notifications', subtitle: 'View all student alerts and announcements.' };
+    }
     return { title: '', subtitle: '' };
   };
 

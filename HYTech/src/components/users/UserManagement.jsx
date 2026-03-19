@@ -12,8 +12,24 @@ import {
   ChevronRight,
   ChevronDown
 } from 'lucide-react';
+import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
+import { deleteApp, initializeApp } from 'firebase/app';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore';
+import { db, firebaseConfig, firebaseInitError, hasValidFirebaseConfig } from '../../firebase';
+import { useToast } from '../../context/ToastContext';
 
 const UserManagement = () => {
+  const { addToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -23,23 +39,11 @@ const UserManagement = () => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [isAddingUser, setIsAddingUser] = useState(false);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const dropdownRef = useRef(null);
 
-  // Sample users data
-  const [users, setUsers] = useState([
-    { id: 1, name: 'Ms. Grace', idNumber: '5684236526', email: 'grace@hytech.com', role: 'Trainer', status: 'Active' },
-    { id: 2, name: 'Engr. James', idNumber: '5684236527', email: 'james@hytech.com', role: 'Admin', status: 'Active' },
-    { id: 3, name: 'Jhudiel', idNumber: '5684236528', email: 'jhudiel@hytech.com', role: 'Student', status: 'Active' },
-    { id: 4, name: 'Jomar', idNumber: '5684236529', email: 'jomar@hytech.com', role: 'Student', status: 'Active' },
-    { id: 5, name: 'Karylle', idNumber: '5684236530', email: 'karylle@hytech.com', role: 'Student', status: 'Active' },
-    { id: 6, name: 'Lenar', idNumber: '5684236531', email: 'lenar@hytech.com', role: 'Student', status: 'Active' },
-    { id: 7, name: 'Mikaela', idNumber: '5684236532', email: 'mikaela@hytech.com', role: 'Student', status: 'Active' },
-    { id: 8, name: 'Kassandra', idNumber: '5684236533', email: 'kassandra@hytech.com', role: 'Student', status: 'Active' },
-    { id: 9, name: 'Jean', idNumber: '5684236534', email: 'jean@hytech.com', role: 'Student', status: 'Active' },
-    { id: 10, name: 'Ellaine', idNumber: '5684236535', email: 'ellaine@hytech.com', role: 'Student', status: 'Active' },
-    { id: 11, name: 'Hart', idNumber: '5684236536', email: 'hart@hytech.com', role: 'Student', status: 'Active' },
-    { id: 12, name: 'Ian', idNumber: '5684236537', email: 'ian@hytech.com', role: 'Student', status: 'Active' },
-  ]);
+  const [users, setUsers] = useState([]);
 
   // Form state for adding new user
   const [newUser, setNewUser] = useState({
@@ -48,6 +52,7 @@ const UserManagement = () => {
     lastName: '',
     nameExtension: '',
     email: '',
+    password: '',
     role: '',
   });
 
@@ -72,6 +77,45 @@ const UserManagement = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (!db || !hasValidFirebaseConfig) {
+      setIsLoadingUsers(false);
+      return;
+    }
+
+    const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'asc'));
+    const unsubscribe = onSnapshot(
+      usersQuery,
+      (snapshot) => {
+        const mappedUsers = snapshot.docs.map((docSnap, index) => {
+          const data = docSnap.data();
+          const normalizedRole = (data.role || 'student').toString();
+          const prettyRole =
+            normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1).toLowerCase();
+
+          return {
+            id: docSnap.id,
+            rowNumber: index + 1,
+            name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Unnamed User',
+            idNumber: data.idNumber || '-',
+            email: data.email || '-',
+            role: prettyRole,
+            status: data.status || 'Active',
+          };
+        });
+
+        setUsers(mappedUsers);
+        setIsLoadingUsers(false);
+      },
+      () => {
+        addToast('Unable to load users from Firestore.', 'error');
+        setIsLoadingUsers(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [addToast]);
+
   // Filter users based on search
   const filteredUsers = users.filter(user => 
     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -84,30 +128,95 @@ const UserManagement = () => {
   const startIndex = (currentPage - 1) * rowsPerPage;
   const paginatedUsers = filteredUsers.slice(startIndex, startIndex + rowsPerPage);
 
-  const handleAddUser = (e) => {
+  const handleAddUser = async (e) => {
     e.preventDefault();
-    const fullName = `${newUser.firstName} ${newUser.middleName ? newUser.middleName + ' ' : ''}${newUser.lastName}${newUser.nameExtension ? ' ' + newUser.nameExtension : ''}`;
-    const newId = Math.max(...users.map(u => u.id)) + 1;
-    const newIdNumber = (parseInt(users[users.length - 1].idNumber) + 1).toString();
-    
-    setUsers([...users, {
-      id: newId,
-      name: fullName,
-      idNumber: newIdNumber,
-      email: newUser.email,
-      role: newUser.role,
-      status: 'Active',
-    }]);
+    if (!db || !hasValidFirebaseConfig) {
+      addToast(firebaseInitError || 'Firebase is not configured correctly.', 'error');
+      return;
+    }
 
-    setNewUser({ firstName: '', middleName: '', lastName: '', nameExtension: '', email: '', role: '' });
-    setShowAddModal(false);
+    if (newUser.password.length < 8) {
+      addToast('Temporary password must be at least 8 characters.', 'error');
+      return;
+    }
+
+    setIsAddingUser(true);
+
+    const fullName = `${newUser.firstName} ${newUser.middleName ? `${newUser.middleName} ` : ''}${newUser.lastName}${newUser.nameExtension ? ` ${newUser.nameExtension}` : ''}`.trim();
+    const numericIdNumbers = users
+      .map((u) => Number(u.idNumber))
+      .filter((idNum) => !Number.isNaN(idNum));
+    const nextIdNumber = numericIdNumbers.length > 0
+      ? String(Math.max(...numericIdNumbers) + 1)
+      : '5684236526';
+
+    let secondaryApp = null;
+
+    try {
+      secondaryApp = initializeApp(firebaseConfig, `user-management-${Date.now()}`);
+      const secondaryAuth = getAuth(secondaryApp);
+
+      const credential = await createUserWithEmailAndPassword(
+        secondaryAuth,
+        newUser.email.trim().toLowerCase(),
+        newUser.password
+      );
+
+      await setDoc(doc(db, 'users', credential.user.uid), {
+        uid: credential.user.uid,
+        firstName: newUser.firstName.trim(),
+        middleName: newUser.middleName.trim(),
+        lastName: newUser.lastName.trim(),
+        nameExtension: newUser.nameExtension.trim(),
+        idNumber: nextIdNumber,
+        name: fullName,
+        email: newUser.email.trim().toLowerCase(),
+        role: newUser.role.trim().toLowerCase(),
+        status: 'Active',
+        createdAt: serverTimestamp(),
+        createdBy: 'admin',
+      });
+
+      await secondaryAuth.signOut();
+
+      setNewUser({
+        firstName: '',
+        middleName: '',
+        lastName: '',
+        nameExtension: '',
+        email: '',
+        password: '',
+        role: '',
+      });
+      setShowAddModal(false);
+      addToast('User account created in Firebase Authentication.', 'success');
+    } catch (error) {
+      const errorMessages = {
+        'auth/email-already-in-use': 'This email already exists in Firebase Authentication.',
+        'auth/invalid-email': 'Please enter a valid email address.',
+        'auth/weak-password': 'Please use a stronger password.',
+        'auth/operation-not-allowed': 'Email/password sign-in is disabled in Firebase Authentication.',
+      };
+      addToast(errorMessages[error?.code] || `Unable to add user (${error?.code || 'unknown error'}).`, 'error');
+    } finally {
+      if (secondaryApp) {
+        await deleteApp(secondaryApp);
+      }
+      setIsAddingUser(false);
+    }
   };
 
   const handleDeleteUser = () => {
     if (selectedUser) {
-      setUsers(users.filter(u => u.id !== selectedUser.id));
-      setShowDeleteModal(false);
-      setSelectedUser(null);
+      deleteDoc(doc(db, 'users', selectedUser.id))
+        .then(() => {
+          addToast('User removed from Firestore.', 'success');
+          setShowDeleteModal(false);
+          setSelectedUser(null);
+        })
+        .catch(() => {
+          addToast('Unable to delete user.', 'error');
+        });
     }
   };
 
@@ -132,19 +241,29 @@ const UserManagement = () => {
     setActiveDropdown(null);
   };
 
-  const handleUpdateUser = (e) => {
+  const handleUpdateUser = async (e) => {
     e.preventDefault();
     const fullName = `${editUser.firstName} ${editUser.middleName ? editUser.middleName + ' ' : ''}${editUser.lastName}${editUser.nameExtension ? ' ' + editUser.nameExtension : ''}`;
-    
-    setUsers(users.map(u => 
-      u.id === selectedUser.id 
-        ? { ...u, name: fullName, email: editUser.email, role: editUser.role }
-        : u
-    ));
-    
-    setShowEditModal(false);
-    setSelectedUser(null);
-    setEditUser({ firstName: '', middleName: '', lastName: '', nameExtension: '', email: '', role: '' });
+
+    try {
+      await updateDoc(doc(db, 'users', selectedUser.id), {
+        firstName: editUser.firstName.trim(),
+        middleName: editUser.middleName.trim(),
+        lastName: editUser.lastName.trim(),
+        nameExtension: editUser.nameExtension.trim(),
+        name: fullName,
+        email: editUser.email.trim().toLowerCase(),
+        role: editUser.role.trim().toLowerCase(),
+        updatedAt: serverTimestamp(),
+      });
+
+      addToast('User profile updated in Firestore.', 'success');
+      setShowEditModal(false);
+      setSelectedUser(null);
+      setEditUser({ firstName: '', middleName: '', lastName: '', nameExtension: '', email: '', role: '' });
+    } catch {
+      addToast('Unable to update user.', 'error');
+    }
   };
 
   const getRoleBadgeColor = (role) => {
@@ -203,6 +322,16 @@ const UserManagement = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
+              {isLoadingUsers && (
+                <tr>
+                  <td className="table-cell text-center text-gray-500" colSpan={6}>Loading users...</td>
+                </tr>
+              )}
+              {!isLoadingUsers && paginatedUsers.length === 0 && (
+                <tr>
+                  <td className="table-cell text-center text-gray-500" colSpan={6}>No users found.</td>
+                </tr>
+              )}
               {paginatedUsers.map((user, index) => (
                 <tr 
                   key={user.id}
@@ -399,6 +528,19 @@ const UserManagement = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Temporary Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  placeholder="Minimum 8 characters"
+                  className="input-field"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Role <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -419,9 +561,10 @@ const UserManagement = () => {
 
               <button
                 type="submit"
-                className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors mt-6"
+                disabled={isAddingUser}
+                className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors mt-6 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Add
+                {isAddingUser ? 'Adding...' : 'Add'}
               </button>
             </form>
           </div>

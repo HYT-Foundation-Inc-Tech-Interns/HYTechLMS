@@ -1,19 +1,71 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Bell, Shield, Palette, Globe, Save, Camera, Check, X } from 'lucide-react';
+import { User, Bell, Shield, Palette, Globe, Save, Camera, X } from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
+import { useProfileAvatar } from '../../context/useProfileAvatar';
+import { useUserSettings } from '../../context/useUserSettings';
+import { uploadUserAvatar } from '../../utils/avatarStorage';
 
 const TrainerSettings = () => {
   const [activeTab, setActiveTab] = useState('profile');
-  const [toast, setToast] = useState(null);
+  const { addToast } = useToast();
+  const { setAvatar } = useProfileAvatar('trainer');
+  const { uid, settingsData, saveSettings } = useUserSettings('trainer');
   const [isSaving, setIsSaving] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [privacySettings, setPrivacySettings] = useState({
+    hideContactDetails: false,
+    hideActiveStatus: false,
+    allowAnalyticsTracking: true,
+  });
+  const [profileForm, setProfileForm] = useState({
+    firstName: 'Trainer',
+    lastName: 'User',
+    email: 'trainer@hytglobal.com',
+    phone: '+63 912 345 6789',
+    bio: '',
+  });
+  const [trainerNotificationSettings, setTrainerNotificationSettings] = useState({
+    emailNotifications: true,
+    pushNotifications: true,
+    courseUpdates: true,
+    newEnrollments: true,
+    messages: true,
+  });
+  const [appearanceSettings, setAppearanceSettings] = useState({
+    language: 'en',
+  });
 
 const fileInputRef = useRef(null);
 const [avatarPreview, setAvatarPreview] = useState(null);
 const [selectedAvatarFile, setSelectedAvatarFile] = useState(null);
 
 useEffect(() => {
-  const saved = localStorage.getItem('trainer-avatar');
-  if (saved) setAvatarPreview(saved);
-}, []);
+  if (!settingsData) {
+    return;
+  }
+
+  if (settingsData.profileForm) {
+    setProfileForm((prev) => ({ ...prev, ...settingsData.profileForm }));
+  }
+  if (settingsData.trainerNotificationSettings) {
+    setTrainerNotificationSettings((prev) => ({ ...prev, ...settingsData.trainerNotificationSettings }));
+  }
+  if (settingsData.appearanceSettings) {
+    setAppearanceSettings((prev) => ({ ...prev, ...settingsData.appearanceSettings }));
+  }
+  if (settingsData.privacySettings) {
+    setPrivacySettings((prev) => ({ ...prev, ...settingsData.privacySettings }));
+  }
+  if (settingsData.avatarUrl || settingsData.avatarPreview) {
+    const syncedAvatar = settingsData.avatarUrl || settingsData.avatarPreview;
+    setAvatarPreview(syncedAvatar);
+    setAvatar(syncedAvatar);
+  }
+}, [settingsData, setAvatar]);
 
 const handleAvatarButton = () => fileInputRef.current?.click();
 
@@ -21,7 +73,7 @@ const handleAvatarChange = (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
   if (!file.type.startsWith('image/')) {
-    alert('Please select an image file.');
+    addToast('Please select a valid image file.', 'error');
     return;
   }
   const reader = new FileReader();
@@ -35,28 +87,70 @@ const handleAvatarChange = (e) => {
 const removeAvatar = () => {
   setAvatarPreview(null);
   setSelectedAvatarFile(null);
-  localStorage.removeItem('trainer-avatar');
+  setAvatar(null);
+  addToast('Profile photo removed.', 'info');
 };
-
-  // Toast notification
-  const showToast = (message) => {
-    setToast(message);
-    setTimeout(() => setToast(null), 3000);
-  };
 
   // Handle save
-const handleSave = () => {
+const handleSave = async () => {
   setIsSaving(true);
-  setTimeout(() => {
-    if (avatarPreview) {
-      localStorage.setItem('trainer-avatar', avatarPreview);
-    } else {
-      localStorage.removeItem('trainer-avatar');
+  try {
+    let avatarUrl = settingsData?.avatarUrl || null;
+
+    if (selectedAvatarFile) {
+      const result = await uploadUserAvatar({ uid, role: 'trainer', file: selectedAvatarFile });
+      avatarUrl = result.url;
     }
+
+    if (!avatarPreview) {
+      avatarUrl = null;
+    }
+
+    await saveSettings({
+      profileForm,
+      trainerNotificationSettings,
+      appearanceSettings,
+      privacySettings,
+      avatarUrl,
+    });
+
+    setAvatar(avatarUrl || null);
+    setAvatarPreview(avatarUrl || null);
+    setSelectedAvatarFile(null);
     setIsSaving(false);
-    showToast('Settings saved successfully!');
-  }, 1000);
+    addToast('Settings saved successfully!', 'success');
+  } catch {
+    setIsSaving(false);
+    addToast('Unable to save settings.', 'error');
+  }
 };
+
+  const handlePasswordSave = () => {
+    const { currentPassword, newPassword, confirmPassword } = passwordForm;
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      addToast('Please fill in all password fields.', 'error');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      addToast('Password must be at least 8 characters.', 'error');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      addToast('New password and confirmation do not match.', 'error');
+      return;
+    }
+
+    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    addToast('Password updated successfully.', 'success');
+  };
+
+  const handlePrivacySave = () => {
+    saveSettings({ privacySettings })
+      .then(() => addToast('Privacy settings updated.', 'success'))
+      .catch(() => addToast('Unable to save privacy settings.', 'error'));
+  };
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
@@ -114,7 +208,8 @@ const handleSave = () => {
           <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
           <input 
             type="text" 
-            defaultValue="Admin"
+            value={profileForm.firstName}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, firstName: e.target.value }))}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
@@ -122,7 +217,8 @@ const handleSave = () => {
           <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
           <input 
             type="text" 
-            defaultValue="User"
+            value={profileForm.lastName}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, lastName: e.target.value }))}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
@@ -130,7 +226,8 @@ const handleSave = () => {
           <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
           <input 
             type="email" 
-            defaultValue="admin@hytglobal.com"
+            value={profileForm.email}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, email: e.target.value }))}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 bg-white"
           />
         </div>
@@ -138,7 +235,8 @@ const handleSave = () => {
           <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
           <input 
             type="tel" 
-            defaultValue="+63 912 345 6789"
+            value={profileForm.phone}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 bg-white"
           />
         </div>
@@ -149,6 +247,8 @@ const handleSave = () => {
         <textarea 
           rows={4}
           placeholder="Tell us about yourself..."
+          value={profileForm.bio}
+          onChange={(e) => setProfileForm((prev) => ({ ...prev, bio: e.target.value }))}
           className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none hover:border-gray-300 bg-white"
         />
       </div>
@@ -159,19 +259,26 @@ const handleSave = () => {
     <div className="space-y-6">
       <div className="space-y-4">
         {[
-          { title: 'Email Notifications', desc: 'Receive email updates about your courses' },
-          { title: 'Push Notifications', desc: 'Get push notifications on your device' },
-          { title: 'Course Updates', desc: 'Notify when students submit assignments' },
-          { title: 'New Enrollments', desc: 'Notify when students enroll in your courses' },
-          { title: 'Messages', desc: 'Notify when you receive new messages' },
-        ].map((item, index) => (
-          <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+          { key: 'emailNotifications', title: 'Email Notifications', desc: 'Receive email updates about your courses' },
+          { key: 'pushNotifications', title: 'Push Notifications', desc: 'Get push notifications on your device' },
+          { key: 'courseUpdates', title: 'Course Updates', desc: 'Notify when students submit assignments' },
+          { key: 'newEnrollments', title: 'New Enrollments', desc: 'Notify when students enroll in your courses' },
+          { key: 'messages', title: 'Messages', desc: 'Notify when you receive new messages' },
+        ].map((item) => (
+          <div key={item.key} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
             <div>
               <h4 className="font-medium text-gray-900">{item.title}</h4>
               <p className="text-sm text-gray-500">{item.desc}</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" defaultChecked className="sr-only peer" />
+              <input
+                type="checkbox"
+                checked={trainerNotificationSettings[item.key]}
+                onChange={(e) =>
+                  setTrainerNotificationSettings((prev) => ({ ...prev, [item.key]: e.target.checked }))
+                }
+                className="sr-only peer"
+              />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
@@ -191,7 +298,11 @@ const handleSave = () => {
               <p className="text-sm text-gray-500">Select your preferred language</p>
             </div>
           </div>
-          <select className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white">
+          <select
+            value={appearanceSettings.language}
+            onChange={(e) => setAppearanceSettings((prev) => ({ ...prev, language: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+          >
             <option value="en">English (US)</option>
             <option value="fil">Filipino</option>
             <option value="es">Spanish</option>
@@ -210,6 +321,8 @@ const handleSave = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
             <input 
               type="password"
+              value={passwordForm.currentPassword}
+              onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
             />
           </div>
@@ -217,6 +330,8 @@ const handleSave = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
             <input 
               type="password"
+              value={passwordForm.newPassword}
+              onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
             />
           </div>
@@ -224,8 +339,56 @@ const handleSave = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
             <input 
               type="password"
+              value={passwordForm.confirmPassword}
+              onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
             />
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handlePasswordSave}
+              className="px-4 py-2.5 bg-[#0B005C] text-white rounded-lg font-medium hover:bg-[#13007a] transition-colors"
+            >
+              Save Password
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-6 border-t border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Privacy Settings</h3>
+        <div className="space-y-3">
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+            <span className="text-sm font-medium text-gray-800">Hide contact details from students</span>
+            <input
+              type="checkbox"
+              checked={privacySettings.hideContactDetails}
+              onChange={(e) => setPrivacySettings((prev) => ({ ...prev, hideContactDetails: e.target.checked }))}
+            />
+          </label>
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+            <span className="text-sm font-medium text-gray-800">Hide active status</span>
+            <input
+              type="checkbox"
+              checked={privacySettings.hideActiveStatus}
+              onChange={(e) => setPrivacySettings((prev) => ({ ...prev, hideActiveStatus: e.target.checked }))}
+            />
+          </label>
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+            <span className="text-sm font-medium text-gray-800">Allow analytics tracking</span>
+            <input
+              type="checkbox"
+              checked={privacySettings.allowAnalyticsTracking}
+              onChange={(e) => setPrivacySettings((prev) => ({ ...prev, allowAnalyticsTracking: e.target.checked }))}
+            />
+          </label>
+          <div className="flex justify-end">
+            <button
+              onClick={handlePrivacySave}
+              className="px-4 py-2.5 bg-[#0B005C] text-white rounded-lg font-medium hover:bg-[#13007a] transition-colors"
+            >
+              Save Privacy
+            </button>
           </div>
         </div>
       </div>
@@ -307,14 +470,6 @@ const handleSave = () => {
           </div>
         </div>
       </div>
-
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 px-5 py-3 rounded-xl shadow-xl z-50 animate-slide-up bg-green-600 text-white flex items-center gap-3">
-          <Check className="w-5 h-5" />
-          <span className="font-medium">{toast}</span>
-        </div>
-      )}
     </div>
   );
 };

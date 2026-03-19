@@ -1,50 +1,197 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, X, User, GraduationCap, Shield } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import {
+  browserLocalPersistence,
+  browserSessionPersistence,
+  createUserWithEmailAndPassword,
+  fetchSignInMethodsForEmail,
+  setPersistence,
+  signInWithEmailAndPassword,
+} from 'firebase/auth';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from 'firebase/firestore';
+import { auth, db, firebaseInitError } from '../../firebase';
+import { useToast } from '../../context/ToastContext';
+
+const INITIAL_STAFF_ACCOUNTS = [
+  {
+    email: 'admin@hytech.com',
+    password: 'admin1234',
+    role: 'admin',
+    name: 'Initial Admin',
+  },
+  {
+    email: 'trainer@hytech.com',
+    password: 'trainer1234',
+    role: 'trainer',
+    name: 'Initial Trainer',
+  },
+];
 
 const SignIn = () => {
+  const SIGN_IN_DRAFT_KEY = 'hyt:signin:draft';
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
-  const [showRoleModal, setShowRoleModal] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
+  const [rememberMe, setRememberMe] = useState(() => {
+    try {
+      const saved = localStorage.getItem(SIGN_IN_DRAFT_KEY);
+      return saved ? Boolean(JSON.parse(saved)?.rememberMe) : false;
+    } catch {
+      return false;
+    }
+  });
+  const [formData, setFormData] = useState(() => {
+    try {
+      const saved = localStorage.getItem(SIGN_IN_DRAFT_KEY);
+      if (!saved) {
+        return { email: '', password: '' };
+      }
+      const parsed = JSON.parse(saved);
+      return {
+        email: parsed?.email || '',
+        password: '',
+      };
+    } catch {
+      return { email: '', password: '' };
+    }
   });
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem(
+      SIGN_IN_DRAFT_KEY,
+      JSON.stringify({
+        email: formData.email,
+        rememberMe,
+      })
+    );
+  }, [formData, rememberMe]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setShowRoleModal(true);
+  const resolveUserRole = async (uid) => {
+    const directUserDoc = await getDoc(doc(db, 'users', uid));
+    if (directUserDoc.exists()) {
+      return directUserDoc.data()?.role || null;
+    }
+
+    const usersByUidQuery = query(collection(db, 'users'), where('uid', '==', uid), limit(1));
+    const userResults = await getDocs(usersByUidQuery);
+    if (!userResults.empty) {
+      return userResults.docs[0].data()?.role || null;
+    }
+
+    return null;
   };
 
-  const handleRoleSelect = (role) => {
+  const findInitialStaffMatch = (email, password) =>
+    INITIAL_STAFF_ACCOUNTS.find(
+      (account) => account.email === email.toLowerCase() && account.password === password
+    );
+
+  const ensureInitialStaffAccount = async (email, password) => {
+    const initialAccount = findInitialStaffMatch(email, password);
+    if (!initialAccount) {
+      return null;
+    }
+
+    const signInMethods = await fetchSignInMethodsForEmail(auth, email);
+    if (signInMethods.length > 0) {
+      return null;
+    }
+
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    await setDoc(doc(db, 'users', credential.user.uid), {
+      uid: credential.user.uid,
+      name: initialAccount.name,
+      email,
+      phone: '',
+      role: initialAccount.role,
+      status: 'Active',
+      isDefaultAccount: true,
+      createdAt: serverTimestamp(),
+    });
+
+    addToast(`${initialAccount.role === 'admin' ? 'Admin' : 'Trainer'} account initialized.`, 'info');
+    return credential;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setIsLoading(true);
-    setShowRoleModal(false);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      // Route based on role
+
+    try {
+      if (!auth || !db) {
+        addToast(firebaseInitError || 'Firebase is not configured correctly.', 'error');
+        return;
+      }
+
+      const normalizedEmail = formData.email.trim().toLowerCase();
+      await setPersistence(
+        auth,
+        rememberMe ? browserLocalPersistence : browserSessionPersistence
+      );
+
+      let credential;
+
+      try {
+        credential = await signInWithEmailAndPassword(
+          auth,
+          normalizedEmail,
+          formData.password
+        );
+      } catch (error) {
+        const createdCredential = await ensureInitialStaffAccount(
+          normalizedEmail,
+          formData.password
+        );
+
+        if (!createdCredential) {
+          throw error;
+        }
+
+        credential = createdCredential;
+      }
+
+      const rawRole = await resolveUserRole(credential.user.uid);
+      const role = String(rawRole || '').toLowerCase();
+
       if (role === 'admin') {
         navigate('/admin');
       } else if (role === 'trainer') {
         navigate('/dashboard');
       } else {
-        // Student dashboard
         navigate('/student');
       }
-    }, 1000);
-  };
+    } catch (error) {
+      const errorMessages = {
+        'auth/invalid-api-key': 'Invalid Firebase API key. Check your VITE_FIREBASE_API_KEY value.',
+        'auth/invalid-credential': 'Invalid email or password.',
+        'auth/user-not-found': 'User account not found.',
+        'auth/wrong-password': 'Invalid email or password.',
+        'auth/too-many-requests': 'Too many attempts. Please try again later.',
+        'auth/network-request-failed': 'Network error. Please check your internet connection.',
+      };
 
-  const roles = [
-    { id: 'admin', name: 'Admin', icon: Shield, color: 'bg-purple-100 text-purple-600' },
-    { id: 'trainer', name: 'Trainer', icon: User, color: 'bg-blue-100 text-blue-600' },
-    { id: 'student', name: 'Student', icon: GraduationCap, color: 'bg-green-100 text-green-600' },
-  ];
+      const message = errorMessages[error?.code] || 'Unable to sign in. Please try again.';
+      addToast(message, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex">
@@ -52,7 +199,7 @@ const SignIn = () => {
       <div 
         className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
         style={{
-          backgroundImage: 'url(/images/sign_page.jpg)',
+          backgroundImage: 'url(/images/2.png)',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
@@ -126,32 +273,7 @@ const SignIn = () => {
             <p className="text-gray-500">Sign in to your account to continue</p>
           </div>
 
-          {/* Social Login */}
-          <div className="flex justify-center gap-4 mb-6">
-            <button className="w-12 h-12 bg-white rounded-full shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center hover:scale-110">
-              <svg className="w-6 h-6" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-            </button>
-            <button className="w-12 h-12 bg-white rounded-full shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center hover:scale-110">
-              <svg className="w-6 h-6" viewBox="0 0 24 24">
-                <path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-              </svg>
-            </button>
-          </div>
-
-          {/* Divider */}
-          <div className="relative mb-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-400">or sign in with email</span>
-            </div>
-          </div>
+          <div className="mb-6" />
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -216,7 +338,11 @@ const SignIn = () => {
                 </div>
                 <span className="text-sm text-gray-600">Remember me</span>
               </label>
-              <button type="button" className="text-sm text-orange-500 hover:text-orange-600 font-medium transition-colors">
+              <button
+                type="button"
+                onClick={() => addToast('Forgot password flow is not yet enabled.', 'info')}
+                className="text-sm text-orange-500 hover:text-orange-600 font-medium transition-colors"
+              >
                 Forgot Password?
               </button>
             </div>
@@ -251,67 +377,6 @@ const SignIn = () => {
         </div>
       </div>
 
-      {/* Role Selection Modal */}
-      {showRoleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in"
-            onClick={() => setShowRoleModal(false)}
-          />
-          
-          {/* Modal */}
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
-            {/* Header */}
-            <div className="bg-navy-500 text-white px-6 py-4 flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
-                <img 
-                  src="/images/hyt_logo.png" 
-                  alt="HYT Logo" 
-                  className="w-8 h-8 object-contain"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.parentElement.innerHTML = '<span class="text-white font-bold text-sm">HYT</span>';
-                  }}
-                />
-              </div>
-              <span className="font-semibold text-lg">HYTech</span>
-              <button 
-                onClick={() => setShowRoleModal(false)}
-                className="ml-auto p-1 hover:bg-white/10 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-6">
-              <h3 className="text-xl font-bold text-gray-800 text-center mb-6">Sign in as:</h3>
-              
-              <div className="space-y-3">
-                {roles.map((role, index) => {
-                  const Icon = role.icon;
-                  return (
-                    <button
-                      key={role.id}
-                      onClick={() => handleRoleSelect(role.id)}
-                      className="w-full flex items-center gap-4 px-4 py-4 bg-white border-2 border-orange-400 rounded-xl hover:bg-orange-50 hover:border-orange-500 transition-all duration-200 group"
-                      style={{ animationDelay: `${index * 0.1}s` }}
-                    >
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${role.color} group-hover:scale-110 transition-transform`}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <span className="font-semibold text-orange-500 group-hover:text-orange-600">
-                        {role.name}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -8,11 +8,17 @@ import {
   MapPin,
   Shield,
   ChevronRight,
-  Check,
-  Palette
+  X
 } from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
+import { useProfileAvatar } from '../../context/useProfileAvatar';
+import { useUserSettings } from '../../context/useUserSettings';
+import { uploadUserAvatar } from '../../utils/avatarStorage';
 
 const StudentSettings = () => {
+  const { addToast } = useToast();
+  const { setAvatar } = useProfileAvatar('student');
+  const { uid, settingsData, saveSettings } = useUserSettings('student');
   const [profileData, setProfileData] = useState({
     firstName: 'Gerald Andrei',
     lastName: 'Lat',
@@ -24,12 +30,39 @@ const StudentSettings = () => {
 const fileInputRef = useRef(null);
 const [avatarPreview, setAvatarPreview] = useState(null);
 const [selectedAvatarFile, setSelectedAvatarFile] = useState(null);
+const [showPasswordModal, setShowPasswordModal] = useState(false);
+const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+const [passwordForm, setPasswordForm] = useState({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+});
+const [privacyForm, setPrivacyForm] = useState({
+  showProfileToClassmates: true,
+  showEmailToInstructors: false,
+  allowProgressInsights: true,
+});
 
-// load saved avatar (data URL) on mount
 useEffect(() => {
-  const saved = localStorage.getItem('student-avatar');
-  if (saved) setAvatarPreview(saved);
-}, []);
+  if (!settingsData) {
+    return;
+  }
+
+  if (settingsData.profileData) {
+    setProfileData((prev) => ({ ...prev, ...settingsData.profileData }));
+  }
+  if (settingsData.notifications) {
+    setNotifications((prev) => ({ ...prev, ...settingsData.notifications }));
+  }
+  if (settingsData.privacyForm) {
+    setPrivacyForm((prev) => ({ ...prev, ...settingsData.privacyForm }));
+  }
+  if (settingsData.avatarUrl || settingsData.avatarPreview) {
+    const syncedAvatar = settingsData.avatarUrl || settingsData.avatarPreview;
+    setAvatarPreview(syncedAvatar);
+    setAvatar(syncedAvatar);
+  }
+}, [settingsData, setAvatar]);
 
 // open file picker
 const handleAvatarButton = () => fileInputRef.current?.click();
@@ -39,7 +72,7 @@ const handleAvatarChange = (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
   if (!file.type.startsWith('image/')) {
-    alert('Please select an image file.');
+    addToast('Please select a valid image file.', 'error');
     return;
   }
   const reader = new FileReader();
@@ -59,8 +92,6 @@ const handleAvatarChange = (e) => {
     gradeUpdates: true
   });
 
-  const [showSaveToast, setShowSaveToast] = useState(false);
-
   const handleNotificationToggle = (key) => {
     setNotifications(prev => ({
       ...prev,
@@ -68,9 +99,64 @@ const handleAvatarChange = (e) => {
     }));
   };
 
-  const handleSaveChanges = () => {
-    setShowSaveToast(true);
-    setTimeout(() => setShowSaveToast(false), 3000);
+  const handleSaveChanges = async () => {
+    try {
+      let avatarUrl = settingsData?.avatarUrl || null;
+
+      if (selectedAvatarFile) {
+        const result = await uploadUserAvatar({ uid, role: 'student', file: selectedAvatarFile });
+        avatarUrl = result.url;
+      }
+
+      if (!avatarPreview) {
+        avatarUrl = null;
+      }
+
+      await saveSettings({
+        profileData,
+        notifications,
+        privacyForm,
+        avatarUrl,
+      });
+      setAvatar(avatarUrl || null);
+      setAvatarPreview(avatarUrl || null);
+      setSelectedAvatarFile(null);
+      addToast('Profile changes saved successfully.', 'success');
+    } catch {
+      addToast('Unable to save settings to Firestore.', 'error');
+    }
+  };
+
+  const handleSavePassword = () => {
+    const { currentPassword, newPassword, confirmPassword } = passwordForm;
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      addToast('Please complete all password fields.', 'error');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      addToast('New password must be at least 8 characters.', 'error');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      addToast('New password and confirmation do not match.', 'error');
+      return;
+    }
+
+    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    setShowPasswordModal(false);
+    addToast('Password updated successfully.', 'success');
+  };
+
+  const handleSavePrivacy = async () => {
+    setShowPrivacyModal(false);
+    try {
+      await saveSettings({ privacyForm });
+      addToast('Privacy settings updated.', 'success');
+    } catch {
+      addToast('Unable to save privacy settings.', 'error');
+    }
   };
 
   const NotificationToggle = ({ label, description, checked, onChange }) => (
@@ -96,14 +182,6 @@ const handleAvatarChange = (e) => {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Save Toast */}
-      {showSaveToast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-green-500 text-white rounded-xl shadow-2xl px-6 py-3 flex items-center gap-3 animate-slide-down">
-          <Check className="w-5 h-5" />
-          <span className="font-medium">Changes saved successfully!</span>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Profile Section */}
         <div className="lg:col-span-2 space-y-6">
@@ -269,7 +347,10 @@ const handleAvatarChange = (e) => {
             <h3 className="font-bold text-gray-900 mb-4">Quick Links</h3>
             
             <div className="space-y-2">
-              <button className="w-full flex items-center justify-between p-3 hover:bg-gray-50:bg-gray-700 rounded-xl transition-colors text-left">
+              <button
+                onClick={() => setShowPasswordModal(true)}
+                className="w-full flex items-center justify-between p-3 hover:bg-gray-50:bg-gray-700 rounded-xl transition-colors text-left"
+              >
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-blue-100 rounded-lg">
                     <Shield className="w-4 h-4 text-blue-600" />
@@ -279,7 +360,10 @@ const handleAvatarChange = (e) => {
                 <ChevronRight className="w-4 h-4 text-gray-400" />
               </button>
               
-              <button className="w-full flex items-center justify-between p-3 hover:bg-gray-50:bg-gray-700 rounded-xl transition-colors text-left">
+              <button
+                onClick={() => setShowPrivacyModal(true)}
+                className="w-full flex items-center justify-between p-3 hover:bg-gray-50:bg-gray-700 rounded-xl transition-colors text-left"
+              >
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-purple-100 rounded-lg">
                     <User className="w-4 h-4 text-purple-600" />
@@ -312,6 +396,89 @@ const handleAvatarChange = (e) => {
           </div>
         </div>
       </div>
+
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Change Password</h3>
+              <button onClick={() => setShowPasswordModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <input
+                type="password"
+                placeholder="Current password"
+                value={passwordForm.currentPassword}
+                onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291]"
+              />
+              <input
+                type="password"
+                placeholder="New password"
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291]"
+              />
+              <input
+                type="password"
+                placeholder="Confirm new password"
+                value={passwordForm.confirmPassword}
+                onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291]"
+              />
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setShowPasswordModal(false)} className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+              <button onClick={handleSavePassword} className="px-4 py-2.5 rounded-xl bg-[#0B005C] text-white hover:bg-[#13007a] transition-colors">Save Password</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPrivacyModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Privacy Settings</h3>
+              <button onClick={() => setShowPrivacyModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <label className="flex items-center justify-between text-sm text-gray-700">
+                <span>Show profile to classmates</span>
+                <input
+                  type="checkbox"
+                  checked={privacyForm.showProfileToClassmates}
+                  onChange={(e) => setPrivacyForm((prev) => ({ ...prev, showProfileToClassmates: e.target.checked }))}
+                />
+              </label>
+              <label className="flex items-center justify-between text-sm text-gray-700">
+                <span>Show email to instructors</span>
+                <input
+                  type="checkbox"
+                  checked={privacyForm.showEmailToInstructors}
+                  onChange={(e) => setPrivacyForm((prev) => ({ ...prev, showEmailToInstructors: e.target.checked }))}
+                />
+              </label>
+              <label className="flex items-center justify-between text-sm text-gray-700">
+                <span>Allow progress analytics insights</span>
+                <input
+                  type="checkbox"
+                  checked={privacyForm.allowProgressInsights}
+                  onChange={(e) => setPrivacyForm((prev) => ({ ...prev, allowProgressInsights: e.target.checked }))}
+                />
+              </label>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setShowPrivacyModal(false)} className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+              <button onClick={handleSavePrivacy} className="px-4 py-2.5 rounded-xl bg-[#0B005C] text-white hover:bg-[#13007a] transition-colors">Save Privacy</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
