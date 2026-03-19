@@ -25,6 +25,9 @@ const AdminDashboardLayout = () => {
     if (path === '/admin/settings') {
       return { title: 'Settings', subtitle: 'Configure system settings' };
     }
+    if (path === '/admin/notifications') {
+      return { title: 'Notifications', subtitle: 'Review all admin alerts and activity updates' };
+    }
     return { title: '', subtitle: '' };
   };
 

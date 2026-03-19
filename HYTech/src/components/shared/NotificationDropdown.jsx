@@ -1,33 +1,43 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Bell, X, Check, Clock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useRoleNotifications } from '../../context/useRoleNotifications';
+import { useToast } from '../../context/ToastContext';
 
-const NotificationDropdown = ({ notifications = [] }) => {
+const NotificationDropdown = ({ role = 'student', notifications = [] }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [isViewingAll, setIsViewingAll] = useState(false);
   const notificationRef = useRef(null);
+  const navigate = useNavigate();
+  const { addToast } = useToast();
 
-  // Default notifications if none provided
-  const defaultNotifications = [
-    { id: 1, text: 'Welcome to HYTech LMS!', time: 'Just now', unread: true },
-  ];
-
-  const [notificationList, setNotificationList] = useState(
-    notifications.length > 0 ? notifications : defaultNotifications
+  const {
+    notifications: notificationList,
+    unreadCount,
+    markAllAsRead,
+    markAsRead,
+  } = useRoleNotifications(
+    role,
+    notifications.length > 0 ? notifications : [{ id: 1, text: 'Welcome to HYTech LMS!', time: 'Just now', unread: true }]
   );
-
-  useEffect(() => {
-    setNotificationList(notifications.length > 0 ? notifications : defaultNotifications);
-  }, [notifications]);
-
-  const unreadCount = notificationList.filter((n) => n.unread).length;
   const visibleNotifications = isViewingAll ? notificationList : notificationList.slice(0, 3);
 
   const handleMarkAllAsRead = () => {
-    setNotificationList((prev) => prev.map((notification) => ({ ...notification, unread: false })));
+    if (unreadCount === 0) {
+      addToast('All notifications are already read.', 'info');
+      return;
+    }
+
+    markAllAsRead();
+    addToast('All notifications marked as read.', 'success');
   };
 
   const handleViewAll = () => {
-    setIsViewingAll((prev) => !prev);
+    setShowNotifications(false);
+    setIsViewingAll(false);
+
+    const basePath = role === 'admin' ? '/admin' : role === 'trainer' ? '/dashboard' : '/student';
+    navigate(`${basePath}/notifications`);
   };
 
   // Close dropdown when clicking outside
@@ -106,6 +116,11 @@ const NotificationDropdown = ({ notifications = [] }) => {
                     className={`p-4 border-b border-gray-50 hover:bg-gray-50:bg-gray-700 transition-colors cursor-pointer group ${
                       notification.unread ? 'bg-blue-50/50' : ''
                     }`}
+                    onClick={() => {
+                      if (notification.unread) {
+                        markAsRead(notification.id);
+                      }
+                    }}
                   >
                     <div className="flex items-start gap-3">
                       {/* Unread indicator */}
@@ -147,10 +162,10 @@ const NotificationDropdown = ({ notifications = [] }) => {
                   Mark all as read
                 </button>
                 <button
-                  onClick={handleViewAll}
+                  onClick={isViewingAll ? () => setIsViewingAll(false) : handleViewAll}
                   className="text-sm text-orange-600 hover:text-orange-700:text-orange-300 font-medium transition-colors"
                 >
-                  {isViewingAll ? 'Show less' : 'View all'}
+                  {isViewingAll ? 'Show less' : 'View all notifications'}
                 </button>
               </div>
             )}

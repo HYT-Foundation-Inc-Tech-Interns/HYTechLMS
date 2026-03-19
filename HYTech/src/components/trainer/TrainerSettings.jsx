@@ -1,10 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Bell, Shield, Palette, Globe, Save, Camera, Check, X } from 'lucide-react';
+import { User, Bell, Shield, Palette, Globe, Save, Camera, X } from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
+import { useProfileAvatar } from '../../context/useProfileAvatar';
 
 const TrainerSettings = () => {
   const [activeTab, setActiveTab] = useState('profile');
-  const [toast, setToast] = useState(null);
+  const { addToast } = useToast();
+  const { setAvatar } = useProfileAvatar('trainer');
   const [isSaving, setIsSaving] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [privacySettings, setPrivacySettings] = useState({
+    hideContactDetails: false,
+    hideActiveStatus: false,
+    allowAnalyticsTracking: true,
+  });
 
 const fileInputRef = useRef(null);
 const [avatarPreview, setAvatarPreview] = useState(null);
@@ -21,7 +34,7 @@ const handleAvatarChange = (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
   if (!file.type.startsWith('image/')) {
-    alert('Please select an image file.');
+    addToast('Please select a valid image file.', 'error');
     return;
   }
   const reader = new FileReader();
@@ -35,28 +48,44 @@ const handleAvatarChange = (e) => {
 const removeAvatar = () => {
   setAvatarPreview(null);
   setSelectedAvatarFile(null);
-  localStorage.removeItem('trainer-avatar');
+  setAvatar(null);
+  addToast('Profile photo removed.', 'info');
 };
-
-  // Toast notification
-  const showToast = (message) => {
-    setToast(message);
-    setTimeout(() => setToast(null), 3000);
-  };
 
   // Handle save
 const handleSave = () => {
   setIsSaving(true);
   setTimeout(() => {
-    if (avatarPreview) {
-      localStorage.setItem('trainer-avatar', avatarPreview);
-    } else {
-      localStorage.removeItem('trainer-avatar');
-    }
+    setAvatar(avatarPreview || null);
     setIsSaving(false);
-    showToast('Settings saved successfully!');
+    addToast('Settings saved successfully!', 'success');
   }, 1000);
 };
+
+  const handlePasswordSave = () => {
+    const { currentPassword, newPassword, confirmPassword } = passwordForm;
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      addToast('Please fill in all password fields.', 'error');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      addToast('Password must be at least 8 characters.', 'error');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      addToast('New password and confirmation do not match.', 'error');
+      return;
+    }
+
+    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    addToast('Password updated successfully.', 'success');
+  };
+
+  const handlePrivacySave = () => {
+    addToast('Privacy settings updated.', 'success');
+  };
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
@@ -210,6 +239,8 @@ const handleSave = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
             <input 
               type="password"
+              value={passwordForm.currentPassword}
+              onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
             />
           </div>
@@ -217,6 +248,8 @@ const handleSave = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
             <input 
               type="password"
+              value={passwordForm.newPassword}
+              onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
             />
           </div>
@@ -224,8 +257,56 @@ const handleSave = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
             <input 
               type="password"
+              value={passwordForm.confirmPassword}
+              onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
             />
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handlePasswordSave}
+              className="px-4 py-2.5 bg-[#0B005C] text-white rounded-lg font-medium hover:bg-[#13007a] transition-colors"
+            >
+              Save Password
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-6 border-t border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Privacy Settings</h3>
+        <div className="space-y-3">
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+            <span className="text-sm font-medium text-gray-800">Hide contact details from students</span>
+            <input
+              type="checkbox"
+              checked={privacySettings.hideContactDetails}
+              onChange={(e) => setPrivacySettings((prev) => ({ ...prev, hideContactDetails: e.target.checked }))}
+            />
+          </label>
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+            <span className="text-sm font-medium text-gray-800">Hide active status</span>
+            <input
+              type="checkbox"
+              checked={privacySettings.hideActiveStatus}
+              onChange={(e) => setPrivacySettings((prev) => ({ ...prev, hideActiveStatus: e.target.checked }))}
+            />
+          </label>
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+            <span className="text-sm font-medium text-gray-800">Allow analytics tracking</span>
+            <input
+              type="checkbox"
+              checked={privacySettings.allowAnalyticsTracking}
+              onChange={(e) => setPrivacySettings((prev) => ({ ...prev, allowAnalyticsTracking: e.target.checked }))}
+            />
+          </label>
+          <div className="flex justify-end">
+            <button
+              onClick={handlePrivacySave}
+              className="px-4 py-2.5 bg-[#0B005C] text-white rounded-lg font-medium hover:bg-[#13007a] transition-colors"
+            >
+              Save Privacy
+            </button>
           </div>
         </div>
       </div>
@@ -307,14 +388,6 @@ const handleSave = () => {
           </div>
         </div>
       </div>
-
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 px-5 py-3 rounded-xl shadow-xl z-50 animate-slide-up bg-green-600 text-white flex items-center gap-3">
-          <Check className="w-5 h-5" />
-          <span className="font-medium">{toast}</span>
-        </div>
-      )}
     </div>
   );
 };

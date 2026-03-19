@@ -11,6 +11,7 @@ import UserManagement from './components/users/UserManagement';
 import Sectors from './components/sectors/Sectors';
 import SystemLogs from './components/logs/SystemLogs';
 import Settings from './components/settings/Settings';
+import NotificationsPage from './components/shared/NotificationsPage';
 
 // Trainer imports
 import DashboardLayout from './components/layout/DashboardLayout';
@@ -48,6 +49,7 @@ function App() {
           <Route path="sectors" element={<Sectors />} />
           <Route path="logs" element={<SystemLogs />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="notifications" element={<NotificationsPage role="admin" />} />
         </Route>
 
         {/* Trainer Dashboard Routes */}
@@ -59,6 +61,7 @@ function App() {
           <Route path="sectors/:sectorId" element={<SectorDetail />} />
           <Route path="archived" element={<ArchivedCourses />} />
           <Route path="settings" element={<TrainerSettings />} />
+          <Route path="notifications" element={<NotificationsPage role="trainer" />} />
         </Route>
 
         {/* Student Dashboard Routes */}
@@ -70,6 +73,7 @@ function App() {
           <Route path="certificates" element={<StudentCertificates />} />
           <Route path="archived" element={<StudentArchivedCourses />} />
           <Route path="settings" element={<StudentSettings />} />
+          <Route path="notifications" element={<NotificationsPage role="student" />} />
         </Route>
 
         {/* Fallback */}
