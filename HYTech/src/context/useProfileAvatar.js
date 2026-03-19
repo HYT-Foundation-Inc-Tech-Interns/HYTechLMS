@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -92,7 +92,7 @@ export const useProfileAvatar = (role) => {
     };
   }, [normalizedRole, uid]);
 
-  const setAvatar = (imageData) => {
+  const setAvatar = useCallback((imageData) => {
     const storageKey = getKey(normalizedRole, uid);
 
     if (imageData) {
@@ -105,7 +105,7 @@ export const useProfileAvatar = (role) => {
     window.dispatchEvent(
       new CustomEvent('hyt:avatar-updated', { detail: { role: normalizedRole, uid } })
     );
-  };
+  }, [normalizedRole, uid]);
 
   return { avatar, setAvatar };
 };

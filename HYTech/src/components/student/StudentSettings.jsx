@@ -14,6 +14,9 @@ import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
 import { uploadUserAvatar } from '../../utils/avatarStorage';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { auth, db } from '../../firebase';
 
 const StudentSettings = () => {
   const { addToast } = useToast();
@@ -63,6 +66,35 @@ useEffect(() => {
     setAvatar(syncedAvatar);
   }
 }, [settingsData, setAvatar]);
+
+useEffect(() => {
+  if (!uid || !db) {
+    return;
+  }
+
+  const loadProfile = async () => {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      if (!userDoc.exists()) {
+        return;
+      }
+
+      const data = userDoc.data() || {};
+      setProfileData((prev) => ({
+        ...prev,
+        firstName: data.firstName || prev.firstName,
+        lastName: data.lastName || prev.lastName,
+        email: auth?.currentUser?.email || data.email || prev.email,
+        phone: data.phone || prev.phone,
+        address: data.address || prev.address,
+      }));
+    } catch {
+      // Keep existing UI state if profile load fails.
+    }
+  };
+
+  loadProfile();
+}, [uid]);
 
 // open file picker
 const handleAvatarButton = () => fileInputRef.current?.click();
@@ -118,6 +150,24 @@ const handleAvatarChange = (e) => {
         privacyForm,
         avatarUrl,
       });
+
+      if (uid && db) {
+        await setDoc(
+          doc(db, 'users', uid),
+          {
+            uid,
+            firstName: profileData.firstName.trim(),
+            lastName: profileData.lastName.trim(),
+            name: `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim(),
+            email: auth?.currentUser?.email || profileData.email,
+            phone: profileData.phone.trim(),
+            address: profileData.address.trim(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
+
       setAvatar(avatarUrl || null);
       setAvatarPreview(avatarUrl || null);
       setSelectedAvatarFile(null);
@@ -127,7 +177,7 @@ const handleAvatarChange = (e) => {
     }
   };
 
-  const handleSavePassword = () => {
+  const handleSavePassword = async () => {
     const { currentPassword, newPassword, confirmPassword } = passwordForm;
     if (!currentPassword || !newPassword || !confirmPassword) {
       addToast('Please complete all password fields.', 'error');
@@ -144,9 +194,27 @@ const handleAvatarChange = (e) => {
       return;
     }
 
-    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    setShowPasswordModal(false);
-    addToast('Password updated successfully.', 'success');
+    try {
+      const currentUser = auth?.currentUser;
+      if (!currentUser?.email) {
+        addToast('No authenticated user found.', 'error');
+        return;
+      }
+
+      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+      await reauthenticateWithCredential(currentUser, credential);
+      await updatePassword(currentUser, newPassword);
+
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setShowPasswordModal(false);
+      addToast('Password updated successfully.', 'success');
+    } catch (error) {
+      const message =
+        error?.code === 'auth/wrong-password' || error?.code === 'auth/invalid-credential'
+          ? 'Current password is incorrect.'
+          : 'Unable to update password. Please try again.';
+      addToast(message, 'error');
+    }
   };
 
   const handleSavePrivacy = async () => {
@@ -252,10 +320,11 @@ const handleAvatarChange = (e) => {
                   <input 
                     type="email"
                     value={profileData.email}
-                    onChange={(e) => setProfileData(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all bg-white"
+                    readOnly
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl bg-gray-100 text-gray-500 cursor-not-allowed"
                   />
                 </div>
+                <p className="text-xs text-gray-500 mt-1">Email cannot be changed.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone Number</label>

@@ -4,6 +4,9 @@ import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
 import { uploadUserAvatar } from '../../utils/avatarStorage';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { auth, db } from '../../firebase';
 
 const TrainerSettings = () => {
   const [activeTab, setActiveTab] = useState('profile');
@@ -67,6 +70,36 @@ useEffect(() => {
   }
 }, [settingsData, setAvatar]);
 
+useEffect(() => {
+  if (!uid || !db) {
+    return;
+  }
+
+  const loadProfile = async () => {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      if (!userDoc.exists()) {
+        return;
+      }
+
+      const data = userDoc.data() || {};
+      const fallbackName = String(data.name || '').trim().split(/\s+/);
+      setProfileForm((prev) => ({
+        ...prev,
+        firstName: data.firstName || fallbackName[0] || prev.firstName,
+        lastName: data.lastName || fallbackName.slice(1).join(' ') || prev.lastName,
+        email: auth?.currentUser?.email || data.email || prev.email,
+        phone: data.phone || prev.phone,
+        bio: data.bio || prev.bio,
+      }));
+    } catch {
+      // Keep existing UI state if profile load fails.
+    }
+  };
+
+  loadProfile();
+}, [uid]);
+
 const handleAvatarButton = () => fileInputRef.current?.click();
 
 const handleAvatarChange = (e) => {
@@ -114,6 +147,23 @@ const handleSave = async () => {
       avatarUrl,
     });
 
+    if (uid && db) {
+      await setDoc(
+        doc(db, 'users', uid),
+        {
+          uid,
+          firstName: profileForm.firstName.trim(),
+          lastName: profileForm.lastName.trim(),
+          name: `${profileForm.firstName.trim()} ${profileForm.lastName.trim()}`.trim(),
+          email: auth?.currentUser?.email || profileForm.email,
+          phone: profileForm.phone.trim(),
+          bio: profileForm.bio.trim(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+
     setAvatar(avatarUrl || null);
     setAvatarPreview(avatarUrl || null);
     setSelectedAvatarFile(null);
@@ -125,7 +175,7 @@ const handleSave = async () => {
   }
 };
 
-  const handlePasswordSave = () => {
+  const handlePasswordSave = async () => {
     const { currentPassword, newPassword, confirmPassword } = passwordForm;
     if (!currentPassword || !newPassword || !confirmPassword) {
       addToast('Please fill in all password fields.', 'error');
@@ -142,8 +192,26 @@ const handleSave = async () => {
       return;
     }
 
-    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    addToast('Password updated successfully.', 'success');
+    try {
+      const currentUser = auth?.currentUser;
+      if (!currentUser?.email) {
+        addToast('No authenticated user found.', 'error');
+        return;
+      }
+
+      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+      await reauthenticateWithCredential(currentUser, credential);
+      await updatePassword(currentUser, newPassword);
+
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      addToast('Password updated successfully.', 'success');
+    } catch (error) {
+      const message =
+        error?.code === 'auth/wrong-password' || error?.code === 'auth/invalid-credential'
+          ? 'Current password is incorrect.'
+          : 'Unable to update password. Please try again.';
+      addToast(message, 'error');
+    }
   };
 
   const handlePrivacySave = () => {
@@ -227,9 +295,10 @@ const handleSave = async () => {
           <input 
             type="email" 
             value={profileForm.email}
-            onChange={(e) => setProfileForm((prev) => ({ ...prev, email: e.target.value }))}
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 bg-white"
+            readOnly
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-gray-100 text-gray-500 cursor-not-allowed"
           />
+          <p className="text-xs text-gray-500 mt-1">Email cannot be changed.</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
