@@ -8,8 +8,6 @@ import {
   Pencil,
   X,
   Send,
-  Paperclip,
-  Trash2,
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
@@ -19,7 +17,6 @@ const StudentTasks = () => {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [submissionNote, setSubmissionNote] = useState('');
-  const [uploadedFiles, setUploadedFiles] = useState([]);
 
   const dueThisWeek = {
     count: 0,
@@ -124,7 +121,6 @@ const StudentTasks = () => {
   const openTaskModal = (task, source) => {
     setSelectedTask({ ...task, source });
     setSubmissionNote('');
-    setUploadedFiles([]);
     setShowTaskModal(true);
   };
 
@@ -132,31 +128,6 @@ const StudentTasks = () => {
     setShowTaskModal(false);
     setSelectedTask(null);
     setSubmissionNote('');
-    setUploadedFiles([]);
-  };
-
-  const handleFilesSelected = (event) => {
-    const files = Array.from(event.target.files || []);
-    if (!files.length) {
-      return;
-    }
-
-    setUploadedFiles((prev) => {
-      const nextFiles = [...prev];
-      files.forEach((file) => {
-        const exists = nextFiles.some((item) => item.name === file.name && item.size === file.size);
-        if (!exists) {
-          nextFiles.push(file);
-        }
-      });
-      return nextFiles;
-    });
-
-    event.target.value = '';
-  };
-
-  const removeUploadedFile = (indexToRemove) => {
-    setUploadedFiles((prev) => prev.filter((_, index) => index !== indexToRemove));
   };
 
   const removeTaskFromSource = (task) => {
@@ -196,7 +167,6 @@ const StudentTasks = () => {
         description: withSubmission && submissionNote.trim()
           ? `${task.description || 'Task submitted.'} Note: ${submissionNote.trim()}`
           : (task.description || 'Task completed.'),
-        attachments: withSubmission ? uploadedFiles.map((file) => file.name) : [],
       },
       ...prev,
     ]);
@@ -436,55 +406,16 @@ const StudentTasks = () => {
                 ) : null}
 
                 {!isCompletedTask && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Attach Files</label>
-                      <label className="w-full flex items-center justify-center gap-2 border border-dashed border-blue-300 bg-blue-50 text-blue-700 rounded-xl px-4 py-3 cursor-pointer hover:bg-blue-100 transition-colors">
-                        <Paperclip className="w-4 h-4" />
-                        <span className="font-medium text-sm">Upload submission files</span>
-                        <input
-                          type="file"
-                          multiple
-                          onChange={handleFilesSelected}
-                          className="hidden"
-                        />
-                      </label>
-                      {uploadedFiles.length > 0 && (
-                        <div className="mt-3 space-y-2">
-                          {uploadedFiles.map((file, index) => (
-                            <div
-                              key={`${file.name}-${file.size}-${index}`}
-                              className="flex items-center justify-between gap-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2"
-                            >
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-gray-700 truncate">{file.name}</p>
-                                <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => removeUploadedFile(index)}
-                                className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors"
-                                aria-label="Remove file"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Submission Note (Optional)</label>
-                      <textarea
-                        value={submissionNote}
-                        onChange={(event) => setSubmissionNote(event.target.value)}
-                        rows={4}
-                        placeholder="Add context about your submission..."
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
-                      />
-                    </div>
-                  </>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Submission Note (Optional)</label>
+                    <textarea
+                      value={submissionNote}
+                      onChange={(event) => setSubmissionNote(event.target.value)}
+                      rows={4}
+                      placeholder="Add context about your submission..."
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
+                    />
+                  </div>
                 )}
               </div>
 
