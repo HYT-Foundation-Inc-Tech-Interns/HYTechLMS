@@ -16,7 +16,7 @@ import { useEffect, useRef } from 'react';
 import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
-import { uploadUserAvatar } from '../../utils/avatarStorage';
+import { compressAvatarImageToBase64 } from '../../utils/avatarStorage';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
@@ -100,8 +100,8 @@ const Settings = () => {
       return;
     }
 
-    if (settingsData.avatarUrl || settingsData.avatarPreview) {
-      const syncedAvatar = settingsData.avatarUrl || settingsData.avatarPreview;
+    if (settingsData.avatarBase64 || settingsData.avatarUrl || settingsData.avatarPreview) {
+      const syncedAvatar = settingsData.avatarBase64 || settingsData.avatarUrl || settingsData.avatarPreview;
       setAvatarPreview(syncedAvatar);
       setAvatar(syncedAvatar);
     }
@@ -233,21 +233,23 @@ const Settings = () => {
     }
   };
 
+  const [isSaving, setIsSaving] = useState(false);
   const handleSaveAll = async () => {
+    setIsSaving(true);
     try {
-      let avatarUrl = settingsData?.avatarUrl || null;
+      let avatarBase64 = settingsData?.avatarBase64 || null;
 
       if (selectedAvatarFile) {
-        const result = await uploadUserAvatar({ uid, role: 'admin', file: selectedAvatarFile });
-        avatarUrl = result.url;
+        const result = await compressAvatarImageToBase64(selectedAvatarFile);
+        avatarBase64 = result.base64;
       }
 
       if (!avatarPreview) {
-        avatarUrl = null;
+        avatarBase64 = null;
       }
 
       await saveSettings({
-        avatarUrl,
+        avatarBase64,
         accountForm,
         accessSettings,
         notificationSettings,
@@ -269,17 +271,20 @@ const Settings = () => {
             phone: accountForm.contactNumber.trim(),
             address: accountForm.fullAddress.trim(),
             updatedAt: serverTimestamp(),
+            avatarBase64: avatarBase64 || null,
           },
           { merge: true }
         );
       }
 
-      setAvatar(avatarUrl || null);
-      setAvatarPreview(avatarUrl || null);
+      setAvatar(avatarBase64 || null);
+      setAvatarPreview(avatarBase64 || null);
       setSelectedAvatarFile(null);
       addToast('Settings saved successfully.', 'success');
     } catch {
       addToast('Unable to save settings.', 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -867,10 +872,18 @@ const Settings = () => {
       <div className="flex justify-end">
         <button
           onClick={handleSaveAll}
-          className="flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors shadow-lg shadow-green-500/30"
+          disabled={isSaving}
+          className={`flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-lg font-semibold shadow-lg shadow-green-500/30 ${isSaving ? 'opacity-60 cursor-not-allowed' : 'hover:bg-green-600 transition-colors'}`}
         >
-          <Save className="w-5 h-5" />
-          <span>Save Changes</span>
+          {isSaving ? (
+            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+          ) : (
+            <Save className="w-5 h-5" />
+          )}
+          <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
         </button>
       </div>
     </div>

@@ -37,7 +37,7 @@ const toBlob = (canvas, type, quality) =>
     );
   });
 
-export const compressAvatarImage = async (file) => {
+export const compressAvatarImageToBase64 = async (file) => {
   const image = await loadImageFromFile(file);
   const longestSide = Math.max(image.width, image.height);
   const scale = longestSide > MAX_DIMENSION ? MAX_DIMENSION / longestSide : 1;
@@ -56,13 +56,13 @@ export const compressAvatarImage = async (file) => {
 
   context.drawImage(image, 0, 0, width, height);
 
-  const blob = await toBlob(canvas, 'image/jpeg', IMAGE_QUALITY);
+  // Convert to base64 string
+  const base64 = canvas.toDataURL('image/jpeg', IMAGE_QUALITY);
   return {
-    blob,
+    base64,
     width,
     height,
     originalSize: file.size,
-    compressedSize: blob.size,
   };
 };
 
