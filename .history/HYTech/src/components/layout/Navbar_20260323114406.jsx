@@ -98,7 +98,7 @@ const Navbar = ({ title, subtitle }) => {
               <img src={avatar} alt="Trainer profile" className="w-9 h-9 rounded-full object-cover border border-white/20" />
             ) : (
               <div className="w-9 h-9 bg-orange-500 rounded-full flex items-center justify-center font-semibold text-sm shadow-lg">
-                TR
+                TG
               </div>
             )}
           </button>

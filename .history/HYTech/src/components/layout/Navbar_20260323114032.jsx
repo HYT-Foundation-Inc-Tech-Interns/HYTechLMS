@@ -98,7 +98,7 @@ const Navbar = ({ title, subtitle }) => {
               <img src={avatar} alt="Trainer profile" className="w-9 h-9 rounded-full object-cover border border-white/20" />
             ) : (
               <div className="w-9 h-9 bg-orange-500 rounded-full flex items-center justify-center font-semibold text-sm shadow-lg">
-                TR
+                AU
               </div>
             )}
           </button>
@@ -107,7 +107,7 @@ const Navbar = ({ title, subtitle }) => {
             <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] animate-slide-down">
               <div className="p-4 border-b border-gray-100">
                 <p className="font-semibold text-gray-800">Trainer</p>
-                <p className="text-sm text-gray-500">trainer@hytech.com</p>
+                <p className="text-sm text-gray-500">Trainer.com</p>
               </div>
               <div className="p-2">
                 <button

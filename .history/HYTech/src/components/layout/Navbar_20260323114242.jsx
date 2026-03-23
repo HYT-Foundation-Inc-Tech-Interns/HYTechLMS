@@ -98,7 +98,7 @@ const Navbar = ({ title, subtitle }) => {
               <img src={avatar} alt="Trainer profile" className="w-9 h-9 rounded-full object-cover border border-white/20" />
             ) : (
               <div className="w-9 h-9 bg-orange-500 rounded-full flex items-center justify-center font-semibold text-sm shadow-lg">
-                TR
+                AU
               </div>
             )}
           </button>
@@ -115,7 +115,7 @@ const Navbar = ({ title, subtitle }) => {
                   className="w-full flex items-center gap-3 px-3 py-2 text-gray-700 hover:bg-gray-50:bg-gray-700 rounded-lg transition-colors"
                 >
                   <User className="w-4 h-4" />
-                  <span className="text-sm">View Profile</span>
+                  <span className="text-sm">View Profiles</span>
                 </button>
                 <button
                   onClick={() => navigate('/dashboard/settings')}
