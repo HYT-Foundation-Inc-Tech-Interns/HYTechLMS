@@ -836,7 +836,7 @@ const Settings = () => {
   };
 
   return (
-    <div className="space-y-6 pb-6 lg:pb-8">
+    <div className="space-y-6">
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-4">
         {tabs.map((tab) => {

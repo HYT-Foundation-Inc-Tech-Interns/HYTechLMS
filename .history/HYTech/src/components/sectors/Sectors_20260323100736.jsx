@@ -224,7 +224,7 @@ const Sectors = () => {
   };
 
   return (
-    <div className="space-y-6 pb-6 lg:pb-8">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Sectors</h1>

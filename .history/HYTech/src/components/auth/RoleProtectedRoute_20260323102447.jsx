@@ -1,8 +1,42 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
+import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
-import { getHomePathForRole, normalizeRole, resolveEffectiveRole } from '../../utils/authRole';
+
+const ROLE_HOME = {
+  admin: '/admin',
+  trainer: '/dashboard',
+  student: '/student',
+};
+
+const normalizeRole = (value) => String(value || '').toLowerCase();
+
+const inferRoleFromEmail = (email) => {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (normalizedEmail === 'admin@hytech.com') {
+    return 'admin';
+  }
+  if (normalizedEmail === 'trainer@hytech.com') {
+    return 'trainer';
+  }
+  return 'student';
+};
+
+const resolveUserRole = async (uid) => {
+  const directUserDoc = await getDoc(doc(db, 'users', uid));
+  if (directUserDoc.exists()) {
+    return directUserDoc.data()?.role || null;
+  }
+
+  const usersByUidQuery = query(collection(db, 'users'), where('uid', '==', uid), limit(1));
+  const userResults = await getDocs(usersByUidQuery);
+  if (!userResults.empty) {
+    return userResults.docs[0].data()?.role || null;
+  }
+
+  return null;
+};
 
 const RoleProtectedRoute = ({ allowedRole, children }) => {
   const location = useLocation();
@@ -29,14 +63,11 @@ const RoleProtectedRoute = ({ allowedRole, children }) => {
       setIsAuthenticated(true);
 
       try {
-        const role = await resolveEffectiveRole({
-          uid: user.uid,
-          email: user.email,
-          database: db,
-        });
+        const resolvedRole = await resolveUserRole(user.uid);
+        const role = normalizeRole(resolvedRole) || inferRoleFromEmail(user.email);
         setUserRole(role);
       } catch {
-        setUserRole('student');
+        setUserRole(inferRoleFromEmail(user.email));
       } finally {
         setIsLoading(false);
       }
@@ -59,7 +90,7 @@ const RoleProtectedRoute = ({ allowedRole, children }) => {
 
   const normalizedAllowedRole = normalizeRole(allowedRole);
   if (!normalizedAllowedRole || userRole !== normalizedAllowedRole) {
-    const fallbackPath = getHomePathForRole(userRole);
+    const fallbackPath = ROLE_HOME[userRole] || '/signin';
     return <Navigate to={fallbackPath} replace />;
   }
 

@@ -586,35 +586,33 @@ const UserManagement = () => {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && selectedUser && (
-        <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setShowDeleteModal(false)}
           />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-scale-in">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Trash2 className="w-8 h-8 text-red-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">Delete User</h3>
-                <p className="text-gray-500 mb-6">
-                  Are you sure you want to delete <strong>{selectedUser.name}</strong>? This action cannot be undone.
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowDeleteModal(false)}
-                    className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDeleteUser}
-                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-scale-in">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-8 h-8 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">Delete User</h3>
+              <p className="text-gray-500 mb-6">
+                Are you sure you want to delete <strong>{selectedUser.name}</strong>? This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteUser}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Delete
+                </button>
               </div>
             </div>
           </div>
@@ -623,59 +621,57 @@ const UserManagement = () => {
 
       {/* View User Modal */}
       {showViewModal && selectedUser && (
-        <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setShowViewModal(false)}
           />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] overflow-hidden animate-scale-in flex flex-col">
-              <div className="flex items-center justify-between p-6 border-b border-gray-100">
-                <h2 className="text-lg font-semibold text-gray-900">User Details</h2>
-                <button
-                  onClick={() => setShowViewModal(false)}
-                  className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5 text-gray-500" />
-                </button>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">User Details</h2>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Full Name</label>
+                <p className="text-gray-900 font-medium">{selectedUser.name}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">ID Number</label>
+                <p className="text-gray-900 font-medium">{selectedUser.idNumber}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Email</label>
+                <p className="text-gray-900 font-medium">{selectedUser.email}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Role</label>
+                <p className="text-gray-900 font-medium">
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(selectedUser.role)}`}>
+                    {selectedUser.role}
+                  </span>
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Status</label>
+                <p className="text-gray-900 font-medium">
+                  <span className="badge-success">{selectedUser.status}</span>
+                </p>
               </div>
 
-              <div className="p-6 space-y-4 overflow-y-auto">
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Full Name</label>
-                  <p className="text-gray-900 font-medium">{selectedUser.name}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">ID Number</label>
-                  <p className="text-gray-900 font-medium">{selectedUser.idNumber}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Email</label>
-                  <p className="text-gray-900 font-medium">{selectedUser.email}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Role</label>
-                  <p className="text-gray-900 font-medium">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(selectedUser.role)}`}>
-                      {selectedUser.role}
-                    </span>
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Status</label>
-                  <p className="text-gray-900 font-medium">
-                    <span className="badge-success">{selectedUser.status}</span>
-                  </p>
-                </div>
-
-                <div className="flex justify-end gap-3 pt-4">
-                  <button
-                    onClick={() => setShowViewModal(false)}
-                    className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
-                  >
-                    Close
-                  </button>
-                </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  onClick={() => setShowViewModal(false)}
+                  className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
@@ -684,29 +680,27 @@ const UserManagement = () => {
 
       {/* Edit User Modal */}
       {showEditModal && selectedUser && (
-        <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setShowEditModal(false)}
           />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] overflow-hidden animate-scale-in flex flex-col">
-              <div className="flex items-center justify-between p-6 border-b border-gray-100">
-                <div className="flex items-center gap-2">
-                  <Edit2 className="w-5 h-5 text-blue-600" />
-                  <h2 className="text-lg font-semibold text-gray-900">Edit User</h2>
-                </div>
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5 text-gray-500" />
-                </button>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-blue-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Edit User</h2>
               </div>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
 
-              <form onSubmit={handleUpdateUser} className="flex flex-1 min-h-0 flex-col">
-                <div className="p-6 space-y-4 overflow-y-auto">
-                <div>
+            <form onSubmit={handleUpdateUser} className="p-6 space-y-4">
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   First Name <span className="text-red-500">*</span>
                 </label>
@@ -785,25 +779,23 @@ const UserManagement = () => {
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
                 </div>
               </div>
-                </div>
 
-                <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowEditModal(false)}
-                    className="px-5 py-2.5 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
-                  >
-                    Save Changes
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-5 py-2.5 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
