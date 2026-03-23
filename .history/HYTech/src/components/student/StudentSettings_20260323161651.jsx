@@ -210,7 +210,7 @@ const StudentSettings = () => {
     { id: 'security', label: 'Security', icon: Shield },
   ];
 
-  const renderProfileSettings = () => (
+  const ProfileSettings = () => (
     <div className="space-y-6">
       <div className="flex items-center gap-6">
         <div className="relative">
@@ -332,7 +332,7 @@ const StudentSettings = () => {
     </div>
   );
 
-  const renderNotificationSettings = () => (
+  const NotificationSettings = () => (
     <div className="space-y-4">
       {[
         { key: 'emailNotifications', title: 'Email Notifications', desc: 'Receive notifications via email' },
@@ -357,7 +357,7 @@ const StudentSettings = () => {
     </div>
   );
 
-  const renderPrivacySettings = () => (
+  const PrivacySettings = () => (
     <div className="space-y-4">
       <button
         type="button"
@@ -373,7 +373,7 @@ const StudentSettings = () => {
     </div>
   );
 
-  const renderSecuritySettings = () => (
+  const SecuritySettings = () => (
     <div className="space-y-4">
       <button
         type="button"
@@ -416,10 +416,10 @@ const StudentSettings = () => {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 p-6">
-        {activeTab === 'profile' && renderProfileSettings()}
-        {activeTab === 'notifications' && renderNotificationSettings()}
-        {activeTab === 'privacy' && renderPrivacySettings()}
-        {activeTab === 'security' && renderSecuritySettings()}
+        {activeTab === 'profile' && <ProfileSettings />}
+        {activeTab === 'notifications' && <NotificationSettings />}
+        {activeTab === 'privacy' && <PrivacySettings />}
+        {activeTab === 'security' && <SecuritySettings />}
       </div>
 
       <div className="flex justify-end mt-6">
