@@ -67,9 +67,9 @@ const AdminNavbar = ({ title, subtitle }) => {
           onError={(e) => { e.target.style.display = 'none'; }}
           title="HYTech"
         />
-        <span className="font-semibold text-base md:text-lg whitespace-nowrap">HYTech Admin</span>
+        <span className="font-semibold text-base md:text-lg whitespace-nowrap">HYTech</span>
         {title && (
-          <div className="min-w-0 border-l border-white/20 ml-2 sm:ml-4 md:ml-9 lg:ml-12 xl:ml-14 pl-3 sm:pl-4 md:pl-5">
+          <div className="min-w-0 ml-2 sm:ml-4 md:ml-9 lg:ml-32 xl:ml-32 pl-3 sm:pl-4 md:pl-5">
               <h1 className="font-semibold text-base md:text-lg leading-tight truncate">{title}</h1>
               {subtitle && (
                 <p className="text-[11px] md:text-xs text-white/70 hidden sm:block truncate">{subtitle}</p>

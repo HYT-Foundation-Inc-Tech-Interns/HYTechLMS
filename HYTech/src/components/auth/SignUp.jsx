@@ -170,7 +170,7 @@ const SignUp = () => {
 
           {/* Welcome Text */}
           <div className="animate-slide-up">
-            <h1 className="text-4xl lg:text-6xl font-bold mb-4">
+            <h1 className="text-4xl lg:text-4xl font-bold mb-4">
               Welcome to
             </h1>
             <h2 className="text-3xl lg:text-5xl font-bold text-orange-400">
@@ -206,18 +206,12 @@ const SignUp = () => {
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold text-gray-800 mb-2">Getting Started</h2>
             <p className="text-gray-500">Create account to continue!</p>
-            <p className="text-xs text-gray-500 mt-2">
-              Public sign up is for student accounts only. Admin and trainer accounts are managed in User Management.
-            </p>
           </div>
 
           <div className="mb-6" />
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            <p className="text-xs text-gray-500">
-              <span className="text-red-500">*</span> Required fields
-            </p>
 
             {/* Name Inputs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
