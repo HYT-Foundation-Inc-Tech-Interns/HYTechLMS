@@ -58,7 +58,8 @@ export const useRoleNotifications = (role, seedNotifications = null) => {
   useEffect(() => {
     const stored = readStoredNotifications(normalizedRole, defaultNotifications);
     setNotifications(stored);
-  }, [normalizedRole, defaultNotifications]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normalizedRole]);
 
   useEffect(() => {
     localStorage.setItem(getKey(normalizedRole), JSON.stringify(notifications));
