@@ -202,10 +202,10 @@ const SignIn = () => {
 
           {/* Welcome Text */}
           <div className="animate-slide-up">
-            <h1 className="text-4xl lg:text-5xl font-bold mb-4">
+            <h1 className="text-4xl lg:text-4xl font-bold mb-4">
               Welcome to
             </h1>
-            <h2 className="text-3xl lg:text-4xl font-bold text-orange-400">
+            <h2 className="text-3xl lg:text-5xl font-bold text-orange-400">
               HYT Global Institute
             </h2>
           </div>
