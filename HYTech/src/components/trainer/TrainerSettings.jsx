@@ -3,7 +3,7 @@ import { User, Bell, Shield, Palette, Globe, Save, Camera, X } from 'lucide-reac
 import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
-import { uploadUserAvatar } from '../../utils/avatarStorage';
+import { compressAvatarImageToBase64 } from '../../utils/avatarStorage';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
@@ -63,8 +63,8 @@ useEffect(() => {
   if (settingsData.privacySettings) {
     setPrivacySettings((prev) => ({ ...prev, ...settingsData.privacySettings }));
   }
-  if (settingsData.avatarUrl || settingsData.avatarPreview) {
-    const syncedAvatar = settingsData.avatarUrl || settingsData.avatarPreview;
+  if (settingsData.avatarBase64 || settingsData.avatarUrl || settingsData.avatarPreview) {
+    const syncedAvatar = settingsData.avatarBase64 || settingsData.avatarUrl || settingsData.avatarPreview;
     setAvatarPreview(syncedAvatar);
     setAvatar(syncedAvatar);
   }
@@ -128,15 +128,15 @@ const removeAvatar = () => {
 const handleSave = async () => {
   setIsSaving(true);
   try {
-    let avatarUrl = settingsData?.avatarUrl || null;
+    let avatarBase64 = settingsData?.avatarBase64 || null;
 
     if (selectedAvatarFile) {
-      const result = await uploadUserAvatar({ uid, role: 'trainer', file: selectedAvatarFile });
-      avatarUrl = result.url;
+      const result = await compressAvatarImageToBase64(selectedAvatarFile);
+      avatarBase64 = result.base64;
     }
 
     if (!avatarPreview) {
-      avatarUrl = null;
+      avatarBase64 = null;
     }
 
     await saveSettings({
@@ -144,7 +144,7 @@ const handleSave = async () => {
       trainerNotificationSettings,
       appearanceSettings,
       privacySettings,
-      avatarUrl,
+      avatarBase64,
     });
 
     if (uid && db) {
@@ -159,13 +159,14 @@ const handleSave = async () => {
           phone: profileForm.phone.trim(),
           bio: profileForm.bio.trim(),
           updatedAt: serverTimestamp(),
+          avatarBase64: avatarBase64 || null,
         },
         { merge: true }
       );
     }
 
-    setAvatar(avatarUrl || null);
-    setAvatarPreview(avatarUrl || null);
+    setAvatar(avatarBase64 || null);
+    setAvatarPreview(avatarBase64 || null);
     setSelectedAvatarFile(null);
     setIsSaving(false);
     addToast('Settings saved successfully!', 'success');

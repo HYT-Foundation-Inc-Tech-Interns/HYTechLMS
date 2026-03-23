@@ -13,200 +13,166 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
-import { uploadUserAvatar } from '../../utils/avatarStorage';
+import { compressAvatarImageToBase64 } from '../../utils/avatarStorage';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 
+
 const StudentSettings = () => {
+  // ...existing imports and hooks...
   const { addToast } = useToast();
   const { setAvatar } = useProfileAvatar('student');
   const { uid, settingsData, saveSettings } = useUserSettings('student');
-  const [profileData, setProfileData] = useState({
+  const [activeTab, setActiveTab] = useState('profile');
+  const [profileForm, setProfileForm] = useState({
     firstName: 'Gerald Andrei',
     lastName: 'Lat',
     email: 'gerald.lat@email.com',
     phone: '+63 912 345 6789',
-    address: 'Makati City, Philippines'
+    address: 'Makati City, Philippines',
   });
-
-const fileInputRef = useRef(null);
-const [avatarPreview, setAvatarPreview] = useState(null);
-const [selectedAvatarFile, setSelectedAvatarFile] = useState(null);
-const [showPasswordModal, setShowPasswordModal] = useState(false);
-const [showPrivacyModal, setShowPrivacyModal] = useState(false);
-const [passwordForm, setPasswordForm] = useState({
-  currentPassword: '',
-  newPassword: '',
-  confirmPassword: '',
-});
-const [privacyForm, setPrivacyForm] = useState({
-  showProfileToClassmates: true,
-  showEmailToInstructors: false,
-  allowProgressInsights: true,
-});
-
-useEffect(() => {
-  if (!settingsData) {
-    return;
-  }
-
-  if (settingsData.profileData) {
-    setProfileData((prev) => ({ ...prev, ...settingsData.profileData }));
-  }
-  if (settingsData.notifications) {
-    setNotifications((prev) => ({ ...prev, ...settingsData.notifications }));
-  }
-  if (settingsData.privacyForm) {
-    setPrivacyForm((prev) => ({ ...prev, ...settingsData.privacyForm }));
-  }
-  if (settingsData.avatarUrl || settingsData.avatarPreview) {
-    const syncedAvatar = settingsData.avatarUrl || settingsData.avatarPreview;
-    setAvatarPreview(syncedAvatar);
-    setAvatar(syncedAvatar);
-  }
-}, [settingsData, setAvatar]);
-
-useEffect(() => {
-  if (!uid || !db) {
-    return;
-  }
-
-  const loadProfile = async () => {
-    try {
-      const userDoc = await getDoc(doc(db, 'users', uid));
-      if (!userDoc.exists()) {
-        return;
-      }
-
-      const data = userDoc.data() || {};
-      setProfileData((prev) => ({
-        ...prev,
-        firstName: data.firstName || prev.firstName,
-        lastName: data.lastName || prev.lastName,
-        email: auth?.currentUser?.email || data.email || prev.email,
-        phone: data.phone || prev.phone,
-        address: data.address || prev.address,
-      }));
-    } catch {
-      // Keep existing UI state if profile load fails.
-    }
-  };
-
-  loadProfile();
-}, [uid]);
-
-// open file picker
-const handleAvatarButton = () => fileInputRef.current?.click();
-
-// read file as data URL and set preview
-const handleAvatarChange = (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  if (!file.type.startsWith('image/')) {
-    addToast('Please select a valid image file.', 'error');
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = () => {
-    setAvatarPreview(reader.result);
-    setSelectedAvatarFile(file);
-  };
-  reader.readAsDataURL(file);
-};
-
   const [notifications, setNotifications] = useState({
     emailNotifications: true,
     pushNotifications: true,
     courseUpdates: true,
     taskReminders: true,
     newMaterials: false,
-    gradeUpdates: true
+    gradeUpdates: true,
   });
+  const [privacyForm, setPrivacyForm] = useState({
+    showProfileToClassmates: true,
+    showEmailToInstructors: false,
+    allowProgressInsights: true,
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const fileInputRef = useRef(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleNotificationToggle = (key) => {
-    setNotifications(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
+  useEffect(() => {
+    if (!settingsData) return;
+    if (settingsData.profileForm) setProfileForm((prev) => ({ ...prev, ...settingsData.profileForm }));
+    if (settingsData.notifications) setNotifications((prev) => ({ ...prev, ...settingsData.notifications }));
+    if (settingsData.privacyForm) setPrivacyForm((prev) => ({ ...prev, ...settingsData.privacyForm }));
+    if (settingsData.avatarBase64 || settingsData.avatarUrl || settingsData.avatarPreview) {
+      const syncedAvatar = settingsData.avatarBase64 || settingsData.avatarUrl || settingsData.avatarPreview;
+      setAvatarPreview(syncedAvatar);
+      setAvatar(syncedAvatar);
+    }
+  }, [settingsData, setAvatar]);
+
+  useEffect(() => {
+    if (!uid || !db) return;
+    const loadProfile = async () => {
+      try {
+        const userDoc = await getDoc(doc(db, 'users', uid));
+        if (!userDoc.exists()) return;
+        const data = userDoc.data() || {};
+        setProfileForm((prev) => ({
+          ...prev,
+          firstName: data.firstName || prev.firstName,
+          lastName: data.lastName || prev.lastName,
+          email: auth?.currentUser?.email || data.email || prev.email,
+          phone: data.phone || prev.phone,
+          address: data.address || prev.address,
+        }));
+      } catch {
+        // Keep existing UI state if profile load fails.
+      }
+    };
+    loadProfile();
+  }, [uid]);
+
+  const handleAvatarButton = () => fileInputRef.current?.click();
+  const handleAvatarChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      addToast('Please select a valid image file.', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAvatarPreview(reader.result);
+      setSelectedAvatarFile(file);
+    };
+    reader.readAsDataURL(file);
+  };
+  const removeAvatar = () => {
+    setAvatarPreview(null);
+    setSelectedAvatarFile(null);
+    setAvatar(null);
+    addToast('Profile photo removed.', 'info');
   };
 
-  const handleSaveChanges = async () => {
+  const handleSave = async () => {
+    setIsSaving(true);
     try {
-      let avatarUrl = settingsData?.avatarUrl || null;
-
+      let avatarBase64 = settingsData?.avatarBase64 || null;
       if (selectedAvatarFile) {
-        const result = await uploadUserAvatar({ uid, role: 'student', file: selectedAvatarFile });
-        avatarUrl = result.url;
+        const result = await compressAvatarImageToBase64(selectedAvatarFile);
+        avatarBase64 = result.base64;
       }
-
-      if (!avatarPreview) {
-        avatarUrl = null;
-      }
-
-      await saveSettings({
-        profileData,
-        notifications,
-        privacyForm,
-        avatarUrl,
-      });
-
+      if (!avatarPreview) avatarBase64 = null;
+      await saveSettings({ profileForm, notifications, privacyForm, avatarBase64 });
       if (uid && db) {
         await setDoc(
           doc(db, 'users', uid),
           {
             uid,
-            firstName: profileData.firstName.trim(),
-            lastName: profileData.lastName.trim(),
-            name: `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim(),
-            email: auth?.currentUser?.email || profileData.email,
-            phone: profileData.phone.trim(),
-            address: profileData.address.trim(),
+            firstName: profileForm.firstName.trim(),
+            lastName: profileForm.lastName.trim(),
+            name: `${profileForm.firstName.trim()} ${profileForm.lastName.trim()}`.trim(),
+            email: auth?.currentUser?.email || profileForm.email,
+            phone: profileForm.phone.trim(),
+            address: profileForm.address.trim(),
             updatedAt: serverTimestamp(),
+            avatarBase64: avatarBase64 || null,
           },
           { merge: true }
         );
       }
-
-      setAvatar(avatarUrl || null);
-      setAvatarPreview(avatarUrl || null);
+      setAvatar(avatarBase64 || null);
+      setAvatarPreview(avatarBase64 || null);
       setSelectedAvatarFile(null);
-      addToast('Profile changes saved successfully.', 'success');
+      setIsSaving(false);
+      addToast('Settings saved successfully!', 'success');
     } catch {
-      addToast('Unable to save settings to Firestore.', 'error');
+      setIsSaving(false);
+      addToast('Unable to save settings.', 'error');
     }
   };
 
-  const handleSavePassword = async () => {
+  const handlePasswordSave = async () => {
     const { currentPassword, newPassword, confirmPassword } = passwordForm;
     if (!currentPassword || !newPassword || !confirmPassword) {
-      addToast('Please complete all password fields.', 'error');
+      addToast('Please fill in all password fields.', 'error');
       return;
     }
-
     if (newPassword.length < 8) {
-      addToast('New password must be at least 8 characters.', 'error');
+      addToast('Password must be at least 8 characters.', 'error');
       return;
     }
-
     if (newPassword !== confirmPassword) {
       addToast('New password and confirmation do not match.', 'error');
       return;
     }
-
     try {
       const currentUser = auth?.currentUser;
       if (!currentUser?.email) {
         addToast('No authenticated user found.', 'error');
         return;
       }
-
       const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
       await reauthenticateWithCredential(currentUser, credential);
       await updatePassword(currentUser, newPassword);
-
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      setShowPasswordModal(false);
       addToast('Password updated successfully.', 'success');
     } catch (error) {
       const message =
@@ -217,8 +183,7 @@ const handleAvatarChange = (e) => {
     }
   };
 
-  const handleSavePrivacy = async () => {
-    setShowPrivacyModal(false);
+  const handlePrivacySave = async () => {
     try {
       await saveSettings({ privacyForm });
       addToast('Privacy settings updated.', 'success');
@@ -227,327 +192,265 @@ const handleAvatarChange = (e) => {
     }
   };
 
-  const NotificationToggle = ({ label, description, checked, onChange }) => (
-    <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
-      <div>
-        <p className="font-medium text-gray-900">{label}</p>
-        {description && <p className="text-sm text-gray-500">{description}</p>}
+  const tabs = [
+    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'privacy', label: 'Privacy', icon: Shield },
+    { id: 'security', label: 'Security', icon: Shield },
+  ];
+
+  const ProfileSettings = () => (
+    <div className="space-y-6">
+      <div className="flex items-center gap-6">
+        <div className="relative">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleAvatarChange}
+            className="hidden"
+          />
+          {avatarPreview ? (
+            <div className="w-24 h-24 rounded-full overflow-hidden bg-white border flex items-center justify-center">
+              <img src={avatarPreview} alt="avatar preview" className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <div className="w-24 h-24 bg-gradient-to-br from-[#0D4291] to-[#0B005C] rounded-full flex items-center justify-center text-white text-2xl font-bold">
+              {`${profileForm.firstName?.[0] || ''}${profileForm.lastName?.[0] || ''}`}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleAvatarButton}
+            className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+          >
+            <Camera className="w-4 h-4 text-gray-600" />
+          </button>
+          {avatarPreview && (
+            <button
+              type="button"
+              onClick={removeAvatar}
+              className="absolute -top-2 -right-2 p-1.5 bg-white rounded-full text-gray-700 hover:bg-gray-100 transition-colors border border-gray-200 shadow-sm"
+              title="Remove photo"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        <div>
+          <h3 className="font-semibold text-gray-900">Profile Photo</h3>
+          <p className="text-sm text-gray-500">JPG, PNG or GIF. Max size 2MB</p>
+        </div>
       </div>
-      <button
-        onClick={onChange}
-        className={`relative w-12 h-6 rounded-full transition-colors ${
-          checked ? 'bg-green-500' : 'bg-gray-300'
-        }`}
-      >
-        <span 
-          className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-            checked ? 'left-7' : 'left-1'
-          }`}
-        />
-      </button>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+          <input
+            type="text"
+            value={profileForm.firstName}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, firstName: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+          <input
+            type="text"
+            value={profileForm.lastName}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, lastName: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+          <input
+            type="email"
+            value={profileForm.email}
+            readOnly
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-gray-100 text-gray-500 cursor-not-allowed"
+          />
+          <p className="text-xs text-gray-500 mt-1">Email cannot be changed.</p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+          <input
+            type="tel"
+            value={profileForm.phone}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 bg-white"
+          />
+        </div>
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+          <input
+            type="text"
+            value={profileForm.address}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, address: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 bg-white"
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const NotificationSettings = () => (
+    <div className="space-y-6">
+      <div className="space-y-4">
+        {[
+          { key: 'emailNotifications', title: 'Email Notifications', desc: 'Receive notifications via email' },
+          { key: 'pushNotifications', title: 'Push Notifications', desc: 'Receive browser push notifications' },
+          { key: 'courseUpdates', title: 'Course Updates', desc: 'Get notified about course announcements' },
+          { key: 'taskReminders', title: 'Task Reminders', desc: 'Receive reminders for upcoming tasks' },
+          { key: 'newMaterials', title: 'New Materials', desc: 'Get notified when new materials are uploaded' },
+          { key: 'gradeUpdates', title: 'Grade Updates', desc: 'Receive notifications about grade changes' },
+        ].map((item) => (
+          <div key={item.key} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+            <div>
+              <h4 className="font-medium text-gray-900">{item.title}</h4>
+              <p className="text-sm text-gray-500">{item.desc}</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={notifications[item.key]}
+                onChange={(e) =>
+                  setNotifications((prev) => ({ ...prev, [item.key]: e.target.checked }))
+                }
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const PrivacySettings = () => (
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <div className="p-4 bg-gray-50 rounded-xl">
+          <div className="flex items-center gap-4 mb-4">
+            <Shield className="w-5 h-5 text-gray-600" />
+            <div>
+              <h4 className="font-medium text-gray-900">Privacy Settings</h4>
+              <p className="text-sm text-gray-500">Control your privacy preferences</p>
+            </div>
+          </div>
+          <label className="flex items-center justify-between text-sm text-gray-700 mb-2">
+            <span>Show profile to classmates</span>
+            <input
+              type="checkbox"
+              checked={privacyForm.showProfileToClassmates}
+              onChange={(e) => setPrivacyForm((prev) => ({ ...prev, showProfileToClassmates: e.target.checked }))}
+            />
+          </label>
+          <label className="flex items-center justify-between text-sm text-gray-700 mb-2">
+            <span>Show email to instructors</span>
+            <input
+              type="checkbox"
+              checked={privacyForm.showEmailToInstructors}
+              onChange={(e) => setPrivacyForm((prev) => ({ ...prev, showEmailToInstructors: e.target.checked }))}
+            />
+          </label>
+          <label className="flex items-center justify-between text-sm text-gray-700">
+            <span>Allow progress analytics insights</span>
+            <input
+              type="checkbox"
+              checked={privacyForm.allowProgressInsights}
+              onChange={(e) => setPrivacyForm((prev) => ({ ...prev, allowProgressInsights: e.target.checked }))}
+            />
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+
+  const SecuritySettings = () => (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Change Password</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
+            <input
+              type="password"
+              value={passwordForm.currentPassword}
+              onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+            <input
+              type="password"
+              value={passwordForm.newPassword}
+              onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
+            <input
+              type="password"
+              value={passwordForm.confirmPassword}
+              onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end mt-6">
+          <button
+            onClick={handlePasswordSave}
+            className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+          >
+            Save Password
+          </button>
+        </div>
+      </div>
     </div>
   );
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Profile Section */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Profile Card */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-6">
-            <div className="flex items-center gap-2 mb-6">
-              <User className="w-5 h-5 text-[#0D4291]" />
-              <h2 className="font-bold text-gray-900 uppercase text-sm">Profile Information</h2>
-            </div>
-
-            {/* Avatar */}
-            <div className="flex items-center gap-4 mb-6">
-              <div className="relative">
-                 <input
-                   ref={fileInputRef}
-                    type="file"
-                   accept="image/*"
-                   onChange={handleAvatarChange}
-                    className="hidden"
-                />
-              {avatarPreview ? (
-    <div className="w-20 h-20 rounded-full overflow-hidden bg-white border flex items-center justify-center">
-      <img src={avatarPreview} alt="avatar preview" className="w-full h-full object-cover" />
-    </div>
-  ) : (
-    <div className="w-20 h-20 bg-gradient-to-br from-[#0D4291] to-[#0B005C] rounded-full flex items-center justify-center text-white text-2xl font-bold">
-      {`${profileData.firstName?.[0] || ''}${profileData.lastName?.[0] || ''}`}
-    </div>
-  )}
-                <button
-                    type="button"
-                    onClick={handleAvatarButton}
-                    className="absolute -bottom-1 -right-1 p-1.5 bg-orange-500 rounded-full text-white hover:bg-orange-600 transition-colors border-2 border-white"
-                  >
-                     <Camera className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-900 text-lg">{profileData.firstName} {profileData.lastName}</h3>
-                <p className="text-sm text-gray-500">Student</p>
-              </div>
-            </div>
-
-            {/* Form Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">First Name</label>
-                <input 
-                  type="text"
-                  value={profileData.firstName}
-                  onChange={(e) => setProfileData(prev => ({ ...prev, firstName: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Last Name</label>
-                <input 
-                  type="text"
-                  value={profileData.lastName}
-                  onChange={(e) => setProfileData(prev => ({ ...prev, lastName: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all bg-white"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input 
-                    type="email"
-                    value={profileData.email}
-                    readOnly
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl bg-gray-100 text-gray-500 cursor-not-allowed"
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Email cannot be changed.</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone Number</label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input 
-                    type="tel"
-                    value={profileData.phone}
-                    onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all bg-white"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Location</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input 
-                    type="text"
-                    value={profileData.address}
-                    onChange={(e) => setProfileData(prev => ({ ...prev, address: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291] transition-all bg-white"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Save Button */}
-            <div className="flex justify-end mt-6">
-              <button 
-                onClick={handleSaveChanges}
-                className="px-6 py-2.5 bg-green-500 text-white rounded-xl font-medium hover:bg-green-600 transition-colors"
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-
-          {/* Notifications Card */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Bell className="w-5 h-5 text-[#0D4291]" />
-              <h2 className="font-bold text-gray-900 uppercase text-sm">Notification Preferences</h2>
-            </div>
-
-            <NotificationToggle 
-              label="Email Notifications"
-              description="Receive notifications via email"
-              checked={notifications.emailNotifications}
-              onChange={() => handleNotificationToggle('emailNotifications')}
-            />
-            <NotificationToggle 
-              label="Push Notifications"
-              description="Receive browser push notifications"
-              checked={notifications.pushNotifications}
-              onChange={() => handleNotificationToggle('pushNotifications')}
-            />
-            <NotificationToggle 
-              label="Course Updates"
-              description="Get notified about course announcements"
-              checked={notifications.courseUpdates}
-              onChange={() => handleNotificationToggle('courseUpdates')}
-            />
-            <NotificationToggle 
-              label="Task Reminders"
-              description="Receive reminders for upcoming tasks"
-              checked={notifications.taskReminders}
-              onChange={() => handleNotificationToggle('taskReminders')}
-            />
-            <NotificationToggle 
-              label="New Materials"
-              description="Get notified when new materials are uploaded"
-              checked={notifications.newMaterials}
-              onChange={() => handleNotificationToggle('newMaterials')}
-            />
-            <NotificationToggle 
-              label="Grade Updates"
-              description="Receive notifications about grade changes"
-              checked={notifications.gradeUpdates}
-              onChange={() => handleNotificationToggle('gradeUpdates')}
-            />
-          </div>
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Quick Links */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5">
-            <h3 className="font-bold text-gray-900 mb-4">Quick Links</h3>
-            
-            <div className="space-y-2">
-              <button
-                onClick={() => setShowPasswordModal(true)}
-                className="w-full flex items-center justify-between p-3 hover:bg-gray-50:bg-gray-700 rounded-xl transition-colors text-left"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Shield className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <span className="text-sm font-medium text-gray-700">Change Password</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-400" />
-              </button>
-              
-              <button
-                onClick={() => setShowPrivacyModal(true)}
-                className="w-full flex items-center justify-between p-3 hover:bg-gray-50:bg-gray-700 rounded-xl transition-colors text-left"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <User className="w-4 h-4 text-purple-600" />
-                  </div>
-                  <span className="text-sm font-medium text-gray-700">Privacy Settings</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-400" />
-              </button>
-            </div>
-          </div>
-
-          {/* Account Info */}
-          <div className="bg-gradient-to-br from-[#0D4291] to-[#0B005C] rounded-2xl p-5 text-white">
-            <h3 className="font-bold mb-4">Account Status</h3>
-            
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-white/70">Status</span>
-                <span className="px-2 py-0.5 bg-green-500 rounded-full text-xs font-bold">Active</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-white/70">Member Since</span>
-                <span className="font-medium">Jan 2024</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-white/70">Last Login</span>
-                <span className="font-medium">Today</span>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="p-6">
+      {/* User Name Bar */}
+      <div className="mb-4 flex items-center gap-3">
+        <User className="w-6 h-6 text-blue-600" />
+        <span className="text-lg font-semibold text-gray-900">
+          {profileForm.firstName} {profileForm.lastName}
+        </span>
       </div>
-
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Change Password</h3>
-              <button onClick={() => setShowPasswordModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                <X className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <input
-                type="password"
-                placeholder="Current password"
-                value={passwordForm.currentPassword}
-                onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291]"
-              />
-              <input
-                type="password"
-                placeholder="New password"
-                value={passwordForm.newPassword}
-                onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291]"
-              />
-              <input
-                type="password"
-                placeholder="Confirm new password"
-                value={passwordForm.confirmPassword}
-                onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291]"
-              />
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <button onClick={() => setShowPasswordModal(false)} className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
-              <button onClick={handleSavePassword} className="px-4 py-2.5 rounded-xl bg-[#0B005C] text-white hover:bg-[#13007a] transition-colors">Save Password</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPrivacyModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Privacy Settings</h3>
-              <button onClick={() => setShowPrivacyModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                <X className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <label className="flex items-center justify-between text-sm text-gray-700">
-                <span>Show profile to classmates</span>
-                <input
-                  type="checkbox"
-                  checked={privacyForm.showProfileToClassmates}
-                  onChange={(e) => setPrivacyForm((prev) => ({ ...prev, showProfileToClassmates: e.target.checked }))}
-                />
-              </label>
-              <label className="flex items-center justify-between text-sm text-gray-700">
-                <span>Show email to instructors</span>
-                <input
-                  type="checkbox"
-                  checked={privacyForm.showEmailToInstructors}
-                  onChange={(e) => setPrivacyForm((prev) => ({ ...prev, showEmailToInstructors: e.target.checked }))}
-                />
-              </label>
-              <label className="flex items-center justify-between text-sm text-gray-700">
-                <span>Allow progress analytics insights</span>
-                <input
-                  type="checkbox"
-                  checked={privacyForm.allowProgressInsights}
-                  onChange={(e) => setPrivacyForm((prev) => ({ ...prev, allowProgressInsights: e.target.checked }))}
-                />
-              </label>
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <button onClick={() => setShowPrivacyModal(false)} className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
-              <button onClick={handleSavePrivacy} className="px-4 py-2.5 rounded-xl bg-[#0B005C] text-white hover:bg-[#13007a] transition-colors">Save Privacy</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <div className="mb-6 flex gap-2 border-b border-gray-200">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2 -mb-px border-b-2 transition-colors font-medium text-sm ${
+              activeTab === tab.id
+                ? 'border-blue-600 text-blue-600 bg-white'
+                : 'border-transparent text-gray-500 hover:text-blue-600 hover:bg-gray-50'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      <div className="bg-white rounded-2xl border border-gray-100 p-6">
+        {activeTab === 'profile' && <ProfileSettings />}
+        {activeTab === 'notifications' && <NotificationSettings />}
+        {activeTab === 'privacy' && <PrivacySettings />}
+        {activeTab === 'security' && <SecuritySettings />}
+      </div>
+      <div className="flex justify-end mt-6">
+        <button
+          onClick={handleSave}
+          className="px-6 py-2.5 bg-green-500 text-white rounded-xl font-medium hover:bg-green-600 transition-colors"
+          disabled={isSaving}
+        >
+          {isSaving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
     </div>
   );
 };
