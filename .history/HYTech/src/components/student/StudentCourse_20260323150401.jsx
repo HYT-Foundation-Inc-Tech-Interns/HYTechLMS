@@ -405,17 +405,6 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
       questionResults,
       passed: percentage >= 60
     });
-
-    setQuizAttemptHistory((prev) => [
-      {
-        id: Date.now(),
-        quizId: selectedQuiz.id,
-        score: percentage,
-        passed: percentage >= 60,
-        submittedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      },
-      ...prev,
-    ]);
     
     setQuizSubmitted(true);
     exitFullscreen();
@@ -779,13 +768,8 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
 
       {/* Announcement Modal */}
       {showAnnouncementModal && selectedAnnouncement && (
-        <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6">
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setShowAnnouncementModal(false)}
-          />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-          <div className="relative bg-white rounded-2xl w-full max-w-2xl max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] shadow-2xl animate-slide-up overflow-hidden flex flex-col">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl animate-slide-up">
             {/* Header */}
             <div className="p-6 border-b border-gray-100">
               <div className="flex items-start justify-between">
@@ -803,7 +787,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                   <span className="text-sm text-gray-400">Posted {selectedAnnouncement.time}</span>
                   <button 
                     onClick={() => setShowAnnouncementModal(false)}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="p-2 hover:bg-gray-100:bg-gray-700 rounded-lg transition-colors"
                   >
                     <X className="w-5 h-5 text-gray-500" />
                   </button>
@@ -812,7 +796,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
             </div>
 
             {/* Content */}
-            <div className="p-6 overflow-y-auto">
+            <div className="p-6">
               <div className="whitespace-pre-line text-gray-700 leading-relaxed">
                 {selectedAnnouncement.fullMessage}
               </div>
@@ -844,19 +828,13 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
               )}
             </div>
           </div>
-          </div>
         </div>
       )}
 
       {/* Previous Announcements Modal */}
       {showAnnouncementHistoryModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6">
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setShowAnnouncementHistoryModal(false)}
-          />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-          <div className="relative bg-white rounded-2xl w-full max-w-3xl max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] overflow-hidden shadow-2xl animate-slide-up flex flex-col">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-hidden shadow-2xl animate-slide-up flex flex-col">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-gray-900">Previous Announcements</h2>
@@ -893,19 +871,13 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
               ))}
             </div>
           </div>
-          </div>
         </div>
       )}
 
       {/* Material Details Modal */}
       {showMaterialModal && selectedMaterial && (
-        <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6">
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setShowMaterialModal(false)}
-          />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-          <div className="relative bg-white rounded-2xl w-full max-w-2xl max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] shadow-2xl animate-slide-up overflow-hidden flex flex-col">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl animate-slide-up overflow-hidden">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-gray-100 rounded-lg">
@@ -924,7 +896,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto">
+            <div className="p-6">
               <h3 className="text-sm font-semibold text-gray-700 uppercase mb-2">Description</h3>
               <p className="text-gray-700 leading-relaxed">{selectedMaterial.description}</p>
 
@@ -945,19 +917,13 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
               </div>
             </div>
           </div>
-          </div>
         </div>
       )}
 
       {/* Quiz Assessment Modal */}
       {showQuizInfoModal && selectedQuizInfo && (
-        <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6">
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setShowQuizInfoModal(false)}
-          />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-          <div className="relative bg-white rounded-2xl w-full max-w-2xl max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] shadow-2xl animate-slide-up overflow-hidden flex flex-col">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl animate-slide-up overflow-hidden">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{selectedQuizInfo.title}</h2>
@@ -971,7 +937,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
               </button>
             </div>
 
-            <div className="p-6 space-y-4 overflow-y-auto">
+            <div className="p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-orange-50 rounded-xl p-4">
                   <p className="text-xs text-orange-700 uppercase">Duration</p>
@@ -1027,7 +993,6 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                 Start Quiz
               </button>
             </div>
-          </div>
           </div>
         </div>
       )}
@@ -1344,10 +1309,8 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
 
       {/* Warning Modal for Tab Switching */}
       {showWarningModal && (
-        <div className="fixed inset-0 z-[10000] overflow-y-auto p-4 sm:p-6">
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-          <div className="relative bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-2xl border border-gray-200">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-2xl border border-gray-200">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-8 h-8 text-red-600" />
             </div>
@@ -1365,7 +1328,6 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
             >
               Return to Quiz
             </button>
-          </div>
           </div>
         </div>
       )}

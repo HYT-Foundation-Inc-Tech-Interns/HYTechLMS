@@ -309,94 +309,109 @@ const StudentSettings = () => {
               <h4 className="font-medium text-gray-900">{item.title}</h4>
               <p className="text-sm text-gray-500">{item.desc}</p>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={notifications[item.key]}
-                onChange={(e) =>
-                  setNotifications((prev) => ({ ...prev, [item.key]: e.target.checked }))
-                }
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-            </label>
           </div>
-        ))}
-      </div>
-    </div>
-  );
 
-  const PrivacySettings = () => (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <div className="p-4 bg-gray-50 rounded-xl">
-          <div className="flex items-center gap-4 mb-4">
-            <Shield className="w-5 h-5 text-gray-600" />
-            <div>
-              <h4 className="font-medium text-gray-900">Privacy Settings</h4>
-              <p className="text-sm text-gray-500">Control your privacy preferences</p>
+          {/* Account Info */}
+          <div className="bg-gradient-to-br from-[#0D4291] to-[#0B005C] rounded-2xl p-5 text-white">
+            <h3 className="font-bold mb-4">Account Status</h3>
+            
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-white/70">Status</span>
+                <span className="px-2 py-0.5 bg-green-500 rounded-full text-xs font-bold">Active</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-white/70">Member Since</span>
+                <span className="font-medium">Jan 2024</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-white/70">Last Login</span>
+                <span className="font-medium">Today</span>
+              </div>
             </div>
           </div>
-          <label className="flex items-center justify-between text-sm text-gray-700 mb-2">
-            <span>Show profile to classmates</span>
-            <input
-              type="checkbox"
-              checked={privacyForm.showProfileToClassmates}
-              onChange={(e) => setPrivacyForm((prev) => ({ ...prev, showProfileToClassmates: e.target.checked }))}
-            />
-          </label>
-          <label className="flex items-center justify-between text-sm text-gray-700 mb-2">
-            <span>Show email to instructors</span>
-            <input
-              type="checkbox"
-              checked={privacyForm.showEmailToInstructors}
-              onChange={(e) => setPrivacyForm((prev) => ({ ...prev, showEmailToInstructors: e.target.checked }))}
-            />
-          </label>
-          <label className="flex items-center justify-between text-sm text-gray-700">
-            <span>Allow progress analytics insights</span>
-            <input
-              type="checkbox"
-              checked={privacyForm.allowProgressInsights}
-              onChange={(e) => setPrivacyForm((prev) => ({ ...prev, allowProgressInsights: e.target.checked }))}
-            />
-          </label>
         </div>
       </div>
-    </div>
-  );
 
-  const SecuritySettings = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Change Password</h3>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
-            <input
-              type="password"
-              value={passwordForm.currentPassword}
-              onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
-            />
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Change Password</h3>
+              <button onClick={() => setShowPasswordModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <input
+                type="password"
+                placeholder="Current password"
+                value={passwordForm.currentPassword}
+                onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291]"
+              />
+              <input
+                type="password"
+                placeholder="New password"
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291]"
+              />
+              <input
+                type="password"
+                placeholder="Confirm new password"
+                value={passwordForm.confirmPassword}
+                onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291]"
+              />
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setShowPasswordModal(false)} className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+              <button onClick={handleSavePassword} className="px-4 py-2.5 rounded-xl bg-[#0B005C] text-white hover:bg-[#13007a] transition-colors">Save Password</button>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
-            <input
-              type="password"
-              value={passwordForm.newPassword}
-              onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
-            <input
-              type="password"
-              value={passwordForm.confirmPassword}
-              onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
-            />
+        </div>
+      )}
+
+      {showPrivacyModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Privacy Settings</h3>
+              <button onClick={() => setShowPrivacyModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <label className="flex items-center justify-between text-sm text-gray-700">
+                <span>Show profile to classmates</span>
+                <input
+                  type="checkbox"
+                  checked={privacyForm.showProfileToClassmates}
+                  onChange={(e) => setPrivacyForm((prev) => ({ ...prev, showProfileToClassmates: e.target.checked }))}
+                />
+              </label>
+              <label className="flex items-center justify-between text-sm text-gray-700">
+                <span>Show email to instructors</span>
+                <input
+                  type="checkbox"
+                  checked={privacyForm.showEmailToInstructors}
+                  onChange={(e) => setPrivacyForm((prev) => ({ ...prev, showEmailToInstructors: e.target.checked }))}
+                />
+              </label>
+              <label className="flex items-center justify-between text-sm text-gray-700">
+                <span>Allow progress analytics insights</span>
+                <input
+                  type="checkbox"
+                  checked={privacyForm.allowProgressInsights}
+                  onChange={(e) => setPrivacyForm((prev) => ({ ...prev, allowProgressInsights: e.target.checked }))}
+                />
+              </label>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setShowPrivacyModal(false)} className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+              <button onClick={handleSavePrivacy} className="px-4 py-2.5 rounded-xl bg-[#0B005C] text-white hover:bg-[#13007a] transition-colors">Save Privacy</button>
+            </div>
           </div>
         </div>
         <div className="flex justify-end mt-6">
