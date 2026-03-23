@@ -356,6 +356,22 @@ const StudentSettings = () => {
     </div>
   );
 
+  const renderPrivacySettings = () => (
+    <div className="space-y-4">
+      <button
+        type="button"
+        onClick={() => setShowPrivacyModal(true)}
+        className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+      >
+        <div>
+          <h4 className="font-medium text-gray-900 text-left">Privacy Settings</h4>
+          <p className="text-sm text-gray-500 text-left">Manage profile visibility and analytics permissions.</p>
+        </div>
+        <ChevronRight className="w-4 h-4 text-gray-400" />
+      </button>
+    </div>
+  );
+
   const renderSecuritySettings = () => (
     <div className="space-y-4">
       <button
