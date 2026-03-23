@@ -175,7 +175,7 @@ const SignIn = () => {
       <div 
         className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
         style={{
-          backgroundImage: 'url(/images/Image3.jpg)',
+          backgroundImage: 'url(/images/2.png)',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
@@ -186,8 +186,8 @@ const SignIn = () => {
         {/* Content */}
         <div className="relative z-10 flex flex-col items-center justify-center w-full p-12 text-white text-center">
           {/* Logo - Made Much Bigger */}
-          <div className="mb-6 animate-fade-in">
-            <div className="w-56 h-56 mx-auto mb-6 relative translate-y-11 ">
+          <div className="mb-10 animate-fade-in">
+            <div className="w-56 h-56 mx-auto mb-6 relative">
               <div className="absolute inset-0 bg-white/10 rounded-full blur-2xl scale-110" />
               <img 
                 src="/images/hyt_logo.png" 
@@ -205,7 +205,7 @@ const SignIn = () => {
             <h1 className="text-4xl lg:text-6xl font-bold mb-4">
               Welcome to
             </h1>
-            <h2 className="text-3xl lg:text-5xl font-bold text-orange-400">
+            <h2 className="text-3xl lg:text-4xl font-bold text-orange-400">
               HYT Global Institute
             </h2>
           </div>

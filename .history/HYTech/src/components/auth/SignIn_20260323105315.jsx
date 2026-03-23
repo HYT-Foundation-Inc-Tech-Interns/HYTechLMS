@@ -184,10 +184,10 @@ const SignIn = () => {
         <div className="absolute inset-0 bg-navy-500/60" />
         
         {/* Content */}
-        <div className="relative z-10 flex flex-col items-center justify-center w-full p-12 text-white text-center">
+        <div className="relative z-10 flex flex-col items-center justify-center w-full p-100 text-white text-center">
           {/* Logo - Made Much Bigger */}
-          <div className="mb-6 animate-fade-in">
-            <div className="w-56 h-56 mx-auto mb-6 relative translate-y-11 ">
+          <div className="mb-10 animate-fade-in">
+            <div className="w-56 h-56 mx-auto mb-6 relative">
               <div className="absolute inset-0 bg-white/10 rounded-full blur-2xl scale-110" />
               <img 
                 src="/images/hyt_logo.png" 
