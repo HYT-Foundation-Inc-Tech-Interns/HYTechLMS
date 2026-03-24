@@ -12,6 +12,7 @@ const normalizeRole = (role) => {
 
 const getKey = (role, uid) => `${normalizeRole(role)}-avatar-${uid || 'guest'}`;
 
+
 const readAvatar = (role, uid) => {
   try {
     return localStorage.getItem(getKey(role, uid));
@@ -20,50 +21,67 @@ const readAvatar = (role, uid) => {
   }
 };
 
+
 export const useProfileAvatar = (role) => {
   const normalizedRole = useMemo(() => normalizeRole(role), [role]);
   const [uid, setUid] = useState(() => auth?.currentUser?.uid || null);
-  const [avatar, setAvatarState] = useState(() => readAvatar(normalizedRole, auth?.currentUser?.uid || null));
+  const [avatar, setAvatarState] = useState(null);
 
+  // Always fetch avatar from Firestore on first load
+  useEffect(() => {
+    if (!db || !uid) {
+      setAvatarState(null);
+      return;
+    }
+    const settingsRef = doc(db, 'userSettings', uid);
+    let unsub = null;
+    let fetched = false;
+    const fetchAvatar = async () => {
+      try {
+        // One-time fetch for initial load
+        const snapshot = await import('firebase/firestore').then(m => m.getDoc(settingsRef));
+        if (snapshot.exists()) {
+          const roleSettings = snapshot.data()?.[normalizedRole] || null;
+          const remoteAvatar = roleSettings?.avatarUrl || roleSettings?.avatarPreview || null;
+          if (remoteAvatar) {
+            localStorage.setItem(getKey(normalizedRole, uid), remoteAvatar);
+            setAvatarState(remoteAvatar);
+            fetched = true;
+          }
+        }
+      } catch {
+        // fallback to localStorage if fetch fails
+        setAvatarState(readAvatar(normalizedRole, uid));
+      }
+    };
+    fetchAvatar();
+    // Subscribe to changes for live updates
+    unsub = onSnapshot(settingsRef, (snapshot) => {
+      const roleSettings = snapshot.exists() ? snapshot.data()?.[normalizedRole] || null : null;
+      const remoteAvatar = roleSettings?.avatarUrl || roleSettings?.avatarPreview || null;
+      if (remoteAvatar) {
+        localStorage.setItem(getKey(normalizedRole, uid), remoteAvatar);
+        setAvatarState(remoteAvatar);
+      } else {
+        setAvatarState(readAvatar(normalizedRole, uid));
+      }
+    });
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [normalizedRole, uid]);
+
+  // Keep uid in sync with auth state
   useEffect(() => {
     if (!auth) {
       setUid(null);
       return () => {};
     }
-
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUid(user?.uid || null);
     });
-
     return () => unsubscribe();
   }, []);
-
-  useEffect(() => {
-    setAvatarState(readAvatar(normalizedRole, uid));
-  }, [normalizedRole, uid]);
-
-  useEffect(() => {
-    if (!db || !uid) {
-      return () => {};
-    }
-
-    const settingsRef = doc(db, 'userSettings', uid);
-    const unsubscribe = onSnapshot(
-      settingsRef,
-      (snapshot) => {
-        const roleSettings = snapshot.exists() ? snapshot.data()?.[normalizedRole] || null : null;
-        const remoteAvatar = roleSettings?.avatarUrl || roleSettings?.avatarPreview || null;
-
-        if (remoteAvatar) {
-          localStorage.setItem(getKey(normalizedRole, uid), remoteAvatar);
-          setAvatarState(remoteAvatar);
-        }
-      },
-      () => {}
-    );
-
-    return () => unsubscribe();
-  }, [normalizedRole, uid]);
 
   useEffect(() => {
     const syncAvatar = (event) => {
@@ -94,13 +112,11 @@ export const useProfileAvatar = (role) => {
 
   const setAvatar = useCallback((imageData) => {
     const storageKey = getKey(normalizedRole, uid);
-
     if (imageData) {
       localStorage.setItem(storageKey, imageData);
     } else {
       localStorage.removeItem(storageKey);
     }
-
     setAvatarState(imageData || null);
     window.dispatchEvent(
       new CustomEvent('hyt:avatar-updated', { detail: { role: normalizedRole, uid } })

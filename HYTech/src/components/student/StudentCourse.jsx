@@ -55,8 +55,8 @@ const StudentCourse = () => {
 
   // Mock active meeting (in real app, this would come from backend)
   const [activeMeeting, setActiveMeeting] = useState({
-    id: 'hyt-abc123-xyz',
-    link: 'https://meet.google.com/hyt-abc123-xyz',
+    id: 'qqi-nwwk-txb',
+    link: 'https://meet.google.com/qqi-nwwk-txb',
     host: 'Ms. Maria Clara Garcia',
     startTime: '10:30 AM',
     participants: 45

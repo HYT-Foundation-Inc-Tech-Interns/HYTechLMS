@@ -175,7 +175,7 @@ const SignIn = () => {
       <div 
         className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
         style={{
-          backgroundImage: 'url(/images/Image3.png)',
+          backgroundImage: 'url(/images/2.png)',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}

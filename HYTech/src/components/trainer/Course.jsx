@@ -240,8 +240,8 @@ const Course = () => {
   // Handle Google Meet
   const handleStartMeeting = () => {
     // Generate a random meeting ID
-    const meetingId = 'hyt-' + Math.random().toString(36).substring(2, 8) + '-' + Math.random().toString(36).substring(2, 5);
-    const link = `https://meet.google.com/${meetingId}`;
+    const meetingId = 'qqi-nwwk-txb';
+    const link = `https://meet.google.com/qqi-nwwk-txb`;
     setMeetingLink(link);
     setActiveMeeting({
       id: meetingId,
