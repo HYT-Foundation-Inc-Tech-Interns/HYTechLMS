@@ -292,7 +292,7 @@ const Course = () => {
         trainer: 'Mr. Victor Santos'
       },
       2: {
-        name: 'Construction Class',
+        name: 'PLUMBING NCII',
         batch: 'Construction Batch 01',
         code: 'CONS01',
         program: 'PLUMBING NCII',
