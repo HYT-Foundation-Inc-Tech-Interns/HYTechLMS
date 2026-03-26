@@ -270,6 +270,7 @@ const UserManagement = () => {
     switch (role.toLowerCase()) {
       case 'admin': return 'bg-purple-100 text-purple-600';
       case 'trainer': return 'bg-blue-100 text-blue-600';
+      case 'supervisor': return 'bg-indigo-100 text-indigo-600';
       case 'student': return 'bg-green-100 text-green-600';
       default: return 'bg-gray-100 text-gray-600';
     }
@@ -555,6 +556,7 @@ const UserManagement = () => {
                     <option value="">Select</option>
                     <option value="Admin">Admin</option>
                     <option value="Trainer">Trainer</option>
+                    <option value="Supervisor">Supervisor</option>
                     <option value="Student">Student</option>
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
@@ -780,6 +782,7 @@ const UserManagement = () => {
                     <option value="">Select</option>
                     <option value="Admin">Admin</option>
                     <option value="Trainer">Trainer</option>
+                    <option value="Supervisor">Supervisor</option>
                     <option value="Student">Student</option>
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />

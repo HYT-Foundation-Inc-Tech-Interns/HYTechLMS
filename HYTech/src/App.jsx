@@ -25,6 +25,15 @@ import SectorDetail from './components/trainer/SectorDetail';
 import ArchivedCourses from './components/trainer/ArchivedCourses';
 import TrainerSettings from './components/trainer/TrainerSettings';
 
+// Supervisor imports
+import SupervisorDashboardLayout from './components/layout/SupervisorDashboardLayout';
+import SupervisorHome from './components/supervisor/SupervisorHome';
+import SupervisorTrainers from './components/supervisor/SupervisorTrainers';
+import SupervisorStudents from './components/supervisor/SupervisorStudents';
+import SupervisorCourses from './components/supervisor/SupervisorCourses';
+import SupervisorReports from './components/supervisor/SupervisorReports';
+import SupervisorSettings from './components/supervisor/SupervisorSettings';
+
 // Student imports
 import StudentDashboardLayout from './components/student/StudentDashboardLayout';
 import StudentHome from './components/student/StudentHome';
@@ -92,6 +101,24 @@ function App() {
           <Route path="archived" element={<ArchivedCourses />} />
           <Route path="settings" element={<TrainerSettings />} />
           <Route path="notifications" element={<NotificationsPage role="trainer" />} />
+        </Route>
+
+        {/* Supervisor Dashboard Routes */}
+        <Route
+          path="/supervisor"
+          element={(
+            <RoleProtectedRoute allowedRole="supervisor">
+              <SupervisorDashboardLayout />
+            </RoleProtectedRoute>
+          )}
+        >
+          <Route index element={<SupervisorHome />} />
+          <Route path="trainers" element={<SupervisorTrainers />} />
+          <Route path="students" element={<SupervisorStudents />} />
+          <Route path="courses" element={<SupervisorCourses />} />
+          <Route path="reports" element={<SupervisorReports />} />
+          <Route path="settings" element={<SupervisorSettings />} />
+          <Route path="notifications" element={<NotificationsPage role="supervisor" />} />
         </Route>
 
         {/* Student Dashboard Routes */}

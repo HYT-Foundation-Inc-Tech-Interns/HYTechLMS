@@ -31,6 +31,18 @@ const INITIAL_STAFF_ACCOUNTS = [
     role: 'trainer',
     name: 'Initial Trainer',
   },
+  {
+    email: 'supervisor@hytech.com',
+    password: 'supervisor1234',
+    role: 'supervisor',
+    name: 'Initial Supervisor',
+  },
+  {
+    email: 'student@hytech.com',
+    password: 'student1234',
+    role: 'student',
+    name: 'Initial Student',
+  },
 ];
 
 const SignIn = () => {
@@ -105,7 +117,7 @@ const SignIn = () => {
       createdAt: serverTimestamp(),
     });
 
-    addToast(`${initialAccount.role === 'admin' ? 'Admin' : 'Trainer'} account initialized.`, 'info');
+    addToast(`${initialAccount.name} initialized.`, 'info');
     return credential;
   };
 

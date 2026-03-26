@@ -3,6 +3,7 @@ import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/
 export const ROLE_HOME = {
   admin: '/admin',
   trainer: '/dashboard',
+  supervisor: '/supervisor',
   student: '/student',
 };
 
@@ -15,6 +16,9 @@ export const inferRoleFromEmail = (email) => {
   }
   if (normalizedEmail === 'trainer@hytech.com') {
     return 'trainer';
+  }
+  if (normalizedEmail === 'supervisor@hytech.com') {
+    return 'supervisor';
   }
   return 'student';
 };
