@@ -37,7 +37,11 @@ const Settings = () => {
 
   // Account form state
   const [accountForm, setAccountForm] = useState({
-    fullName: 'Coconut',
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    nameExtension: '',
+    birthDate: '',
     emailAddress: '',
     fullAddress: '167 Brgy. Yehey, Quezon City, Philippines',
     contactNumber: '',
@@ -148,12 +152,15 @@ const Settings = () => {
         }
 
         const data = userDoc.data() || {};
-        const fullName = String(data.name || `${data.firstName || ''} ${data.lastName || ''}`).trim();
         const emailValue = auth?.currentUser?.email || data.email || '';
 
         setAccountForm((prev) => ({
           ...prev,
-          fullName: fullName || prev.fullName,
+          firstName: data.firstName || prev.firstName,
+          middleName: data.middleName || prev.middleName,
+          lastName: data.lastName || prev.lastName,
+          nameExtension: data.nameExtension || prev.nameExtension,
+          birthDate: data.birthDate || prev.birthDate,
           fullAddress: data.address || prev.fullAddress,
           contactNumber: data.phone || prev.contactNumber,
           email: emailValue,
@@ -267,15 +274,17 @@ const Settings = () => {
       });
 
       if (uid && db) {
-        const trimmedName = accountForm.fullName.trim();
-        const nameParts = trimmedName.split(/\s+/).filter(Boolean);
+        const fullName = `${accountForm.firstName.trim()} ${accountForm.middleName.trim()} ${accountForm.lastName.trim()}${accountForm.nameExtension.trim() ? ` ${accountForm.nameExtension.trim()}` : ''}`.replace(/\s+/g, ' ').trim();
         await setDoc(
           doc(db, 'users', uid),
           {
             uid,
-            firstName: nameParts[0] || '',
-            lastName: nameParts.slice(1).join(' '),
-            name: trimmedName,
+            firstName: accountForm.firstName.trim(),
+            middleName: accountForm.middleName.trim(),
+            lastName: accountForm.lastName.trim(),
+            nameExtension: accountForm.nameExtension.trim(),
+            birthDate: accountForm.birthDate,
+            name: fullName,
             email: auth?.currentUser?.email || accountForm.email,
             phone: accountForm.contactNumber.trim(),
             address: accountForm.fullAddress.trim(),
@@ -367,12 +376,52 @@ const Settings = () => {
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Full Name:</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">First Name <span className="text-red-500">*</span></label>
             <input
               type="text"
-              value={accountForm.fullName}
-              onChange={(e) => setAccountForm({ ...accountForm, fullName: e.target.value })}
+              value={accountForm.firstName}
+              onChange={(e) => setAccountForm({ ...accountForm, firstName: e.target.value })}
               className="input-field"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Middle Name</label>
+            <input
+              type="text"
+              value={accountForm.middleName}
+              onChange={(e) => setAccountForm({ ...accountForm, middleName: e.target.value })}
+              className="input-field"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Last Name <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              value={accountForm.lastName}
+              onChange={(e) => setAccountForm({ ...accountForm, lastName: e.target.value })}
+              className="input-field"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Name Extension</label>
+            <input
+              type="text"
+              placeholder="Jr., Sr., III, etc."
+              value={accountForm.nameExtension}
+              onChange={(e) => setAccountForm({ ...accountForm, nameExtension: e.target.value })}
+              className="input-field"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Birth Date <span className="text-red-500">*</span></label>
+            <input
+              type="date"
+              value={accountForm.birthDate}
+              onChange={(e) => setAccountForm({ ...accountForm, birthDate: e.target.value })}
+              className="input-field"
+              required
             />
           </div>
           <div>
@@ -850,50 +899,58 @@ const Settings = () => {
   };
 
   return (
-    <div className="space-y-6 pb-6 lg:pb-8">
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-4">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
+    <div className="p-6 lg:p-8">
+      <div className="w-full">
+        <div className="mb-4 flex items-center gap-3">
+          <User className="w-6 h-6 text-blue-600" />
+          <span className="text-lg font-semibold text-gray-900">
+            {`${accountForm.firstName || ''} ${accountForm.middleName || ''} ${accountForm.lastName || ''}${accountForm.nameExtension ? ` ${accountForm.nameExtension}` : ''}`.replace(/\s+/g, ' ').trim() || 'Administrator'}
+          </span>
+        </div>
+
+        <div className="mb-6 flex gap-2 border-b border-gray-200 overflow-x-auto">
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
+              className={`flex items-center gap-2 px-4 py-2 -mb-px border-b-2 transition-colors font-medium text-sm whitespace-nowrap ${
                 activeTab === tab.id
-                  ? 'bg-navy-500 text-white shadow-lg shadow-navy-500/30'
-                  : 'text-gray-600 hover:bg-gray-100:bg-gray-700'
+                  ? 'border-blue-600 text-blue-600 bg-white'
+                  : 'border-transparent text-gray-500 hover:text-blue-600 hover:bg-gray-50'
               }`}
             >
-              <Icon className="w-4 h-4" />
-              <span className="hidden sm:inline">{tab.label}</span>
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
             </button>
-          );
-        })}
-      </div>
+          ))}
+        </div>
 
-      {/* Tab Content */}
-      <div className="card p-6 animate-fade-in">
-        {renderTabContent()}
-      </div>
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 animate-fade-in">
+          {renderTabContent()}
+        </div>
 
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <button
-          onClick={handleSaveAll}
-          disabled={isSaving}
-          className={`flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-lg font-semibold shadow-lg shadow-green-500/30 ${isSaving ? 'opacity-60 cursor-not-allowed' : 'hover:bg-green-600 transition-colors'}`}
-        >
-          {isSaving ? (
-            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-            </svg>
-          ) : (
-            <Save className="w-5 h-5" />
-          )}
-          <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
-        </button>
+        <div className="flex justify-end mt-6">
+          <button
+            onClick={handleSaveAll}
+            disabled={isSaving}
+            className="inline-flex items-center gap-2 px-6 py-2.5 bg-green-500 text-white rounded-xl font-medium hover:bg-green-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isSaving ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                </svg>
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Save Changes
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

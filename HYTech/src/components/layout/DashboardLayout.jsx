@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet, useLocation, useParams } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import HytBot from '../hytbot/HytBot';
 
 const TRAINER_COURSE_TITLES = {
   1: 'AUTOMOTIVE SERVICES NCII',
@@ -27,29 +28,29 @@ const DashboardLayout = () => {
   const getPageInfo = () => {
     const path = location.pathname;
     
-    if (path === '/dashboard') {
+    if (path === '/trainer') {
       return { title: '', subtitle: '' };
     }
-    if (path.includes('/dashboard/courses/')) {
+    if (path.includes('/trainer/courses/')) {
       const activeCourseTitle = TRAINER_COURSE_TITLES[Number(params.courseId)] || 'Course';
       return { title: activeCourseTitle, subtitle: 'Your earned certifications and progress toward new ones.' };
     }
-    if (path === '/dashboard/tasks') {
+    if (path === '/trainer/tasks') {
       return { title: 'Tasks', subtitle: 'Your earned certifications and progress toward new ones.' };
     }
-    if (path.includes('/dashboard/sectors/')) {
+    if (path.includes('/trainer/sectors/')) {
       return { title: 'Sectors', subtitle: 'Training Regulations' };
     }
-    if (path === '/dashboard/sectors') {
+    if (path === '/trainer/sectors') {
       return { title: 'Sectors', subtitle: 'Training Regulations' };
     }
-    if (path === '/dashboard/archived') {
+    if (path === '/trainer/archived') {
       return { title: 'Archived Courses', subtitle: 'Your earned certifications and progress toward new ones.' };
     }
-    if (path === '/dashboard/settings') {
+    if (path === '/trainer/settings') {
       return { title: 'Settings', subtitle: 'Configure your Learning Management System.' };
     }
-    if (path === '/dashboard/notifications') {
+    if (path === '/trainer/notifications') {
       return { title: 'Notifications', subtitle: 'View all trainer notifications and updates.' };
     }
     return { title: '', subtitle: '' };
@@ -72,6 +73,7 @@ const DashboardLayout = () => {
           </div>
         </main>
       </div>
+      <HytBot embedded />
     </div>
   );
 };

@@ -82,7 +82,7 @@ const TrainerSectors = () => {
           return (
             <div
               key={sector.id}
-              onClick={() => navigate(`/dashboard/sectors/${sector.id}`)}
+              onClick={() => navigate(`/trainer/sectors/${sector.id}`)}
               className="flex items-center justify-between p-5 hover:bg-blue-50/50:bg-gray-700/50 transition-all duration-200 cursor-pointer group"
             >
               <div className="flex items-center gap-4">

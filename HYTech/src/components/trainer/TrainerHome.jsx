@@ -167,7 +167,7 @@ const TrainerHome = () => {
   const CourseCard = ({ course }) => (
     <div 
       className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
-      onClick={() => navigate(`/dashboard/courses/${course.id}`)}
+      onClick={() => navigate(`/trainer/courses/${course.id}`)}
     >
       {/* Course Image */}
       <div className={`relative h-48 overflow-hidden bg-gradient-to-br ${course.color}`}>

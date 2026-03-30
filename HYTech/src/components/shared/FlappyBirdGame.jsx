@@ -247,7 +247,6 @@ const FlappyBirdGame = ({ onClose }) => {
               onError={(e) => { e.target.style.display = 'none'; }}
             />
             <span className="text-white font-bold text-sm tracking-wide">HYTech Flappy Bird</span>
-            <span className="text-xs text-white/40 ml-1">— secret mode 🐣</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-white text-sm font-semibold bg-orange-500 px-3 py-0.5 rounded-full">

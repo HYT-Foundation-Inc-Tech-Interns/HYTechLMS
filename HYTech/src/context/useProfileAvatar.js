@@ -42,7 +42,7 @@ export const useProfileAvatar = (role) => {
         const snapshot = await import('firebase/firestore').then(m => m.getDoc(settingsRef));
         if (snapshot.exists()) {
           const roleSettings = snapshot.data()?.[normalizedRole] || null;
-          const remoteAvatar = roleSettings?.avatarUrl || roleSettings?.avatarPreview || null;
+          const remoteAvatar = roleSettings?.avatarUrl || roleSettings?.avatarPreview || roleSettings?.avatarBase64 || null;
           if (remoteAvatar) {
             localStorage.setItem(getKey(normalizedRole, uid), remoteAvatar);
             setAvatarState(remoteAvatar);
@@ -58,7 +58,7 @@ export const useProfileAvatar = (role) => {
     // Subscribe to changes for live updates
     unsub = onSnapshot(settingsRef, (snapshot) => {
       const roleSettings = snapshot.exists() ? snapshot.data()?.[normalizedRole] || null : null;
-      const remoteAvatar = roleSettings?.avatarUrl || roleSettings?.avatarPreview || null;
+      const remoteAvatar = roleSettings?.avatarUrl || roleSettings?.avatarPreview || roleSettings?.avatarBase64 || null;
       if (remoteAvatar) {
         localStorage.setItem(getKey(normalizedRole, uid), remoteAvatar);
         setAvatarState(remoteAvatar);

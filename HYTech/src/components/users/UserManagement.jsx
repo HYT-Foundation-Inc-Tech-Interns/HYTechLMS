@@ -6,18 +6,18 @@ import {
   MoreVertical, 
   Eye, 
   Edit2, 
-  Trash2,
   X,
   ChevronLeft,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  Mail
 } from 'lucide-react';
-import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
+import { createUserWithEmailAndPassword, getAuth, sendPasswordResetEmail } from 'firebase/auth';
 import { deleteApp, initializeApp } from 'firebase/app';
 import {
   collection,
-  deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -25,17 +25,18 @@ import {
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import { db, firebaseConfig, firebaseInitError, hasValidFirebaseConfig } from '../../firebase';
+import { auth, db, firebaseConfig, firebaseInitError, hasValidFirebaseConfig } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
 
 const UserManagement = () => {
   const { addToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -51,6 +52,7 @@ const UserManagement = () => {
     middleName: '',
     lastName: '',
     nameExtension: '',
+    birthDate: '',
     email: '',
     password: '',
     role: '',
@@ -82,6 +84,37 @@ const UserManagement = () => {
       setIsLoadingUsers(false);
       return;
     }
+
+    const ensureCurrentSignedInUserDoc = async () => {
+      const currentUser = auth?.currentUser;
+      if (!currentUser?.uid) return;
+
+      try {
+        const currentUserRef = doc(db, 'users', currentUser.uid);
+        const currentUserSnap = await getDoc(currentUserRef);
+        if (currentUserSnap.exists()) return;
+
+        const normalizedEmail = String(currentUser.email || '').trim().toLowerCase();
+        const fallbackName = normalizedEmail.split('@')[0] || 'User';
+        await setDoc(
+          currentUserRef,
+          {
+            uid: currentUser.uid,
+            name: fallbackName,
+            email: normalizedEmail,
+            role: 'admin',
+            status: 'Active',
+            createdAt: serverTimestamp(),
+            createdBy: 'system-backfill',
+          },
+          { merge: true }
+        );
+      } catch {
+        // Non-blocking backfill: users list listener still works.
+      }
+    };
+
+    ensureCurrentSignedInUserDoc();
 
     const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'asc'));
     const unsubscribe = onSnapshot(
@@ -135,6 +168,11 @@ const UserManagement = () => {
       return;
     }
 
+    if (!newUser.birthDate) {
+      addToast('Please select a birth date to generate the temporary password.', 'error');
+      return;
+    }
+
     if (newUser.password.length < 8) {
       addToast('Temporary password must be at least 8 characters.', 'error');
       return;
@@ -184,6 +222,7 @@ const UserManagement = () => {
         middleName: '',
         lastName: '',
         nameExtension: '',
+        birthDate: '',
         email: '',
         password: '',
         role: '',
@@ -208,15 +247,49 @@ const UserManagement = () => {
 
   const handleDeleteUser = () => {
     if (selectedUser) {
-      deleteDoc(doc(db, 'users', selectedUser.id))
-        .then(() => {
-          addToast('User removed from Firestore.', 'success');
-          setShowDeleteModal(false);
-          setSelectedUser(null);
-        })
-        .catch(() => {
-          addToast('Unable to delete user.', 'error');
-        });
+      // Delete removed: replaced by deactivation toggle. Keep function stub removed.
+    }
+  };
+
+  const toggleUserStatus = async (user) => {
+    if (!user || !db) return;
+    const newStatus = user.status === 'Active' ? 'Inactive' : 'Active';
+    try {
+      await updateDoc(doc(db, 'users', user.id), {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+      });
+      addToast(`User marked ${newStatus}.`, 'success');
+    } catch {
+      addToast('Unable to update user status.', 'error');
+    }
+  };
+
+  const handleResetPassword = async (user) => {
+    if (!user || !auth) return;
+    setSelectedUser(user);
+    setShowResetPasswordModal(true);
+    setActiveDropdown(null);
+  };
+
+  const sendResetEmail = async () => {
+    if (!selectedUser || !selectedUser.email) return;
+
+    setIsResettingPassword(true);
+    try {
+      await sendPasswordResetEmail(auth, selectedUser.email);
+      addToast(`Password reset email sent to ${selectedUser.email}.`, 'success');
+      setShowResetPasswordModal(false);
+      setSelectedUser(null);
+    } catch (error) {
+      const errorMessages = {
+        'auth/user-not-found': 'User not found in authentication system.',
+        'auth/invalid-email': 'Invalid email address.',
+        'auth/too-many-requests': 'Too many attempts. Please try again later.',
+      };
+      addToast(errorMessages[error?.code] || 'Unable to send reset email. Please try again.', 'error');
+    } finally {
+      setIsResettingPassword(false);
     }
   };
 
@@ -312,9 +385,6 @@ const UserManagement = () => {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="table-header w-12">
-                  <input type="checkbox" className="w-4 h-4 rounded border-gray-300" />
-                </th>
                 <th className="table-header w-12">#</th>
                 <th className="table-header">NAME</th>
                 <th className="table-header">ROLE</th>
@@ -325,12 +395,12 @@ const UserManagement = () => {
             <tbody className="divide-y divide-gray-100">
               {isLoadingUsers && (
                 <tr>
-                  <td className="table-cell text-center text-gray-500" colSpan={6}>Loading users...</td>
+                  <td className="table-cell text-center text-gray-500" colSpan={5}>Loading users...</td>
                 </tr>
               )}
               {!isLoadingUsers && paginatedUsers.length === 0 && (
                 <tr>
-                  <td className="table-cell text-center text-gray-500" colSpan={6}>No users found.</td>
+                  <td className="table-cell text-center text-gray-500" colSpan={5}>No users found.</td>
                 </tr>
               )}
               {paginatedUsers.map((user, index) => (
@@ -339,9 +409,6 @@ const UserManagement = () => {
                   className="hover:bg-gray-50:bg-gray-700 transition-colors animate-fade-in"
                   style={{ animationDelay: `${index * 0.05}s` }}
                 >
-                  <td className="table-cell">
-                    <input type="checkbox" className="w-4 h-4 rounded border-gray-300" />
-                  </td>
                   <td className="table-cell text-gray-500">{startIndex + index + 1}</td>
                   <td className="table-cell">
                     <div>
@@ -355,7 +422,9 @@ const UserManagement = () => {
                     </span>
                   </td>
                   <td className="table-cell">
-                    <span className="badge-success">{user.status}</span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${user.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {user.status}
+                    </span>
                   </td>
                   <td className="table-cell relative" ref={activeDropdown === user.id ? dropdownRef : null}>
                     <button
@@ -366,31 +435,38 @@ const UserManagement = () => {
                     </button>
                     
                     {activeDropdown === user.id && (
-                      <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-10 min-w-[120px] animate-slide-down">
+                      <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-10 min-w-[160px] animate-slide-down">
                         <button 
                           onClick={() => handleViewUser(user)}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-sm"
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-700 hover:bg-gray-50 transition-colors text-sm whitespace-nowrap"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-4 h-4 flex-shrink-0" />
                           <span>View</span>
                         </button>
                         <button 
                           onClick={() => handleEditUser(user)}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-sm"
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-700 hover:bg-gray-50 transition-colors text-sm whitespace-nowrap"
                         >
-                          <Edit2 className="w-4 h-4" />
+                          <Edit2 className="w-4 h-4 flex-shrink-0" />
                           <span>Edit</span>
                         </button>
-                        <button 
-                          onClick={() => {
-                            setSelectedUser(user);
-                            setShowDeleteModal(true);
-                            setActiveDropdown(null);
-                          }}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 transition-colors text-sm"
+                        <button
+                          onClick={() => handleResetPassword(user)}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-700 hover:bg-gray-50 transition-colors text-sm whitespace-nowrap"
                         >
-                          <Trash2 className="w-4 h-4" />
-                          <span>Delete</span>
+                          <Mail className="w-4 h-4 flex-shrink-0" />
+                          <span>Reset Password</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setActiveDropdown(null);
+                            toggleUserStatus(user);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-700 hover:bg-gray-50 transition-colors text-sm whitespace-nowrap"
+                        >
+                          <span className={`${user.status === 'Active' ? 'text-red-600' : 'text-green-600'}`}>
+                            {user.status === 'Active' ? 'Mark Inactive' : 'Mark Active'}
+                          </span>
                         </button>
                       </div>
                     )}
@@ -516,6 +592,27 @@ const UserManagement = () => {
                   className="input-field"
                 />
               </div>
+              <div className="sm:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Birth Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={newUser.birthDate}
+                  onChange={(e) => {
+                    const birthDate = e.target.value;
+                    setNewUser({ ...newUser, birthDate });
+                    // Auto-generate password
+                    if (birthDate && newUser.lastName) {
+                      const birthYear = new Date(birthDate).getFullYear();
+                      const generatedPassword = `${newUser.lastName.toLowerCase()}_hytech_${birthYear}`;
+                      setNewUser(prev => ({ ...prev, password: generatedPassword }));
+                    }
+                  }}
+                  className="input-field"
+                  required
+                />
+              </div>
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Email <span className="text-red-500">*</span>
@@ -534,13 +631,16 @@ const UserManagement = () => {
                   Temporary Password <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="password"
+                  type="text"
                   value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  placeholder="Minimum 8 characters"
-                  className="input-field"
+                  readOnly
+                  placeholder="lastname_hytech_year-of-birth"
+                  className="input-field bg-gray-50 cursor-not-allowed"
                   required
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Format: lastname_hytech_year-of-birth
+                </p>
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -586,42 +686,7 @@ const UserManagement = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && selectedUser && (
-        <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6">
-          <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setShowDeleteModal(false)}
-          />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-scale-in">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Trash2 className="w-8 h-8 text-red-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">Delete User</h3>
-                <p className="text-gray-500 mb-6">
-                  Are you sure you want to delete <strong>{selectedUser.name}</strong>? This action cannot be undone.
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowDeleteModal(false)}
-                    className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDeleteUser}
-                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Delete action removed — use Mark Active/Inactive toggle instead. */}
 
       {/* View User Modal */}
       {showViewModal && selectedUser && (
@@ -806,6 +871,62 @@ const UserManagement = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Modal */}
+      {showResetPasswordModal && selectedUser && (
+        <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6">
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowResetPasswordModal(false)}
+          />
+          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md animate-scale-in">
+              <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                <h2 className="text-lg font-semibold text-gray-900">Reset Password</h2>
+                <button
+                  onClick={() => setShowResetPasswordModal(false)}
+                  className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                  disabled={isResettingPassword}
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-gray-600">
+                  Send a password reset email to:
+                </p>
+                <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                  <p className="font-medium text-gray-900">{selectedUser.name}</p>
+                  <p className="text-sm text-gray-600">{selectedUser.email}</p>
+                </div>
+                <p className="text-xs text-gray-500">
+                  They will receive an email with instructions to reset their password.
+                </p>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPasswordModal(false)}
+                    className="flex-1 px-5 py-2.5 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition-colors"
+                    disabled={isResettingPassword}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={sendResetEmail}
+                    disabled={isResettingPassword}
+                    className="flex-1 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isResettingPassword ? 'Sending...' : 'Send Email'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import StudentSidebar from './StudentSidebar';
 import StudentNavbar from './StudentNavbar';
+import HytBot from '../hytbot/HytBot';
 
 const StudentDashboardLayout = () => {
   const location = useLocation();
@@ -54,6 +55,7 @@ const StudentDashboardLayout = () => {
           </div>
         </main>
       </div>
+      <HytBot embedded />
     </div>
   );
 };

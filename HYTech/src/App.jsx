@@ -86,7 +86,7 @@ function App() {
 
         {/* Trainer Dashboard Routes */}
         <Route
-          path="/dashboard"
+          path="/trainer"
           element={(
             <RoleProtectedRoute allowedRole="trainer">
               <DashboardLayout />

@@ -28,7 +28,10 @@ const TrainerSettings = () => {
   });
   const [profileForm, setProfileForm] = useState({
     firstName: 'Trainer',
+    middleName: '',
     lastName: 'User',
+    nameExtension: '',
+    birthDate: '',
     email: 'trainer@hytglobal.com',
     phone: '+63 912 345 6789',
     bio: '',
@@ -95,7 +98,10 @@ useEffect(() => {
       setProfileForm((prev) => ({
         ...prev,
         firstName: data.firstName || fallbackName[0] || prev.firstName,
+        middleName: data.middleName || prev.middleName,
         lastName: data.lastName || fallbackName.slice(1).join(' ') || prev.lastName,
+        nameExtension: data.nameExtension || prev.nameExtension,
+        birthDate: data.birthDate || prev.birthDate,
         email: auth?.currentUser?.email || data.email || prev.email,
         phone: data.phone || prev.phone,
         bio: data.bio || prev.bio,
@@ -157,13 +163,17 @@ const handleSave = async () => {
     });
 
     if (uid && db) {
+      const fullName = `${profileForm.firstName.trim()} ${profileForm.middleName.trim()} ${profileForm.lastName.trim()}${profileForm.nameExtension.trim() ? ` ${profileForm.nameExtension.trim()}` : ''}`.replace(/\s+/g, ' ').trim();
       await setDoc(
         doc(db, 'users', uid),
         {
           uid,
           firstName: profileForm.firstName.trim(),
+          middleName: profileForm.middleName.trim(),
           lastName: profileForm.lastName.trim(),
-          name: `${profileForm.firstName.trim()} ${profileForm.lastName.trim()}`.trim(),
+          nameExtension: profileForm.nameExtension.trim(),
+          birthDate: profileForm.birthDate,
+          name: fullName,
           email: auth?.currentUser?.email || profileForm.email,
           phone: profileForm.phone.trim(),
           bio: profileForm.bio.trim(),
@@ -283,7 +293,7 @@ const handleSave = async () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">First Name <span className="text-red-500">*</span></label>
           <input 
             type="text" 
             value={profileForm.firstName}
@@ -292,11 +302,39 @@ const handleSave = async () => {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Middle Name</label>
+          <input 
+            type="text" 
+            value={profileForm.middleName}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, middleName: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Last Name <span className="text-red-500">*</span></label>
           <input 
             type="text" 
             value={profileForm.lastName}
             onChange={(e) => setProfileForm((prev) => ({ ...prev, lastName: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Name Extension</label>
+          <input 
+            type="text" 
+            placeholder="Jr., Sr., III, etc."
+            value={profileForm.nameExtension}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, nameExtension: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Birth Date <span className="text-red-500">*</span></label>
+          <input 
+            type="date" 
+            value={profileForm.birthDate}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, birthDate: e.target.value }))}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
@@ -499,54 +537,56 @@ const handleSave = async () => {
 
   return (
     <div className="p-6 lg:p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          {/* Tabs */}
-          <div className="flex border-b border-gray-100">
-            {tabs.map(tab => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
-                    activeTab === tab.id
-                      ? 'text-blue-600 border-blue-600 bg-blue-50/50'
-                      : 'text-gray-500 border-transparent hover:text-gray-700:text-gray-300 hover:bg-gray-50:bg-gray-700'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
+      <div className="w-full">
+        <div className="mb-4 flex items-center gap-3">
+          <User className="w-6 h-6 text-blue-600" />
+          <span className="text-lg font-semibold text-gray-900">
+            {`${profileForm.firstName || ''} ${profileForm.middleName || ''} ${profileForm.lastName || ''}${profileForm.nameExtension ? ` ${profileForm.nameExtension}` : ''}`.replace(/\s+/g, ' ').trim() || 'Trainer User'}
+          </span>
+        </div>
 
-          {/* Tab Content */}
-          <div className="p-6">
-            {renderTabContent()}
-          </div>
-
-          {/* Save Button */}
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
-            <button 
-              onClick={handleSave}
-              disabled={isSaving}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+        <div className="mb-6 flex gap-2 border-b border-gray-200">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2 -mb-px border-b-2 transition-colors font-medium text-sm ${
+                activeTab === tab.id
+                  ? 'border-blue-600 text-blue-600 bg-white'
+                  : 'border-transparent text-gray-500 hover:text-blue-600 hover:bg-gray-50'
+              }`}
             >
-              {isSaving ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  Save Changes
-                </>
-              )}
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
             </button>
-          </div>
+          ))}
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          {activeTab === 'profile' && renderProfileSettings()}
+          {activeTab === 'notifications' && renderNotificationSettings()}
+          {activeTab === 'appearance' && renderAppearanceSettings()}
+          {activeTab === 'security' && renderSecuritySettings()}
+        </div>
+
+        <div className="flex justify-end mt-6">
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Save Changes
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

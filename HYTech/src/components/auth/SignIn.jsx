@@ -1,22 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, X } from 'lucide-react';
 import {
   browserLocalPersistence,
   browserSessionPersistence,
   createUserWithEmailAndPassword,
   fetchSignInMethodsForEmail,
+  sendPasswordResetEmail,
   setPersistence,
   signInWithEmailAndPassword,
+  signOut,
 } from 'firebase/auth';
 import {
   doc,
+  getDoc,
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
 import { auth, db, firebaseInitError } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
-import { getHomePathForRole, resolveEffectiveRole } from '../../utils/authRole';
+import { getHomePathForRole, inferRoleFromEmail, resolveEffectiveRole } from '../../utils/authRole';
 
 const INITIAL_STAFF_ACCOUNTS = [
   {
@@ -32,6 +35,12 @@ const INITIAL_STAFF_ACCOUNTS = [
     name: 'Initial Trainer',
   },
   {
+    email: 'trainer@hyt.com',
+    password: 'trainer123',
+    role: 'trainer',
+    name: 'Initial Trainer',
+  },
+  {
     email: 'supervisor@hytech.com',
     password: 'supervisor1234',
     role: 'supervisor',
@@ -43,6 +52,24 @@ const INITIAL_STAFF_ACCOUNTS = [
     role: 'student',
     name: 'Initial Student',
   },
+  {
+    email: 'admin@hyt.com',
+    password: 'admin123',
+    role: 'admin',
+    name: 'Initial Admin',
+  },
+  {
+    email: 'supervisor@hyt.com',
+    password: 'supervisor123',
+    role: 'supervisor',
+    name: 'Initial Supervisor',
+  },
+  {
+    email: 'student@hyt.com',
+    password: 'student123',
+    role: 'student',
+    name: 'Initial Student',
+  },
 ];
 
 const SignIn = () => {
@@ -50,6 +77,9 @@ const SignIn = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(() => {
     try {
       const saved = localStorage.getItem(SIGN_IN_DRAFT_KEY);
@@ -89,6 +119,32 @@ const SignIn = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    
+    if (!forgotPasswordEmail.trim()) {
+      addToast('Please enter your email address.', 'error');
+      return;
+    }
+
+    setIsResettingPassword(true);
+    try {
+      await sendPasswordResetEmail(auth, forgotPasswordEmail.trim().toLowerCase());
+      addToast('Password reset email sent! Check your inbox and spam folder.', 'success');
+      setForgotPasswordEmail('');
+      setShowForgotPasswordModal(false);
+    } catch (error) {
+      const errorMessages = {
+        'auth/user-not-found': 'No account found with this email address.',
+        'auth/invalid-email': 'Please enter a valid email address.',
+        'auth/too-many-requests': 'Too many attempts. Please try again later.',
+      };
+      addToast(errorMessages[error?.code] || 'Unable to send password reset email. Please try again.', 'error');
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
   const findInitialStaffMatch = (email, password) =>
     INITIAL_STAFF_ACCOUNTS.find(
       (account) => account.email === email.toLowerCase() && account.password === password
@@ -119,6 +175,38 @@ const SignIn = () => {
 
     addToast(`${initialAccount.name} initialized.`, 'info');
     return credential;
+  };
+
+  const ensureUserProfileDocument = async (firebaseUser) => {
+    const normalizedEmail = String(firebaseUser?.email || '').trim().toLowerCase();
+    const profileRef = doc(db, 'users', firebaseUser.uid);
+    const existingDoc = await getDoc(profileRef);
+
+    if (existingDoc.exists()) {
+      return existingDoc;
+    }
+
+    const initialAccount = INITIAL_STAFF_ACCOUNTS.find(
+      (account) => account.email === normalizedEmail
+    );
+
+    await setDoc(
+      profileRef,
+      {
+        uid: firebaseUser.uid,
+        name: initialAccount?.name || normalizedEmail.split('@')[0] || 'User',
+        email: normalizedEmail,
+        phone: '',
+        role: initialAccount?.role || inferRoleFromEmail(normalizedEmail),
+        status: 'Active',
+        isDefaultAccount: Boolean(initialAccount),
+        createdAt: serverTimestamp(),
+        createdBy: 'system-backfill',
+      },
+      { merge: true }
+    );
+
+    return getDoc(profileRef);
   };
 
   const handleSubmit = async (e) => {
@@ -156,6 +244,23 @@ const SignIn = () => {
         }
 
         credential = createdCredential;
+      }
+
+      // Ensure profile exists so the account appears in User Management.
+      const userSnap = await ensureUserProfileDocument(credential.user);
+
+      // Prevent login if user is marked inactive in Firestore
+      try {
+        const status = userSnap.exists() ? (userSnap.data()?.status || 'Active') : 'Active';
+        if (status !== 'Active') {
+          // Sign out immediately and show message
+          await signOut(auth);
+          addToast('This account is inactive. Contact your administrator.', 'error');
+          return;
+        }
+      } catch (err) {
+        // If we fail to read Firestore, allow fallback to resolve role — but prefer denying on explicit inactive.
+        console.warn('Error checking user status during sign-in', err);
       }
 
       const role = await resolveEffectiveRole({
@@ -305,30 +410,10 @@ const SignIn = () => {
             </div>
 
             {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="sr-only"
-                  />
-                  <div className={`w-5 h-5 border-2 rounded transition-all duration-200 ${
-                    rememberMe ? 'bg-orange-500 border-orange-500' : 'border-gray-300 group-hover:border-orange-400'
-                  }`}>
-                    {rememberMe && (
-                      <svg className="w-full h-full text-white p-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </div>
-                </div>
-                <span className="text-sm text-gray-600">Remember me</span>
-              </label>
+            <div className="flex items-center justify-end">
               <button
                 type="button"
-                onClick={() => addToast('Forgot password flow is not yet enabled.', 'info')}
+                onClick={() => setShowForgotPasswordModal(true)}
                 className="text-sm text-orange-500 hover:text-orange-600 font-medium transition-colors"
               >
                 Forgot Password?
@@ -365,6 +450,69 @@ const SignIn = () => {
         </div>
       </div>
 
+      {/* Forgot Password Modal */}
+      {showForgotPasswordModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6">
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowForgotPasswordModal(false)}
+          />
+          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md animate-scale-in">
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                <h2 className="text-lg font-semibold text-gray-900">Reset Password</h2>
+                <button
+                  onClick={() => setShowForgotPasswordModal(false)}
+                  className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleForgotPassword} className="p-6 space-y-4">
+                <p className="text-sm text-gray-600 mb-4">
+                  Enter your email address and we'll send you a link to reset your password.
+                </p>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={forgotPasswordEmail}
+                    onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    className="input-field"
+                    required
+                    disabled={isResettingPassword}
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPasswordModal(false)}
+                    className="flex-1 px-5 py-2.5 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition-colors"
+                    disabled={isResettingPassword}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isResettingPassword}
+                    className="flex-1 px-5 py-2.5 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isResettingPassword ? 'Sending...' : 'Send Reset Email'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

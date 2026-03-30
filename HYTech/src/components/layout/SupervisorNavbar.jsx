@@ -16,8 +16,10 @@ const SupervisorNavbar = ({ title, subtitle }) => {
   const { settingsData } = useUserSettings('supervisor');
 
   const firstName = settingsData?.profileForm?.firstName?.trim() || '';
+  const middleName = settingsData?.profileForm?.middleName?.trim() || '';
   const lastName = settingsData?.profileForm?.lastName?.trim() || '';
-  const fullName = `${firstName} ${lastName}`.trim() || 'Supervisor';
+  const nameExtension = settingsData?.profileForm?.nameExtension?.trim() || '';
+  const fullName = `${firstName} ${middleName} ${lastName}${nameExtension ? ` ${nameExtension}` : ''}`.replace(/\s+/g, ' ').trim() || 'Supervisor';
   const email = settingsData?.profileForm?.email || auth?.currentUser?.email || 'supervisor@hytech.com';
   const initials = `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || 'SV';
 

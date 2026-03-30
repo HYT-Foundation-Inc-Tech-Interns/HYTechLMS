@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import SupervisorSidebar from './SupervisorSidebar';
 import SupervisorNavbar from './SupervisorNavbar';
+import HytBot from '../hytbot/HytBot';
 
 const SupervisorDashboardLayout = () => {
   const location = useLocation();
@@ -51,6 +52,7 @@ const SupervisorDashboardLayout = () => {
           </div>
         </main>
       </div>
+      <HytBot embedded />
     </div>
   );
 };

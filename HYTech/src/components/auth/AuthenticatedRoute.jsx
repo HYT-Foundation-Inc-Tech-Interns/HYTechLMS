@@ -3,19 +3,16 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from '../../firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { getHomePathForRole, normalizeRole, resolveEffectiveRole } from '../../utils/authRole';
 
-const RoleProtectedRoute = ({ allowedRole, children }) => {
+const AuthenticatedRoute = ({ children }) => {
   const location = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userRole, setUserRole] = useState('');
 
   useEffect(() => {
     if (!auth || !db) {
       setIsLoading(false);
       setIsAuthenticated(false);
-      setUserRole('');
       return () => {};
     }
 
@@ -29,45 +26,29 @@ const RoleProtectedRoute = ({ allowedRole, children }) => {
 
       if (!user) {
         setIsAuthenticated(false);
-        setUserRole('');
         setIsLoading(false);
         return;
       }
 
-      setIsAuthenticated(true);
       setIsLoading(true);
-
       unsubscribeUserStatus = onSnapshot(
         doc(db, 'users', user.uid),
         async (userSnap) => {
           const status = userSnap.exists() ? (userSnap.data()?.status || 'Active') : 'Active';
-
           if (status !== 'Active') {
             await signOut(auth);
             setIsAuthenticated(false);
-            setUserRole('');
             setIsLoading(false);
             return;
           }
 
-          try {
-            const role = await resolveEffectiveRole({ uid: user.uid, email: user.email, database: db });
-            setUserRole(role);
-          } catch {
-            setUserRole('student');
-          } finally {
-            setIsLoading(false);
-          }
+          setIsAuthenticated(true);
+          setIsLoading(false);
         },
-        async () => {
-          try {
-            const role = await resolveEffectiveRole({ uid: user.uid, email: user.email, database: db });
-            setUserRole(role);
-          } catch {
-            setUserRole('student');
-          } finally {
-            setIsLoading(false);
-          }
+        () => {
+          // If status read fails, keep authenticated flow rather than hard-blocking.
+          setIsAuthenticated(true);
+          setIsLoading(false);
         }
       );
     });
@@ -88,17 +69,9 @@ const RoleProtectedRoute = ({ allowedRole, children }) => {
     );
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/signin" replace state={{ from: location }} />;
-  }
-
-  const normalizedAllowedRole = normalizeRole(allowedRole);
-  if (!normalizedAllowedRole || userRole !== normalizedAllowedRole) {
-    const fallbackPath = getHomePathForRole(userRole);
-    return <Navigate to={fallbackPath} replace />;
-  }
+  if (!isAuthenticated) return <Navigate to="/signin" replace state={{ from: location }} />;
 
   return children;
 };
 
-export default RoleProtectedRoute;
+export default AuthenticatedRoute;

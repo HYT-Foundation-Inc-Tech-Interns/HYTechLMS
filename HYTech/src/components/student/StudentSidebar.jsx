@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   Home, 
   BookOpen, 
   ClipboardList, 
   Archive, 
-  Settings, 
+  Settings,
   ChevronUp,
   ChevronDown,
   ChevronRight,
@@ -20,6 +20,15 @@ const StudentSidebar = () => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCoursesExpanded, setIsCoursesExpanded] = useState(true);
   const location = useLocation();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent('hytech:sidebar-collapse', {
+        detail: { isCollapsed },
+      })
+    );
+  }, [isCollapsed]);
 
   const isCoursePath = location.pathname.includes('/student/courses');
 

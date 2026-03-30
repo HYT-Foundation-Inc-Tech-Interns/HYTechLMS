@@ -30,7 +30,10 @@ const SignUp = () => {
       if (!saved) {
         return {
           firstName: '',
+          middleName: '',
           lastName: '',
+          nameExtension: '',
+          birthDate: '',
           email: '',
           phone: '',
           password: '',
@@ -39,7 +42,10 @@ const SignUp = () => {
       const parsed = JSON.parse(saved);
       return {
         firstName: parsed?.firstName || '',
+        middleName: parsed?.middleName || '',
         lastName: parsed?.lastName || '',
+        nameExtension: parsed?.nameExtension || '',
+        birthDate: parsed?.birthDate || '',
         email: parsed?.email || '',
         phone: parsed?.phone || '',
         password: '',
@@ -47,7 +53,10 @@ const SignUp = () => {
     } catch {
       return {
         firstName: '',
+        middleName: '',
         lastName: '',
+        nameExtension: '',
+        birthDate: '',
         email: '',
         phone: '',
         password: '',
@@ -61,7 +70,10 @@ const SignUp = () => {
       SIGN_UP_DRAFT_KEY,
       JSON.stringify({
         firstName: formData.firstName,
+        middleName: formData.middleName,
         lastName: formData.lastName,
+        nameExtension: formData.nameExtension,
+        birthDate: formData.birthDate,
         email: formData.email,
         phone: formData.phone,
         rememberMe,
@@ -102,8 +114,11 @@ const SignUp = () => {
       await setDoc(doc(db, 'users', credential.user.uid), {
         uid: credential.user.uid,
         firstName: formData.firstName.trim(),
+        middleName: formData.middleName.trim(),
         lastName: formData.lastName.trim(),
-        name: `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim(),
+        nameExtension: formData.nameExtension.trim(),
+        birthDate: formData.birthDate,
+        name: `${formData.firstName.trim()} ${formData.middleName.trim()} ${formData.lastName.trim()}${formData.nameExtension.trim() ? ` ${formData.nameExtension.trim()}` : ''}`.replace(/\s+/g, ' ').trim(),
         email: formData.email.trim(),
         phone: formData.phone.trim(),
         role: 'student',
@@ -237,6 +252,25 @@ const SignUp = () => {
 
               <div className="group">
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Middle Name
+                </label>
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <input
+                    type="text"
+                    name="middleName"
+                    value={formData.middleName}
+                    onChange={handleChange}
+                    placeholder="Enter middle name"
+                    className="input-field pl-12"
+                  />
+                </div>
+              </div>
+
+              <div className="group">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Last Name <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -253,6 +287,39 @@ const SignUp = () => {
                     required
                   />
                 </div>
+              </div>
+
+              <div className="group">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Name Extension
+                </label>
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <input
+                    type="text"
+                    name="nameExtension"
+                    value={formData.nameExtension}
+                    onChange={handleChange}
+                    placeholder="Jr., Sr., III, etc."
+                    className="input-field pl-12"
+                  />
+                </div>
+              </div>
+
+              <div className="group">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Birth Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  name="birthDate"
+                  value={formData.birthDate}
+                  onChange={handleChange}
+                  className="input-field"
+                  required
+                />
               </div>
             </div>
 
@@ -324,30 +391,6 @@ const SignUp = () => {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-            </div>
-
-            {/* Remember Me */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="sr-only"
-                  />
-                  <div className={`w-5 h-5 border-2 rounded transition-all duration-200 ${
-                    rememberMe ? 'bg-orange-500 border-orange-500' : 'border-gray-300 group-hover:border-orange-400'
-                  }`}>
-                    {rememberMe && (
-                      <svg className="w-full h-full text-white p-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </div>
-                </div>
-                <span className="text-sm text-gray-600">Remember me next time</span>
-              </label>
             </div>
 
             {/* Submit Button */}

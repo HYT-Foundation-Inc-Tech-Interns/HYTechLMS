@@ -36,7 +36,7 @@ const NotificationDropdown = ({ role = 'student', notifications = [] }) => {
     setShowNotifications(false);
     setIsViewingAll(false);
 
-    const basePath = role === 'admin' ? '/admin' : role === 'trainer' ? '/dashboard' : '/student';
+    const basePath = role === 'admin' ? '/admin' : role === 'trainer' ? '/trainer' : '/student';
     navigate(`${basePath}/notifications`);
   };
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   Home, 
@@ -6,7 +6,7 @@ import {
   ClipboardList, 
   FolderOpen, 
   Archive, 
-  Settings, 
+  Settings,
   ChevronRight,
   ChevronDown,
   ChevronUp,
@@ -20,18 +20,27 @@ const Sidebar = () => {
   const [isCoursesExpanded, setIsCoursesExpanded] = useState(true);
   const location = useLocation();
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent('hytech:sidebar-collapse', {
+        detail: { isCollapsed },
+      })
+    );
+  }, [isCollapsed]);
+
   // Check if current path is a course page
-  const isCoursePath = location.pathname.includes('/dashboard/courses');
+  const isCoursePath = location.pathname.includes('/trainer/courses');
 
   const mainNavItems = [
-    { path: '/dashboard', icon: Home, label: 'Home', exact: true },
+    { path: '/trainer', icon: Home, label: 'Home', exact: true },
   ];
 
   const bottomNavItems = [
-    { path: '/dashboard/tasks', icon: ClipboardList, label: 'Tasks' },
-    { path: '/dashboard/sectors', icon: FolderOpen, label: 'Sectors' },
-    { path: '/dashboard/archived', icon: Archive, label: 'Archived Courses' },
-    { path: '/dashboard/settings', icon: Settings, label: 'Settings' },
+    { path: '/trainer/tasks', icon: ClipboardList, label: 'Tasks' },
+    { path: '/trainer/sectors', icon: FolderOpen, label: 'Sectors' },
+    { path: '/trainer/archived', icon: Archive, label: 'Archived Courses' },
+    { path: '/trainer/settings', icon: Settings, label: 'Settings' },
   ];
 
   // Mock enrolled courses
@@ -140,7 +149,7 @@ const Sidebar = () => {
                   {enrolledCourses.map(course => (
                     <NavLink
                       key={course.id}
-                      to={`/dashboard/courses/${course.id}`}
+                      to={`/trainer/courses/${course.id}`}
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200
                         ${isActive

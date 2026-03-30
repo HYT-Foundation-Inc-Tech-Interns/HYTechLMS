@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
   Home, 
   Users, 
   BookOpen, 
   BarChart3, 
-  Settings, 
+  Settings,
   ChevronRight,
   Menu,
   X
@@ -14,6 +14,15 @@ import {
 const SupervisorSidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent('hytech:sidebar-collapse', {
+        detail: { isCollapsed },
+      })
+    );
+  }, [isCollapsed]);
 
   const mainNavItems = [
     { path: '/supervisor', icon: Home, label: 'Home', exact: true },

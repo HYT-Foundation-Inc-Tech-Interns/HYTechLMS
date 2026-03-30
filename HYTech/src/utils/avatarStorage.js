@@ -56,8 +56,12 @@ export const compressAvatarImageToBase64 = async (file) => {
 
   context.drawImage(image, 0, 0, width, height);
 
+  // Preserve transparency for PNG/GIF/WebP by selecting output mime type
+  const inputType = (file && file.type) || '';
+  const preserveAlpha = inputType.includes('png') || inputType.includes('gif') || inputType.includes('webp');
+  const mimeType = preserveAlpha ? 'image/png' : 'image/jpeg';
   // Convert to base64 string
-  const base64 = canvas.toDataURL('image/jpeg', IMAGE_QUALITY);
+  const base64 = mimeType === 'image/jpeg' ? canvas.toDataURL(mimeType, IMAGE_QUALITY) : canvas.toDataURL(mimeType);
   return {
     base64,
     width,

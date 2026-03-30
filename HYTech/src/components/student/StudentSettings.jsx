@@ -7,7 +7,6 @@ import {
   Phone,
   MapPin,
   Shield,
-  ChevronRight,
   X
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
@@ -27,7 +26,10 @@ const StudentSettings = () => {
   const [activeTab, setActiveTab] = useState('profile');
   const [profileForm, setProfileForm] = useState({
     firstName: 'Gerald Andrei',
+    middleName: '',
     lastName: 'Lat',
+    nameExtension: '',
+    birthDate: '',
     email: 'gerald.lat@email.com',
     phone: '+63 912 345 6789',
     address: 'Makati City, Philippines',
@@ -56,8 +58,6 @@ const StudentSettings = () => {
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [selectedAvatarFile, setSelectedAvatarFile] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   useEffect(() => {
     if (!settingsData || settingsHydratedRef.current) return;
@@ -87,7 +87,10 @@ const StudentSettings = () => {
         setProfileForm((prev) => ({
           ...prev,
           firstName: data.firstName || prev.firstName,
+          middleName: data.middleName || prev.middleName,
           lastName: data.lastName || prev.lastName,
+          nameExtension: data.nameExtension || prev.nameExtension,
+          birthDate: data.birthDate || prev.birthDate,
           email: auth?.currentUser?.email || data.email || prev.email,
           phone: data.phone || prev.phone,
           address: data.address || prev.address,
@@ -133,13 +136,17 @@ const StudentSettings = () => {
       if (!avatarPreview) avatarBase64 = null;
       await saveSettings({ profileForm, notifications, privacyForm, avatarBase64 });
       if (uid && db) {
+        const fullName = `${profileForm.firstName.trim()} ${profileForm.middleName.trim()} ${profileForm.lastName.trim()}${profileForm.nameExtension.trim() ? ` ${profileForm.nameExtension.trim()}` : ''}`.replace(/\s+/g, ' ').trim();
         await setDoc(
           doc(db, 'users', uid),
           {
             uid,
             firstName: profileForm.firstName.trim(),
+            middleName: profileForm.middleName.trim(),
             lastName: profileForm.lastName.trim(),
-            name: `${profileForm.firstName.trim()} ${profileForm.lastName.trim()}`.trim(),
+            nameExtension: profileForm.nameExtension.trim(),
+            birthDate: profileForm.birthDate,
+            name: fullName,
             email: auth?.currentUser?.email || profileForm.email,
             phone: profileForm.phone.trim(),
             address: profileForm.address.trim(),
@@ -255,7 +262,7 @@ const StudentSettings = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">First Name <span className="text-red-500">*</span></label>
           <input
             type="text"
             value={profileForm.firstName}
@@ -264,11 +271,39 @@ const StudentSettings = () => {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Middle Name</label>
+          <input
+            type="text"
+            value={profileForm.middleName}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, middleName: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Last Name <span className="text-red-500">*</span></label>
           <input
             type="text"
             value={profileForm.lastName}
             onChange={(e) => setProfileForm((prev) => ({ ...prev, lastName: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Name Extension</label>
+          <input
+            type="text"
+            placeholder="Jr., Sr., III, etc."
+            value={profileForm.nameExtension}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, nameExtension: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Birth Date <span className="text-red-500">*</span></label>
+          <input
+            type="date"
+            value={profileForm.birthDate}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, birthDate: e.target.value }))}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
@@ -357,30 +392,85 @@ const StudentSettings = () => {
   );
 
   const renderSecuritySettings = () => (
-    <div className="space-y-4">
-      <button
-        type="button"
-        onClick={() => setShowPrivacyModal(true)}
-        className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
-      >
-        <div>
-          <h4 className="font-medium text-gray-900 text-left">Privacy Settings</h4>
-          <p className="text-sm text-gray-500 text-left">Manage profile visibility and analytics permissions.</p>
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Change Password</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
+            <input
+              type="password"
+              value={passwordForm.currentPassword}
+              onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+            <input
+              type="password"
+              value={passwordForm.newPassword}
+              onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
+            <input
+              type="password"
+              value={passwordForm.confirmPassword}
+              onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+            />
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handlePasswordSave}
+              className="px-4 py-2.5 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
+            >
+              Save Password
+            </button>
+          </div>
         </div>
-        <ChevronRight className="w-4 h-4 text-gray-400" />
-      </button>
+      </div>
 
-      <button
-        type="button"
-        onClick={() => setShowPasswordModal(true)}
-        className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
-      >
-        <div>
-          <h4 className="font-medium text-gray-900 text-left">Change Password</h4>
-          <p className="text-sm text-gray-500 text-left">Update your account password.</p>
+      <div className="pt-6 border-t border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Privacy Settings</h3>
+        <div className="space-y-3">
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+            <span className="text-sm font-medium text-gray-800">Show profile to classmates</span>
+            <input
+              type="checkbox"
+              checked={privacyForm.showProfileToClassmates}
+              onChange={(e) => setPrivacyForm((prev) => ({ ...prev, showProfileToClassmates: e.target.checked }))}
+            />
+          </label>
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+            <span className="text-sm font-medium text-gray-800">Show email to instructors</span>
+            <input
+              type="checkbox"
+              checked={privacyForm.showEmailToInstructors}
+              onChange={(e) => setPrivacyForm((prev) => ({ ...prev, showEmailToInstructors: e.target.checked }))}
+            />
+          </label>
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+            <span className="text-sm font-medium text-gray-800">Allow progress analytics insights</span>
+            <input
+              type="checkbox"
+              checked={privacyForm.allowProgressInsights}
+              onChange={(e) => setPrivacyForm((prev) => ({ ...prev, allowProgressInsights: e.target.checked }))}
+            />
+          </label>
+          <div className="flex justify-end">
+            <button
+              onClick={handlePrivacySave}
+              className="px-4 py-2.5 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
+            >
+              Save Privacy
+            </button>
+          </div>
         </div>
-        <ChevronRight className="w-4 h-4 text-gray-400" />
-      </button>
+      </div>
     </div>
   );
 
@@ -389,7 +479,7 @@ const StudentSettings = () => {
       <div className="mb-4 flex items-center gap-3">
         <User className="w-6 h-6 text-blue-600" />
         <span className="text-lg font-semibold text-gray-900">
-          {profileForm.firstName} {profileForm.lastName}
+          {`${profileForm.firstName || ''} ${profileForm.middleName || ''} ${profileForm.lastName || ''}${profileForm.nameExtension ? ` ${profileForm.nameExtension}` : ''}`.replace(/\s+/g, ' ').trim() || 'Student User'}
         </span>
       </div>
 
@@ -416,110 +506,18 @@ const StudentSettings = () => {
         {activeTab === 'security' && renderSecuritySettings()}
       </div>
 
-      <div className="flex justify-end mt-6">
-        <button
-          onClick={handleSave}
-          className="px-6 py-2.5 bg-green-500 text-white rounded-xl font-medium hover:bg-green-600 transition-colors"
-          disabled={isSaving}
-        >
-          {isSaving ? 'Saving...' : 'Save Changes'}
-        </button>
-      </div>
-
-      {showPasswordModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6">
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => setShowPasswordModal(false)}
-          />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-            <div className="relative w-full max-w-md bg-white rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Change Password</h3>
-                <button onClick={() => setShowPasswordModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                  <X className="w-4 h-4 text-gray-500" />
-                </button>
-              </div>
-              <div className="space-y-3">
-                <input
-                  type="password"
-                  placeholder="Current password"
-                  value={passwordForm.currentPassword}
-                  onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291]"
-                />
-                <input
-                  type="password"
-                  placeholder="New password"
-                  value={passwordForm.newPassword}
-                  onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291]"
-                />
-                <input
-                  type="password"
-                  placeholder="Confirm new password"
-                  value={passwordForm.confirmPassword}
-                  onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0D4291]"
-                />
-              </div>
-              <div className="mt-5 flex justify-end gap-2">
-                <button onClick={() => setShowPasswordModal(false)} className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
-                <button onClick={handlePasswordSave} className="px-4 py-2.5 rounded-xl bg-[#0B005C] text-white hover:bg-[#13007a] transition-colors">Save Password</button>
-              </div>
-            </div>
-          </div>
+      {(activeTab === 'profile' || activeTab === 'notifications') && (
+        <div className="flex justify-end mt-6">
+          <button
+            onClick={handleSave}
+            className="px-6 py-2.5 bg-green-500 text-white rounded-xl font-medium hover:bg-green-600 transition-colors"
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </button>
         </div>
       )}
 
-      {showPrivacyModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6">
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => setShowPrivacyModal(false)}
-          />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-            <div className="relative w-full max-w-md bg-white rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Privacy Settings</h3>
-                <button onClick={() => setShowPrivacyModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                  <X className="w-4 h-4 text-gray-500" />
-                </button>
-              </div>
-              <div className="space-y-3">
-                <label className="flex items-center justify-between text-sm text-gray-700">
-                  <span>Show profile to classmates</span>
-                  <input
-                    type="checkbox"
-                    checked={privacyForm.showProfileToClassmates}
-                    onChange={(e) => setPrivacyForm((prev) => ({ ...prev, showProfileToClassmates: e.target.checked }))}
-                  />
-                </label>
-                <label className="flex items-center justify-between text-sm text-gray-700">
-                  <span>Show email to instructors</span>
-                  <input
-                    type="checkbox"
-                    checked={privacyForm.showEmailToInstructors}
-                    onChange={(e) => setPrivacyForm((prev) => ({ ...prev, showEmailToInstructors: e.target.checked }))}
-                  />
-                </label>
-                <label className="flex items-center justify-between text-sm text-gray-700">
-                  <span>Allow progress analytics insights</span>
-                  <input
-                    type="checkbox"
-                    checked={privacyForm.allowProgressInsights}
-                    onChange={(e) => setPrivacyForm((prev) => ({ ...prev, allowProgressInsights: e.target.checked }))}
-                  />
-                </label>
-              </div>
-              <div className="mt-5 flex justify-end gap-2">
-                <button onClick={() => setShowPrivacyModal(false)} className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
-                <button onClick={handlePrivacySave} className="px-4 py-2.5 rounded-xl bg-[#0B005C] text-white hover:bg-[#13007a] transition-colors">Save Privacy</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

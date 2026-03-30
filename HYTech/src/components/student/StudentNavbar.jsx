@@ -16,8 +16,10 @@ const StudentNavbar = ({ title, subtitle }) => {
   const { settingsData } = useUserSettings('student');
 
   const firstName = settingsData?.profileForm?.firstName?.trim() || '';
+  const middleName = settingsData?.profileForm?.middleName?.trim() || '';
   const lastName = settingsData?.profileForm?.lastName?.trim() || '';
-  const fullName = `${firstName} ${lastName}`.trim() || 'Student User';
+  const nameExtension = settingsData?.profileForm?.nameExtension?.trim() || '';
+  const fullName = `${firstName} ${middleName} ${lastName}${nameExtension ? ` ${nameExtension}` : ''}`.replace(/\s+/g, ' ').trim() || 'Student User';
   const email = settingsData?.profileForm?.email || auth?.currentUser?.email || 'student@hytech.com';
   const initials = `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || 'SU';
 

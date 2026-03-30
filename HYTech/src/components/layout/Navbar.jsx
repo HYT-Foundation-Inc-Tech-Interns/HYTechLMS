@@ -16,8 +16,10 @@ const Navbar = ({ title, subtitle }) => {
   const { settingsData } = useUserSettings('trainer');
 
   const firstName = settingsData?.profileForm?.firstName?.trim() || '';
+  const middleName = settingsData?.profileForm?.middleName?.trim() || '';
   const lastName = settingsData?.profileForm?.lastName?.trim() || '';
-  const fullName = `${firstName} ${lastName}`.trim() || 'Trainer';
+  const nameExtension = settingsData?.profileForm?.nameExtension?.trim() || '';
+  const fullName = `${firstName} ${middleName} ${lastName}${nameExtension ? ` ${nameExtension}` : ''}`.replace(/\s+/g, ' ').trim() || 'Trainer';
   const email = settingsData?.profileForm?.email || auth?.currentUser?.email || 'trainer@hytech.com';
   const initials = `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || 'TR';
 
@@ -119,14 +121,14 @@ const Navbar = ({ title, subtitle }) => {
               </div>
               <div className="p-2">
                 <button
-                  onClick={() => navigate('/dashboard/settings')}
+                  onClick={() => navigate('/trainer/settings')}
                   className="w-full flex items-center gap-3 px-3 py-2 text-gray-700 hover:bg-gray-50:bg-gray-700 rounded-lg transition-colors"
                 >
                   <User className="w-4 h-4" />
                   <span className="text-sm">View Profile</span>
                 </button>
                 <button
-                  onClick={() => navigate('/dashboard/settings')}
+                  onClick={() => navigate('/trainer/settings')}
                   className="w-full flex items-center gap-3 px-3 py-2 text-gray-700 hover:bg-gray-50:bg-gray-700 rounded-lg transition-colors"
                 >
                   <Settings className="w-4 h-4" />

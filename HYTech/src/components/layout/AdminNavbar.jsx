@@ -15,7 +15,11 @@ const AdminNavbar = ({ title, subtitle }) => {
   const { avatar } = useProfileAvatar('admin');
   const { settingsData } = useUserSettings('admin');
 
-  const fullName = settingsData?.accountForm?.fullName?.trim() || 'Admin User';
+  const firstName = settingsData?.accountForm?.firstName?.trim() || '';
+  const middleName = settingsData?.accountForm?.middleName?.trim() || '';
+  const lastName = settingsData?.accountForm?.lastName?.trim() || '';
+  const nameExtension = settingsData?.accountForm?.nameExtension?.trim() || '';
+  const fullName = `${firstName} ${middleName} ${lastName}${nameExtension ? ` ${nameExtension}` : ''}`.replace(/\s+/g, ' ').trim() || 'Admin User';
   const email = settingsData?.accountForm?.email || settingsData?.accountForm?.emailAddress || auth?.currentUser?.email || 'admin@hytglobal.com';
   const initials =
     fullName

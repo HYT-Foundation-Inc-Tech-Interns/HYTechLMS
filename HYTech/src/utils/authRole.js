@@ -2,7 +2,7 @@ import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/
 
 export const ROLE_HOME = {
   admin: '/admin',
-  trainer: '/dashboard',
+  trainer: '/trainer',
   supervisor: '/supervisor',
   student: '/student',
 };
@@ -11,14 +11,17 @@ export const normalizeRole = (value) => String(value || '').toLowerCase();
 
 export const inferRoleFromEmail = (email) => {
   const normalizedEmail = String(email || '').trim().toLowerCase();
-  if (normalizedEmail === 'admin@hytech.com') {
+  if (normalizedEmail === 'admin@hytech.com' || normalizedEmail === 'admin@hyt.com') {
     return 'admin';
   }
-  if (normalizedEmail === 'trainer@hytech.com') {
+  if (normalizedEmail === 'trainer@hytech.com' || normalizedEmail === 'trainer@hyt.com') {
     return 'trainer';
   }
-  if (normalizedEmail === 'supervisor@hytech.com') {
+  if (normalizedEmail === 'supervisor@hytech.com' || normalizedEmail === 'supervisor@hyt.com') {
     return 'supervisor';
+  }
+  if (normalizedEmail === 'student@hytech.com' || normalizedEmail === 'student@hyt.com') {
+    return 'student';
   }
   return 'student';
 };

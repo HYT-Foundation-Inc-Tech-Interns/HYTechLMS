@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import AdminSidebar from './AdminSidebar';
 import AdminNavbar from './AdminNavbar';
+import HytBot from '../hytbot/HytBot';
 
 const AdminDashboardLayout = () => {
   const location = useLocation();
@@ -48,6 +49,7 @@ const AdminDashboardLayout = () => {
           </div>
         </main>
       </div>
+      <HytBot embedded />
     </div>
   );
 };
