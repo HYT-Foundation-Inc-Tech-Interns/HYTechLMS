@@ -4,8 +4,8 @@ import { auth, db } from '../../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { useToast } from '../../context/ToastContext';
 
-const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.0-flash';
-const GEMINI_FALLBACK_MODEL = import.meta.env.VITE_GEMINI_FALLBACK_MODEL || 'gemini-1.5-flash';
+const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_FALLBACK_MODEL = import.meta.env.VITE_GEMINI_FALLBACK_MODEL || 'gemini-flash-latest';
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const HYTBOT_API_URL = import.meta.env.VITE_HYTBOT_API_URL;
 const MAX_GEMINI_RETRIES = 2;
@@ -34,6 +34,92 @@ const parseRetryAfterMs = (response) => {
     return retryAfter * 1000;
   }
   return null;
+};
+
+const includesAny = (text, keywords) => keywords.some((keyword) => text.includes(keyword));
+
+const buildLocalFallbackReply = (userMessage, currentRole = 'guest') => {
+  const text = String(userMessage || '').toLowerCase().trim();
+  const role = String(currentRole || 'guest').toLowerCase();
+
+  const homeByRole = {
+    admin: '/admin',
+    trainer: '/trainer',
+    supervisor: '/supervisor',
+    student: '/student',
+  };
+
+  const roleLabelByRole = {
+    admin: 'Admin',
+    trainer: 'Trainer',
+    supervisor: 'Supervisor',
+    student: 'Student',
+    guest: 'User',
+  };
+
+  const homePath = homeByRole[role] || '/signin';
+  const settingsPath = homePath === '/signin' ? '/signin' : `${homePath}/settings`;
+
+  if (!text) {
+    return 'Ask me anything about HYTech LMS and I will guide you step-by-step.';
+  }
+
+  if (includesAny(text, ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening'])) {
+    return `Hello! I can still help with HYTech LMS tasks for ${roleLabelByRole[role] || 'User'} accounts. Try asking things like "how to reset password" or "where is settings".`;
+  }
+
+  if (includesAny(text, ['reset password', 'forgot password', 'change password', 'password'])) {
+    return `Password help:\n1. Go to ${settingsPath}.\n2. Open Security / Change Password.\n3. Enter your current password, new password, and confirmation.\n4. Click Save Password.\n\nIf you are locked out, use the Forgot Password option on the Sign In page.`;
+  }
+
+  if (includesAny(text, ['settings', 'profile', 'update name', 'birth date', 'middle name', 'name extension'])) {
+    return `Profile settings help:\n1. Open ${settingsPath}.\n2. Update First Name, Last Name, Birth Date, and other fields.\n3. Click Save Changes (Profile tab) to persist updates.\n\nMiddle Name and Name Extension are optional fields.`;
+  }
+
+  if (includesAny(text, ['notification', 'notifications', 'alert', 'alerts'])) {
+    return `Notifications help:\n1. Open the bell icon in the top navbar for quick updates.\n2. Open the Notifications page for complete history.\n3. In Settings, adjust notification preferences and save.`;
+  }
+
+  if (role === 'student') {
+    if (includesAny(text, ['course', 'my course', 'enrolled', 'lessons', 'materials'])) {
+      return 'Student course navigation:\n1. Open My Courses from the sidebar.\n2. Select your enrolled course.\n3. Use Tasks and Calendar tabs to track deadlines.';
+    }
+    if (includesAny(text, ['certificate', 'certificates'])) {
+      return 'Certificates are in the Student sidebar under Certificates. Completed courses with requirements met will appear there.';
+    }
+    if (includesAny(text, ['task', 'assignment', 'deadline'])) {
+      return 'Use Student > Tasks to view pending assignments and deadlines. You can also check Calendar for schedule-based reminders.';
+    }
+  }
+
+  if (role === 'trainer') {
+    if (includesAny(text, ['course', 'courses', 'manage course'])) {
+      return 'Trainer course flow:\n1. Go to /trainer.\n2. Open a course from My Courses.\n3. Manage tasks, materials, and learner progress inside the course.';
+    }
+    if (includesAny(text, ['sector', 'sectors'])) {
+      return 'Use Trainer > Sectors to view Training Regulations and sector details.';
+    }
+  }
+
+  if (role === 'admin') {
+    if (includesAny(text, ['user', 'users', 'add user', 'account'])) {
+      return 'Admin user management:\n1. Open Admin > User Management.\n2. Add/Edit user details (first/middle/last/extension/birth date).\n3. Save to create or update user records.';
+    }
+    if (includesAny(text, ['logs', 'system log', 'audit'])) {
+      return 'Open Admin > System Logs to review activity and audit events.';
+    }
+  }
+
+  if (role === 'supervisor') {
+    if (includesAny(text, ['report', 'reports', 'analytics'])) {
+      return 'Supervisor reports are available in Supervisor > Reports for progress and performance monitoring.';
+    }
+    if (includesAny(text, ['trainer', 'trainers', 'student', 'students'])) {
+      return 'Use Supervisor sidebar sections (Trainers, Students, Courses) to monitor accounts and performance.';
+    }
+  }
+
+  return `I can still assist with HYTech LMS navigation and actions. Try asking:\n- "How do I update my profile?"\n- "Where do I reset password?"\n- "Where are notifications?"\n- "How do I manage users/courses/tasks?"`;
 };
 
 const HytBot = ({ embedded = false }) => {
@@ -92,7 +178,7 @@ const HytBot = ({ embedded = false }) => {
   }, [messages]);
 
   const offlineFallbackMessage =
-    "I'm currently unable to reach the AI service. Please try again in a moment.";
+    'Live AI is currently unavailable, so I am using built-in HYTech guidance.';
 
   const requestGeminiReply = async (userMessage) => {
     if (!GEMINI_API_KEY) {
@@ -208,6 +294,7 @@ const HytBot = ({ embedded = false }) => {
 
     try {
       let reply = null;
+      let aiUnavailableReason = '';
 
       // Optional backend proxy takes priority when configured.
       if (HYTBOT_API_URL) {
@@ -220,8 +307,11 @@ const HytBot = ({ embedded = false }) => {
           if (res.ok) {
             const json = await res.json();
             if (json?.reply) reply = json.reply;
+          } else {
+            aiUnavailableReason = 'backend';
           }
         } catch (e) {
+          aiUnavailableReason = 'backend';
           console.warn('HYT BOT backend error', e);
         }
       }
@@ -232,10 +322,10 @@ const HytBot = ({ embedded = false }) => {
           reply = await requestGeminiReply(userMessage);
         } catch (e) {
           if (e?.status === 429) {
-            const waitSeconds = e?.waitSeconds || Math.max(1, Math.ceil((rateLimitedUntilRef.current - Date.now()) / 1000));
-            reply = `I'm currently rate-limited by the AI provider. Please try again in about ${waitSeconds} second${waitSeconds === 1 ? '' : 's'}.`;
+            aiUnavailableReason = 'quota';
             addToast?.('HYT BOT is temporarily rate-limited. Please wait and try again.', 'warning');
           } else {
+            aiUnavailableReason = 'gemini';
             console.warn('HYT BOT Gemini error', e);
           }
         }
@@ -243,19 +333,26 @@ const HytBot = ({ embedded = false }) => {
 
       if (!HYTBOT_API_URL && !GEMINI_API_KEY && !warnedMissingGeminiKeyRef.current) {
         warnedMissingGeminiKeyRef.current = true;
+        aiUnavailableReason = 'missing-key';
         addToast?.('Gemini API key not configured. HYT BOT can only show offline fallback responses.', 'info');
       }
 
-      // Minimal fallback only when AI is unreachable.
+      // Local intelligent fallback when live AI is unavailable.
       if (!reply) {
-        reply = offlineFallbackMessage;
+        const localReply = buildLocalFallbackReply(userMessage, role);
+        if (aiUnavailableReason) {
+          reply = `${localReply}\n\n${offlineFallbackMessage}`;
+        } else {
+          reply = localReply;
+        }
       }
 
       setMessages((m) => [...m, { role: 'assistant', text: reply }]);
     } catch (err) {
       console.warn('HYT BOT sendMessage failed', err);
       addToast?.('HYT BOT encountered an error and could not reach the AI service.', 'warning');
-      const reply = offlineFallbackMessage;
+      const localReply = buildLocalFallbackReply(userMessage, role);
+      const reply = `${localReply}\n\n${offlineFallbackMessage}`;
       setMessages((m) => [...m, { role: 'assistant', text: reply }]);
     } finally {
       setIsSending(false);
@@ -311,7 +408,7 @@ const HytBot = ({ embedded = false }) => {
                   <MessageCircle className="w-5 h-5 text-indigo-600" />
                   <div className="min-w-0">
                     <h3 className="font-semibold text-gray-900 truncate">HYT BOT</h3>
-                    <p className="text-xs text-gray-500 truncate">General AI assistant ({role})</p>
+                    <p className="text-xs text-gray-500 truncate">AI assistant</p>
                   </div>
                 </div>
                 <button
@@ -339,7 +436,7 @@ const HytBot = ({ embedded = false }) => {
           <MessageCircle className="w-6 h-6 text-indigo-600" />
           <div>
             <h3 className="font-semibold text-gray-900">HYT BOT</h3>
-            <p className="text-sm text-gray-500">General AI assistant with HYTech context ({role})</p>
+            <p className="text-sm text-gray-500">AI assistant with HYTech context</p>
           </div>
         </div>
 
