@@ -41,13 +41,6 @@ service cloud.firestore {
       return isOwnUser(targetUserId) || isAdmin() || isSupervisor();
     }
     
-    // Allow trainers to see students in their courses
-    function isTrainerForStudent(studentUid) {
-      return isTrainer() && 
-             exists(/databases/$(database)/documents/studentEnrollments/$(studentUid)_courses) &&
-             get(/databases/$(database)/documents/studentEnrollments/$(studentUid)_courses).data.trainerUid == request.auth.uid;
-    }
-    
     // Users collection - Personal user data
     match /users/{userId} {
       // Students can read their own profile
