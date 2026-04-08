@@ -2,17 +2,182 @@ rules_version='2'
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // Helper functions for authentication and role-based access
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'Admin';
+    }
+    
+    function isTrainer() {
+      return isAuthenticated() && getUserRole() == 'Trainer';
+    }
+    
+    function isStudent() {
+      return isAuthenticated() && getUserRole() == 'Student';
+    }
+    
+    function isSupervisor() {
+      return isAuthenticated() && getUserRole() == 'Supervisor';
+    }
+    
+    function isOwnUser(uid) {
+      return request.auth.uid == uid;
+    }
+    
+    // Users collection - Personal user data
+    match /users/{userId} {
+      // Users can read their own profile
+      allow read: if isAuthenticated() && (isOwnUser(userId) || isAdmin() || isSupervisor());
+      
+      // Users can update their own profile (except role field)
+      allow update: if isOwnUser(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'email']);
+      
+      // Only Admins, Supervisors can create users or modify role/email
+      allow create, delete: if isAdmin();
+      allow update: if (isAdmin() || isSupervisor()) && 
+                       request.resource.data.role is string && 
+                       request.resource.data.email is string;
+    }
+    
+    // Sectors collection - Sector management
+    match /sectors/{sectorId} {
+      // All authenticated users can read sectors
+      allow read: if isAuthenticated();
+      
+      // Only Admins and Supervisors can create/update/delete sectors
+      allow create, update, delete: if (isAdmin() || isSupervisor()) &&
+                                      request.resource.data.name is string &&
+                                      request.resource.data.description is string;
+    }
+    
+    // Courses collection - Course management
+    match /courses/{courseId} {
+      // All authenticated users can read courses
+      allow read: if isAuthenticated();
+      
+      // Trainers can create courses
+      allow create: if isTrainer() &&
+                       request.resource.data.name is string &&
+                       request.resource.data.trainerUid == request.auth.uid &&
+                       request.resource.data.sectorId is string;
+      
+      // Trainers can update/delete their own courses
+      // Admins and Supervisors can update/delete any course
+      allow update, delete: if (isTrainer() && resource.data.trainerUid == request.auth.uid) ||
+                               isAdmin() ||
+                               isSupervisor();
+    }
+    
+    // Tasks collection - Task management
+    match /tasks/{taskId} {
+      // All authenticated users can read tasks
+      allow read: if isAuthenticated();
+      
+      // Trainers can create tasks for their courses
+      allow create: if isTrainer() &&
+                       request.resource.data.courseId is string &&
+                       request.resource.data.title is string;
+      
+      // Trainers can update/delete their own tasks
+      // Admins can update/delete any task
+      allow update, delete: if isTrainer() ||
+                               isAdmin() ||
+                               isSupervisor();
+      
+      // Students can update task completion status for their tasks
+      allow update: if isStudent() && 
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['studentStatus', 'completedAt']);
+    }
+    
+    // StudentEnrollments collection - Track student course enrollments
+    match /studentEnrollments/{enrollmentId} {
+      // Students can read their own enrollments
+      allow read: if isAuthenticated() && 
+                     (isStudent() || isAdmin() || isSupervisor() ||
+                      (resource.data.studentUid == request.auth.uid));
+      
+      // Supervisors and Admins can create enrollments
+      allow create, update: if (isAdmin() || isSupervisor()) &&
+                               request.resource.data.studentUid is string &&
+                               request.resource.data.courseId is string &&
+                               request.resource.data.enrollmentDate is timestamp;
+      
+      // Admins and Supervisors can delete enrollments
+      allow delete: if isAdmin() || isSupervisor();
+    }
+    
+    // Certificates collection - Student certificates
+    match /certificates/{certificateId} {
+      // Students can read their own certificates
+      allow read: if isAuthenticated() &&
+                     (isOwnUser(resource.data.studentUid) || isAdmin() || isSupervisor());
+      
+      // Admins and Supervisors can create/update/delete certificates
+      allow create, update, delete: if (isAdmin() || isSupervisor()) &&
+                                       request.resource.data.studentUid is string &&
+                                       request.resource.data.certificateName is string;
+    }
+    
+    // SystemLogs collection - System activity logs (Admin and Supervisor only)
+    match /systemLogs/{logId} {
+      // Only Admins and Supervisors can read logs
+      allow read: if isAdmin() || isSupervisor();
+      
+      // App can create logs (triggered by backend functions)
+      allow create: if isAuthenticated() &&
+                       request.resource.data.action is string &&
+                       request.resource.data.userId is string &&
+                       request.resource.data.timestamp is timestamp;
+      
+      // Only Admins can delete logs
+      allow delete: if isAdmin();
+      
+      // Logs can only be read, update/delete restricted to admin only
+      allow update: if false;
+    }
+    
+    // Notifications collection - User notifications
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid || isAdmin());
+      
+      // System/authenticated users can create notifications
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId is string &&
+                       request.resource.data.messageIsString &&
+                       request.resource.data.createdAt is timestamp;
+      
+      // Users can update their own notifications (mark as read, etc)
+      allow update: if resource.data.userId == request.auth.uid;
+      
+      // Only Admins can delete notifications
+      allow delete: if isAdmin();
+    }
+    
+    // Settings collection - User and system settings
+    match /settings/{settingId} {
+      // All authenticated users can read public settings
+      allow read: if isAuthenticated();
+      
+      // Only Admins can update system settings
+      allow update: if isAdmin();
+      
+      // Admin-only access for delete
+      allow delete: if isAdmin();
+    }
+    
+    // Deny all other access by default
     match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2026, 4, 9);
+      allow read, write: if false;
     }
   }
 }
