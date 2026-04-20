@@ -14,12 +14,17 @@ import {
   Calendar,
   Award
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { subscribeToStudentEnrollments, getCourseByName } from '../../utils/firestoreService';
 
 const StudentSidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isCoursesExpanded, setIsCoursesExpanded] = useState(true);
+  const [isCoursesExpanded, setIsCoursesExpanded] = useState(false);
+  const [enrolledClasses, setEnrolledClasses] = useState([]);
+  const [loadingClasses, setLoadingClasses] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -30,7 +35,91 @@ const StudentSidebar = () => {
     );
   }, [isCollapsed]);
 
-  const isCoursePath = location.pathname.includes('/student/courses');
+  // Fetch enrolled classes with real-time updates
+  useEffect(() => {
+    if (!user?.uid) return;
+    
+    let unsubscribe;
+    
+    try {
+      // Subscribe to real-time enrollment changes
+      unsubscribe = subscribeToStudentEnrollments(user.uid, async (enrollments) => {
+        try {
+          setLoadingClasses(true);
+          
+          // Fetch class details for each enrollment
+          const classesData = await Promise.all(
+            enrollments.map(async (enrollment) => {
+              try {
+                const classData = await getCourseByName(enrollment.className);
+                return {
+                  id: enrollment.classId,
+                  name: enrollment.className,
+                  courseId: classData?.id,
+                  ...classData
+                };
+              } catch (err) {
+                console.error(`Error fetching class ${enrollment.className}:`, err);
+                return {
+                  id: enrollment.classId,
+                  name: enrollment.className,
+                  courseId: enrollment.classId
+                };
+              }
+            })
+          );
+          
+          setEnrolledClasses(classesData || []);
+        } catch (error) {
+          console.error('Error processing enrollments:', error);
+        } finally {
+          setLoadingClasses(false);
+        }
+      });
+    } catch (error) {
+      console.error('Error subscribing to enrollments:', error);
+      setLoadingClasses(false);
+    }
+    
+    // Cleanup subscription on unmount
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [user?.uid]);
+
+  // Generate avatar color based on class name
+  const getClassColor = (className) => {
+    const colors = [
+      { bg: 'bg-blue-100', text: 'text-blue-700' },
+      { bg: 'bg-purple-100', text: 'text-purple-700' },
+      { bg: 'bg-green-100', text: 'text-green-700' },
+      { bg: 'bg-orange-100', text: 'text-orange-700' },
+      { bg: 'bg-pink-100', text: 'text-pink-700' },
+      { bg: 'bg-indigo-100', text: 'text-indigo-700' },
+      { bg: 'bg-amber-100', text: 'text-amber-700' },
+      { bg: 'bg-teal-100', text: 'text-teal-700' },
+    ];
+    
+    const hash = className.charCodeAt(0) + className.charCodeAt(className.length - 1);
+    return colors[hash % colors.length];
+  };
+
+  // Get initials for class avatar
+  const getInitials = (name) => {
+    // Remove parentheses and their content, then get initials
+    const cleanName = name.replace(/\s*\([^)]*\)/g, '').trim();
+    const words = cleanName.split(' ').filter(w => w.length > 0);
+    
+    if (words.length === 0) return '??';
+    if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
+    
+    // Get first letter of first two words
+    return (words[0][0] + (words[1]?.[0] || '')).toUpperCase();
+  };
+
+  const isCoursePath = location.pathname.includes('/student/') && location.pathname !== '/student' && location.pathname !== '/student/calendar' && !location.pathname.includes('/settings') && !location.pathname.includes('/certificates') && !location.pathname.includes('/archived') && !location.pathname.includes('/tasks');
 
   const mainNavItems = [
     { path: '/student', icon: Home, label: 'Home', exact: true },
@@ -42,11 +131,6 @@ const StudentSidebar = () => {
     { path: '/student/certificates', icon: Award, label: 'Certificates' },
     { path: '/student/archived', icon: Archive, label: 'Archived Courses' },
     { path: '/student/settings', icon: Settings, label: 'Settings' },
-  ];
-
-  // Mock enrolled courses
-  const enrolledCourses = [
-    { id: 1, name: 'Barista NCII', code: 'B', color: 'bg-amber-100 text-amber-700' }
   ];
 
   const NavItem = ({ item }) => {
@@ -109,7 +193,7 @@ const StudentSidebar = () => {
             <NavItem key={item.path} item={item} />
           ))}
 
-          {/* My Courses - Expandable */}
+          {/* My Classes - Expandable */}
           {(!isCollapsed || isMobileOpen) && (
             <div className="space-y-1">
               <button
@@ -123,7 +207,7 @@ const StudentSidebar = () => {
               >
                 <div className="flex items-center gap-3">
                   <BookOpen className="w-5 h-5" />
-                  <span className="font-medium">My Courses</span>
+                  <span className="font-medium">My Classes</span>
                 </div>
                 {isCoursesExpanded ? (
                   <ChevronUp className="w-4 h-4" />
@@ -132,28 +216,40 @@ const StudentSidebar = () => {
                 )}
               </button>
 
-              {/* Enrolled Courses List */}
+              {/* Enrolled Classes List */}
               {isCoursesExpanded && (
                 <div className="ml-4 space-y-1 pt-1 animate-slide-down">
-                  {enrolledCourses.map((course) => (
-                    <NavLink
-                      key={course.id}
-                      to={`/student/courses/${course.id}`}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-300
-                        ${isActive 
-                          ? 'bg-blue-50 text-blue-600' 
-                          : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                        }`
-                      }
-                      onClick={() => setIsMobileOpen(false)}
-                    >
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${course.color}`}>
-                        {course.code}
-                      </div>
-                      <span className="text-sm font-medium">{course.name}</span>
-                    </NavLink>
-                  ))}
+                  {loadingClasses ? (
+                    <div className="px-4 py-2 text-xs text-gray-500">Loading classes...</div>
+                  ) : enrolledClasses.length > 0 ? (
+                    enrolledClasses.map((classItem) => {
+                      const colors = getClassColor(classItem.name);
+                      const initials = getInitials(classItem.name);
+                      const classPath = `/student/${encodeURIComponent(classItem.name)}`;
+                      
+                      return (
+                        <NavLink
+                          key={classItem.id}
+                          to={classPath}
+                          className={({ isActive }) =>
+                            `flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-300
+                            ${isActive 
+                              ? 'bg-blue-50 text-blue-600' 
+                              : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                            }`
+                          }
+                          onClick={() => setIsMobileOpen(false)}
+                        >
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${colors.bg} ${colors.text}`}>
+                            {initials}
+                          </div>
+                          <span className="text-sm font-medium truncate">{classItem.name}</span>
+                        </NavLink>
+                      );
+                    })
+                  ) : (
+                    <div className="px-4 py-2 text-xs text-gray-500">No enrolled classes</div>
+                  )}
                 </div>
               )}
             </div>
@@ -172,10 +268,11 @@ const StudentSidebar = () => {
         <div className="hidden lg:block p-4 border-t border-gray-100">
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-all duration-200"
+            className="w-full flex items-center justify-end gap-2 px-4 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-all duration-200"
           >
-            <ChevronRight className={`w-5 h-5 transition-transform duration-300 ${isCollapsed ? '' : 'rotate-180'}`} />
-            {!isCollapsed && <span className="text-sm">Collapse</span>}
+            <div className={`w-8 h-8 rounded-full items-center justify-center flex ${isCollapsed ? '' : 'bg-blue-100'}`}>
+              <ChevronRight className={`w-5 h-5 transition-transform duration-300 ${isCollapsed ? '' : 'rotate-180'}`} />
+            </div>
           </button>
         </div>
       </aside>

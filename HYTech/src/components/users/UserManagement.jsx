@@ -18,6 +18,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -85,68 +86,103 @@ const UserManagement = () => {
       return;
     }
 
-    const ensureCurrentSignedInUserDoc = async () => {
+    let isMounted = true;
+    let unsubscribeListener = null;
+
+    const loadUsers = async () => {
       const currentUser = auth?.currentUser;
-      if (!currentUser?.uid) return;
+      if (!currentUser?.uid) {
+        if (isMounted) setIsLoadingUsers(false);
+        return;
+      }
 
       try {
+        // Ensure current user doc exists
         const currentUserRef = doc(db, 'users', currentUser.uid);
         const currentUserSnap = await getDoc(currentUserRef);
-        if (currentUserSnap.exists()) return;
+        if (!currentUserSnap.exists()) {
+          const normalizedEmail = String(currentUser.email || '').trim().toLowerCase();
+          const fallbackName = normalizedEmail.split('@')[0] || 'User';
+          await setDoc(
+            currentUserRef,
+            {
+              uid: currentUser.uid,
+              name: fallbackName,
+              email: normalizedEmail,
+              role: 'admin',
+              status: 'Active',
+              createdAt: serverTimestamp(),
+              createdBy: 'system-backfill',
+            },
+            { merge: true }
+          );
+        }
 
-        const normalizedEmail = String(currentUser.email || '').trim().toLowerCase();
-        const fallbackName = normalizedEmail.split('@')[0] || 'User';
-        await setDoc(
-          currentUserRef,
-          {
-            uid: currentUser.uid,
-            name: fallbackName,
-            email: normalizedEmail,
-            role: 'admin',
-            status: 'Active',
-            createdAt: serverTimestamp(),
-            createdBy: 'system-backfill',
-          },
-          { merge: true }
-        );
-      } catch {
-        // Non-blocking backfill: users list listener still works.
+        // Set up real-time listener for users
+        if (isMounted) {
+          try {
+            const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'asc'));
+            
+            unsubscribeListener = onSnapshot(
+              usersQuery,
+              (snapshot) => {
+                if (!isMounted) return;
+
+                const mappedUsers = snapshot.docs.map((docSnap, index) => {
+                  const data = docSnap.data();
+                  const normalizedRole = (data.role || 'student').toString();
+                  const prettyRole =
+                    normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1).toLowerCase();
+
+                  return {
+                    id: docSnap.id,
+                    rowNumber: index + 1,
+                    name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Unnamed User',
+                    idNumber: data.idNumber || '-',
+                    email: data.email || '-',
+                    role: prettyRole,
+                    status: data.status || 'Active',
+                  };
+                });
+
+                if (isMounted) {
+                  setUsers(mappedUsers);
+                  setIsLoadingUsers(false);
+                }
+              },
+              (err) => {
+                console.error('Error loading users:', err);
+                if (isMounted) {
+                  addToast(`Failed to load users: ${err?.message || 'Unknown error'}`, 'error');
+                  setIsLoadingUsers(false);
+                }
+              }
+            );
+          } catch (err) {
+            console.error('Error setting up user listener:', err);
+            if (isMounted) {
+              addToast(`Failed to load users: ${err?.message || 'Unknown error'}`, 'error');
+              setIsLoadingUsers(false);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Error in load users:', err);
+        if (isMounted) {
+          setIsLoadingUsers(false);
+        }
       }
     };
 
-    ensureCurrentSignedInUserDoc();
+    loadUsers();
 
-    const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'asc'));
-    const unsubscribe = onSnapshot(
-      usersQuery,
-      (snapshot) => {
-        const mappedUsers = snapshot.docs.map((docSnap, index) => {
-          const data = docSnap.data();
-          const normalizedRole = (data.role || 'student').toString();
-          const prettyRole =
-            normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1).toLowerCase();
-
-          return {
-            id: docSnap.id,
-            rowNumber: index + 1,
-            name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Unnamed User',
-            idNumber: data.idNumber || '-',
-            email: data.email || '-',
-            role: prettyRole,
-            status: data.status || 'Active',
-          };
-        });
-
-        setUsers(mappedUsers);
-        setIsLoadingUsers(false);
-      },
-      () => {
-        addToast('Unable to load users from Firestore.', 'error');
-        setIsLoadingUsers(false);
+    return () => {
+      isMounted = false;
+      if (unsubscribeListener) {
+        unsubscribeListener();
+        unsubscribeListener = null;
       }
-    );
-
-    return () => unsubscribe();
+    };
   }, [addToast]);
 
   // Filter users based on search

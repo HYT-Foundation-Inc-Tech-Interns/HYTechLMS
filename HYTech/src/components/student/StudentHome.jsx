@@ -1,593 +1,726 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  BookOpen, 
-  Clock, 
-  CheckCircle, 
-  AlertCircle,
-  Star,
-  Users,
-  FileText,
-  ChevronDown,
-  ChevronUp,
-  X,
-  Award,
-  Play,
-  AlertTriangle
+  BookOpen, Clock, CheckCircle, AlertCircle,
+  ChevronDown, ChevronUp, X, Award, Play,
+  AlertTriangle, Loader, AlertCircleIcon, Plus, ArrowRight
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import {
+  getCourses,
+  getSectors,
+  queryActiveEnrollment,
+  getStudentEnrollments,
+  applyCourse,
+  joinClassByCode,
+} from '../../utils/firestoreService';
+
+import { useToast } from '../../context/ToastContext';
+
+// Color palette for course placeholders
+const COLOR_PALETTE = [
+  { bg: 'from-blue-500 to-blue-700', light: 'from-blue-400 to-blue-600' },
+  { bg: 'from-purple-500 to-purple-700', light: 'from-purple-400 to-purple-600' },
+  { bg: 'from-pink-500 to-pink-700', light: 'from-pink-400 to-pink-600' },
+  { bg: 'from-red-500 to-red-700', light: 'from-red-400 to-red-600' },
+  { bg: 'from-orange-500 to-orange-700', light: 'from-orange-400 to-orange-600' },
+  { bg: 'from-yellow-500 to-yellow-700', light: 'from-yellow-400 to-yellow-600' },
+  { bg: 'from-green-500 to-green-700', light: 'from-green-400 to-green-600' },
+  { bg: 'from-teal-500 to-teal-700', light: 'from-teal-400 to-teal-600' },
+  { bg: 'from-cyan-500 to-cyan-700', light: 'from-cyan-400 to-cyan-600' },
+  { bg: 'from-indigo-500 to-indigo-700', light: 'from-indigo-400 to-indigo-600' },
+];
+
+// Generate consistent color based on course ID
+const getPlaceholderColor = (courseId) => {
+  if (!courseId) return COLOR_PALETTE[0];
+  // Convert course id to a number to get consistent index
+  let hash = 0;
+  for (let i = 0; i < courseId.length; i++) {
+    const char = courseId.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  const index = Math.abs(hash) % COLOR_PALETTE.length;
+  return COLOR_PALETTE[index];
+};
 
 const StudentHome = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { addToast } = useToast();
+
+  // State Management
+  const [sectors, setSectors] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [activeEnrollment, setActiveEnrollment] = useState(null);
+  const [enrollments, setEnrollments] = useState([]);
+  
   const [showSectorDropdown, setShowSectorDropdown] = useState(false);
   const [selectedSector, setSelectedSector] = useState(null);
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [showEnrollWarning, setShowEnrollWarning] = useState(false);
-  
-  // Track if student has an ongoing course
-  const hasOngoingCourse = true; // Set to true to simulate student has Barista NCII enrolled
 
+  // Class Code Join States
+  const [classCode, setClassCode] = useState('');
+  const [joiningClass, setJoiningClass] = useState(false);
+
+  // Loading & Error States
+  const [loadingSectors, setLoadingSectors] = useState(true);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+  const [loadingEnrollment, setLoadingEnrollment] = useState(true);
+  const [loadingApply, setLoadingApply] = useState(false);
+  
+  const [errorSectors, setErrorSectors] = useState(null);
+  const [errorCourses, setErrorCourses] = useState(null);
+  const [errorEnrollment, setErrorEnrollment] = useState(null);
+
+  // Initialize: Load sectors and enrollments
+  useEffect(() => {
+    const initializeData = async () => {
+      if (!user?.uid) {
+        setLoadingSectors(false);
+        setLoadingEnrollment(false);
+        return;
+      }
+
+      try {
+        // Load sectors
+        setLoadingSectors(true);
+        const sectorsData = await getSectors({ status: 'Active' });
+        setSectors(sectorsData || []);
+        setErrorSectors(null);
+
+        // Load ALL courses initially
+        setLoadingCourses(true);
+        const coursesData = await getCourses({ status: 'Active' });
+        setCourses(coursesData || []);
+        setErrorCourses(null);
+
+        // Load student's enrollments
+        setLoadingEnrollment(true);
+        const enrollmentsData = await getStudentEnrollments(user.uid);
+        setEnrollments(enrollmentsData || []);
+
+        // Check for active enrollment
+        const activeEnroll = await queryActiveEnrollment(user.uid);
+        setActiveEnrollment(activeEnroll);
+        setErrorEnrollment(null);
+      } catch (error) {
+        console.error('Error initializing student data:', error);
+        setErrorSectors(error.message);
+      } finally {
+        setLoadingSectors(false);
+        setLoadingEnrollment(false);
+        setLoadingCourses(false);
+      }
+    };
+
+    initializeData();
+  }, [user?.uid]);
+
+  // Load courses when sector changes (filter by sector)
+  useEffect(() => {
+    const loadCourses = async () => {
+      try {
+        setLoadingCourses(true);
+        setErrorCourses(null);
+        
+        // If a sector is selected, filter by it; otherwise show all
+        const coursesData = await getCourses(
+          selectedSector
+            ? { sectorId: selectedSector, status: 'Active' }
+            : { status: 'Active' }
+        );
+        
+        setCourses(coursesData || []);
+      } catch (error) {
+        console.error('Error loading courses:', error);
+        setErrorCourses(error.message);
+      } finally {
+        setLoadingCourses(false);
+      }
+    };
+
+    // Only load if sector changed (not on initial load)
+    if (selectedSector || selectedSector === undefined) {
+      loadCourses();
+    }
+  }, [selectedSector]);
+
+  // Statistics - calculated from real data
   const stats = [
-    { 
-      icon: BookOpen, 
-      value: '2', 
+    {
+      icon: BookOpen,
+      value: enrollments.length,
       label: 'Courses Completed',
       color: 'text-blue-600',
-      bgColor: 'bg-blue-50'
+      bgColor: 'bg-blue-50',
     },
-    { 
-      icon: Clock, 
-      value: '100/200', 
+    {
+      icon: Clock,
+      value: '100/200',
       label: 'Training Hours',
       color: 'text-purple-600',
-      bgColor: 'bg-purple-50'
+      bgColor: 'bg-purple-50',
     },
-    { 
-      icon: CheckCircle, 
-      value: '92%', 
+    {
+      icon: CheckCircle,
+      value: '92%',
       label: 'Attendance Rate',
       color: 'text-green-600',
-      bgColor: 'bg-green-50'
+      bgColor: 'bg-green-50',
     },
-    { 
-      icon: AlertCircle, 
-      value: '3', 
+    {
+      icon: AlertCircle,
+      value: activeEnrollment ? '0' : '3',
       label: 'Pending Requirements',
       color: 'text-orange-600',
-      bgColor: 'bg-orange-50'
+      bgColor: 'bg-orange-50',
     },
   ];
 
-  const sectors = [
-    'HEALTH, SOCIAL, AND OTHER COMMUNITY DEVELOPMENT SERVICES',
-    'CONSTRUCTION SECTOR',
-    'ELECTRICAL AND ELECTRONICS SECTOR',
-    'SOCIAL AND OTHER COMMUNITY DEVELOPMENT SERVICES SECTOR',
-    'AUTOMOTIVE/LAND TRANSPORT SECTOR',
-    'TOURISM SECTOR'
-  ];
-
-  const popularCourses = [
-    {
-      id: 1,
-      title: 'K/C SERVICING (DUNRAC) ',
-      instructor: 'Mr. Victor Santos',
-      rating: 4.5,
-      reviews: 29,
-      lessons: 10,
-      students: 45,
-      sector: 'ELECTRICAL AND ELECTRONICS SECTOR',
-      image: 'https://images.unsplash.com/photo-1487754180144-351b8e906e6c?w=500&h=300&fit=crop'
-    },
-    {
-      id: 2,
-      title: 'PLUMBING NCII',
-      instructor: 'Mr. Ramon Cruz',
-      rating: 4.3,
-      reviews: 24,
-      lessons: 12,
-      students: 38,
-      sector: 'CONSTRUCTION SECTOR',
-      image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=500&h=300&fit=crop'
-    },
-    {
-      id: 3,
-      title: 'HILOT (WELLNESS)MASSAGE NCII',
-      instructor: 'Ms. Angela Fernandez',
-      rating: 4.7,
-      reviews: 35,
-      lessons: 11,
-      students: 52,
-      sector: 'HEALTH, SOCIAL, AND OTHER COMMUNITY DEVELOPMENT SERVICES',
-      image: 'https://images.unsplash.com/photo-1544161515-81fded323381?w=500&h=300&fit=crop'
-    },
-    {
-      id: 4,
-      title: 'CAREGIVING NCII',
-      instructor: 'Ms. Grace Reyes',
-      rating: 4.4,
-      reviews: 28,
-      lessons: 10,
-      students: 41,
-      sector: 'HEALTH, SOCIAL, AND OTHER COMMUNITY DEVELOPMENT SERVICES',
-      image: 'https://images.unsplash.com/photo-1631217314831-dc4a8f63e9b1?w=500&h=300&fit=crop'
-    },
-    {
-      id: 5,
-      title: 'BEAUTY CARE (SKINCARE) SERVICES NCII',
-      instructor: 'Ms. Maria Clara Garcia',
-      rating: 4.6,
-      reviews: 31,
-      lessons: 9,
-      students: 48,
-      sector: 'HEALTH, SOCIAL, AND OTHER COMMUNITY DEVELOPMENT SERVICES',
-      image: 'https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=500&h=300&fit=crop'
-    },
-    {
-      id: 6,
-      title: 'BEAUTY CARE (NAIL CARE) SERVICES NCII',
-      instructor: 'Ms. Jessica Torres',
-      rating: 4.5,
-      reviews: 26,
-      lessons: 8,
-      students: 44,
-      sector: 'HEALTH, SOCIAL, AND OTHER COMMUNITY DEVELOPMENT SERVICES',
-      image: 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=500&h=300&fit=crop'
-    },
-    {
-      id: 7,
-      title: 'VISUAL GRAPHICS DESIGN',
-      instructor: 'Mr. Robert Santos',
-      rating: 4.8,
-      reviews: 38,
-      lessons: 14,
-      students: 56,
-      sector: 'SOCIAL AND OTHER COMMUNITY DEVELOPMENT SERVICES SECTOR',
-      image: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=500&h=300&fit=crop'
-    },
-    {
-      id: 8,
-      title: 'COMPUTER SYSTEM SERVICING NCII',
-      instructor: 'Mr. Luis Diaz',
-      rating: 4.4,
-      reviews: 27,
-      lessons: 13,
-      students: 50,
-      sector: 'ELECTRICAL AND ELECTRONICS SECTOR',
-      image: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&h=300&fit=crop'
-    },
-    {
-      id: 9,
-      title: 'BOOKKEEPING NCII',
-      instructor: 'Ms. Patricia Lopez',
-      rating: 4.3,
-      reviews: 22,
-      lessons: 11,
-      students: 35,
-      sector: 'SOCIAL AND OTHER COMMUNITY DEVELOPMENT SERVICES SECTOR',
-      image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=500&h=300&fit=crop'
-    },
-    {
-      id: 10,
-      title: 'HOUSEKEEPING NCII',
-      instructor: 'Ms. Rosa Rivera',
-      rating: 4.2,
-      reviews: 20,
-      lessons: 10,
-      students: 39,
-      sector: 'TOURISM SECTOR',
-      image: 'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=500&h=300&fit=crop'
-    },
-    {
-      id: 11,
-      title: 'EVENT MANAGEMENT SERVICES NCIII',
-      instructor: 'Mr. Daniel Romero',
-      rating: 4.6,
-      reviews: 33,
-      lessons: 12,
-      students: 47,
-      sector: 'TOURISM SECTOR',
-      image: 'https://images.unsplash.com/photo-1540575467063-178f50002cbc?w=500&h=300&fit=crop'
-    },
-    {
-      id: 12,
-      title: 'BARISTA NCII',
-      instructor: 'Ms. Maria Clara Garcia',
-      rating: 4.5,
-      reviews: 29,
-      lessons: 12,
-      students: 54,
-      sector: 'TOURISM SECTOR',
-      image: 'https://images.unsplash.com/photo-1495521821757-a1efb6729352?w=500&h=300&fit=crop'
-    },
-    {
-      id: 13,
-      title: 'FOOD AND BEVERAGE SERVICES NCII',
-      instructor: 'Mr. Juan Dela Cruz',
-      rating: 4.7,
-      reviews: 36,
-      lessons: 13,
-      students: 59,
-      sector: 'TOURISM SECTOR',
-      image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&h=300&fit=crop'
-    },
-    {
-      id: 14,
-      title: 'AUTOMOTIVE SERVICING NCII',
-      instructor: 'Mr. Pedro Reyes',
-      rating: 4.4,
-      reviews: 25,
-      lessons: 15,
-      students: 42,
-      sector: 'AUTOMOTIVE/LAND TRANSPORT SECTOR',
-      image: 'https://images.unsplash.com/photo-1487754180144-351b8e906e6c?w=500&h=300&fit=crop'
-    },
-  ];
-
-  // Filter courses based on selected sector
-  const filteredCourses = selectedSector 
-    ? popularCourses.filter(course => course.sector === selectedSector)
-    : popularCourses;
-
+  // Handle course modal
   const handleCourseClick = (course) => {
+    if (activeEnrollment) {
+      setShowEnrollWarning(true);
+      return;
+    }
     setSelectedCourse(course);
     setShowCourseModal(true);
   };
 
-  const handleEnroll = () => {
-    if (hasOngoingCourse) {
-      setShowEnrollWarning(true);
-    } else {
-      // Handle enrollment logic
+  // Handle apply to course
+  const handleApplyToCourse = async () => {
+    if (!selectedCourse) return;
+
+    if (activeEnrollment) {
+      addToast(
+        'You have an active enrollment. Complete or terminate it before applying to another course.',
+        'error'
+      );
+      return;
+    }
+
+    try {
+      setLoadingApply(true);
+      const appId = await applyCourse(user.uid, selectedCourse.id);
+      addToast(
+        `Successfully applied to ${selectedCourse.name}. Awaiting trainer approval.`,
+        'success'
+      );
       setShowCourseModal(false);
+      setSelectedCourse(null);
+    } catch (error) {
+      console.error('Error applying to course:', error);
+      addToast(error.message || 'Failed to apply to course', 'error');
+    } finally {
+      setLoadingApply(false);
     }
   };
 
-  return (
-    <div className="p-6 space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, index) => {
-          const Icon = stat.icon;
+  // Handle join class by code
+  const handleJoinByCode = async (e) => {
+    e.preventDefault();
+
+    if (!classCode.trim()) {
+      addToast('Please enter a class code', 'error');
+      return;
+    }
+
+    try {
+      setJoiningClass(true);
+      const enrollment = await joinClassByCode(user.uid, classCode);
+      addToast(`Successfully joined class! Welcome to ${enrollment.className}`, 'success');
+      
+      // Clear code input
+      setClassCode('');
+      
+      // Reload enrollments
+      const updatedEnrollments = await getStudentEnrollments(user.uid);
+      setEnrollments(updatedEnrollments);
+      
+      // Refresh active enrollment
+      const activeEnroll = await queryActiveEnrollment(user.uid);
+      setActiveEnrollment(activeEnroll);
+    } catch (error) {
+      console.error('Error joining class:', error);
+      addToast(error.message || 'Failed to join class', 'error');
+    } finally {
+      setJoiningClass(false);
+    }
+  };
+
+  // Render: Join Class Section (only shows when no active enrollment and loading is complete)
+  const JoinClassSection = () => {
+    // Don't show until enrollment data has loaded
+    if (loadingEnrollment) return null;
+    // Don't show if student has enrollments
+    if (enrollments && enrollments.length > 0) return null;
+    // Don't show if there's an active enrollment
+    if (activeEnrollment) return null;
+
+    return (
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg p-8 mb-8 text-white">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Left side - Info */}
+          <div>
+            <h2 className="text-3xl font-bold mb-3">Join a Class</h2>
+            <p className="text-blue-100 mb-4">
+              Enter your class code to join a class immediately. Your trainer will assign you a class code.
+            </p>
+            <div className="flex items-center gap-2 text-blue-100 text-sm">
+              <Plus className="w-4 h-4" />
+              <span>Quick access to class materials and activities</span>
+            </div>
+          </div>
+
+          {/* Right side - Form */}
+          <div>
+            <form onSubmit={handleJoinByCode} className="space-y-3">
+              <input
+                type="text"
+                placeholder="Enter class code (e.g. ABC123)"
+                value={classCode}
+                onChange={(e) => setClassCode(e.target.value.toUpperCase())}
+                disabled={joiningClass}
+                className="w-full px-4 py-3 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={joiningClass || !classCode.trim()}
+                className="w-full bg-white text-blue-600 font-semibold py-3 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {joiningClass ? 'Joining...' : 'Join Class'}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render: Stats Row
+  const StatsRow = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {stats.map((stat, index) => {
+        const Icon = stat.icon;
+        return (
+          <div
+            key={index}
+            className={`${stat.bgColor} rounded-lg p-6 border border-gray-200`}
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">{stat.label}</p>
+                <p className={`text-3xl font-bold ${stat.color} mt-2`}>
+                  {stat.value}
+                </p>
+              </div>
+              <Icon className={`${stat.color} w-8 h-8`} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // Render: Active Enrollment Alert
+  const ActiveEnrollmentAlert = () => {
+    if (!activeEnrollment) return null;
+
+    return (
+      <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-6 mb-6 text-white shadow-lg">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <h3 className="font-bold text-lg mb-2">Your Current Class</h3>
+            <p className="text-blue-100 text-sm mb-1">
+              Enrolled in: <span className="font-semibold">{activeEnrollment.className || 'Class'}</span>
+            </p>
+            <p className="text-blue-50 text-xs">
+              Access your class materials, assignments, and discussions
+            </p>
+          </div>
+          <button
+            onClick={() => navigate(`/student/${encodeURIComponent(activeEnrollment.className)}`)}
+            className="flex items-center gap-2 bg-white text-blue-600 font-semibold px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors whitespace-nowrap flex-shrink-0"
+          >
+            View Class
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Render: Sectors Dropdown
+  const SectorsDropdown = () => {
+    if (loadingSectors) {
+      return (
+        <div className="flex items-center justify-center h-20">
+          <Loader className="w-5 h-5 animate-spin text-blue-600" />
+        </div>
+      );
+    }
+
+    if (errorSectors) {
+      return (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-700 text-sm">{errorSectors}</p>
+        </div>
+      );
+    }
+
+    if (!sectors || sectors.length === 0) {
+      return (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+          <p className="text-gray-600 text-sm">No sectors available</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-2 bg-white rounded-lg border border-gray-200">
+        {sectors.map((sector) => (
+          <button
+            key={sector.id}
+            onClick={() => {
+              setSelectedSector(sector.id);
+              setShowSectorDropdown(false);
+            }}
+            className={`w-full text-left px-4 py-3 text-sm transition-colors ${
+              selectedSector === sector.id
+                ? 'bg-blue-50 text-blue-700 font-medium'
+                : 'hover:bg-gray-50 text-gray-700'
+            }`}
+          >
+            {sector.name}
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  // Render: Popular Courses
+  const PopularCoursesSection = () => {
+    if (loadingCourses) {
+      return (
+        <div className="flex items-center justify-center h-32">
+          <Loader className="w-5 h-5 animate-spin text-blue-600" />
+        </div>
+      );
+    }
+
+    if (errorCourses) {
+      return (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-700 text-sm">{errorCourses}</p>
+        </div>
+      );
+    }
+
+    if (!courses || courses.length === 0) {
+      return (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
+          <p className="text-gray-600">No courses available</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {courses.map((course) => {
+          // Get sector name
+          const sector = sectors.find(s => s.id === course.sectorId);
+          
           return (
-            <div 
-              key={index}
-              className="bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-lg transition-all cursor-pointer"
+            <div
+              key={course.id}
+              className={`bg-white rounded-lg overflow-hidden hover:shadow-xl transition-all cursor-pointer border border-gray-100`}
+              onClick={() => handleCourseClick(course)}
             >
-              <div className="flex items-start gap-4">
-                <div className={`p-3 rounded-xl ${stat.bgColor}`}>
-                  <Icon className={`w-6 h-6 ${stat.color}`} />
+              {/* Course Image/Header */}
+              <div className="relative">
+                {course.image || course.imageUrl || course.photo ? (
+                  <div className="h-48 bg-gray-200 overflow-hidden">
+                    <img
+                      src={course.image || course.imageUrl || course.photo}
+                      alt={course.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className={`h-48 bg-gradient-to-br ${getPlaceholderColor(course.id).bg} flex items-center justify-center`}>
+                    <BookOpen className="w-16 h-16 text-white opacity-80" />
+                  </div>
+                )}
+                
+                {/* Status Badge */}
+                <div className="absolute top-4 right-4">
+                  <span className="px-3 py-1 bg-green-400 text-gray-900 text-xs font-bold rounded-full">
+                    {course.status === 'active' ? 'Active' : course.status}
+                  </span>
                 </div>
-                <div>
-                  <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-                  <p className="text-sm text-gray-500">{stat.label}</p>
+              </div>
+
+              {/* Course Info */}
+              <div className="p-5">
+                {/* Course Name */}
+                <h3 className="font-bold text-gray-900 text-base mb-1 line-clamp-1">
+                  {course.name}
+                </h3>
+
+                {/* Sector/Category */}
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-3">
+                  {sector?.name || 'General'}
+                </p>
+
+                {/* Description or placeholder */}
+                <p className="text-sm text-gray-600 mb-4 min-h-5">
+                  {course.description ? course.description.substring(0, 50) + '...' : 'No description available'}
+                </p>
+
+                {/* Level and Status Info */}
+                <div className="border-t border-gray-200 pt-3 grid grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <p className="text-gray-500 text-xs mb-1">Level</p>
+                    <p className="font-bold text-gray-900">{course.level || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 text-xs mb-1">Status</p>
+                    <p className="font-bold text-green-700 capitalize">{course.status}</p>
+                  </div>
                 </div>
               </div>
             </div>
           );
         })}
       </div>
+    );
+  };
 
-      {/* Popular Courses Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-900">Popular Courses</h2>
+  // Render: Enrollments List (My Classes)
+  const EnrollmentsSection = () => {
+    if (loadingEnrollment) {
+      return (
+        <div className="flex items-center justify-center h-20">
+          <Loader className="w-5 h-5 animate-spin text-blue-600" />
+        </div>
+      );
+    }
+
+    if (!enrollments || enrollments.length === 0) {
+      return (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
+          <p className="text-gray-600">No enrollments yet. Apply to a course to get started!</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {enrollments.map((enrollment) => {
+          // Try to find course by ID first, then by className (name)
+          const enrollCourse = courses.find(c => c.id === enrollment.courseId) || 
+                               courses.find(c => c.name === enrollment.className);
           
-          {/* Sector Dropdown */}
+          return (
+            <div
+              key={enrollment.id}
+              onClick={() => enrollment.className && navigate(`/student/${encodeURIComponent(enrollment.className)}`)}
+              className={`bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer border border-gray-200 ${
+                enrollment.className ? '' : 'opacity-75'
+              }`}
+            >
+              {/* Class Info */}
+              <div className="p-6 space-y-4">
+                {/* Title */}
+                <div>
+                  <h3 className="font-bold text-navy-900 text-lg line-clamp-2">{enrollment.className || enrollCourse?.name || 'Class'}</h3>
+                  {enrollCourse?.name && (
+                    <p className="text-sm text-gray-600 mt-1 line-clamp-1">{enrollCourse.name}</p>
+                  )}
+                </div>
+
+                {/* Status Badge Box */}
+                <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                  <p className="text-xs text-gray-600 font-medium mb-1">Status</p>
+                  <p className={`font-bold text-sm ${
+                    enrollment.status === 'active'
+                      ? 'text-green-700'
+                      : enrollment.status === 'completed'
+                      ? 'text-blue-700'
+                      : 'text-orange-700'
+                  } capitalize`}>
+                    {enrollment.status || 'N/A'}
+                  </p>
+                </div>
+
+                {/* Quick Stats */}
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-gray-50 rounded-lg p-2">
+                    <p className="text-xs text-gray-500 font-medium">Attendance</p>
+                    <p className="text-lg font-bold text-navy-900">
+                      {enrollment.progress?.attendanceRate || '-'}%
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-2">
+                    <p className="text-xs text-gray-500 font-medium">Level</p>
+                    <p className="text-lg font-bold text-blue-600">{enrollCourse?.level || enrollment.level || 'N/A'}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-2">
+                    <p className="text-xs text-gray-500 font-medium">Progress</p>
+                    <p className="text-lg font-bold text-navy-900">{enrollment.progress?.completionRate || '0'}%</p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Main Render
+  return (
+    <div className="p-4">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold text-navy-900 mb-2">Welcome, {user?.displayName}!</h1>
+          <p className="text-gray-600">Track your learning progress and explore new courses</p>
+        </div>
+
+        {/* Join Class Section */}
+        <JoinClassSection />
+
+        {/* Stats */}
+        <StatsRow />
+
+        {/* Active Enrollment Alert */}
+        <ActiveEnrollmentAlert />
+
+        {/* My Classes Section */}
+        {enrollments && enrollments.length > 0 && (
+          <div className="mb-12">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">My Classes</h2>
+                <p className="text-gray-600 mt-1">Classes you are currently enrolled in</p>
+              </div>
+            </div>
+            <EnrollmentsSection />
+          </div>
+        )}
+
+        {/* Available Courses Section */}
+        <div className="space-y-6 mb-8">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">Available Classes</h2>
+            <p className="text-gray-600">Explore classes you can apply to</p>
+          </div>
+
+          {/* Sector Filter */}
           <div className="relative">
             <button
               onClick={() => setShowSectorDropdown(!showSectorDropdown)}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 hover:border-gray-300 transition-colors"
+              className="w-full md:w-96 bg-white border border-gray-300 rounded-lg px-4 py-3 text-left font-medium text-gray-900 hover:bg-gray-50 flex items-center justify-between"
             >
-              <span>Sectors</span>
-              {showSectorDropdown ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              <span>
+                {selectedSector
+                  ? sectors.find(s => s.id === selectedSector)?.name
+                  : 'All Courses'}
+              </span>
+              {showSectorDropdown ? <ChevronUp /> : <ChevronDown />}
             </button>
 
             {showSectorDropdown && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-20">
-                <button
-                  onClick={() => {
-                    setSelectedSector(null);
-                    setShowSectorDropdown(false);
-                  }}
-                  className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-blue-600 hover:text-white transition-colors"
-                >
-                  All Sectors
-                </button>
-                {sectors.map((sector, index) => (
+              <div className="absolute top-full left-0 right-0 mt-2 z-10">
+                <div className="space-y-2 bg-white rounded-lg border border-gray-200">
                   <button
-                    key={index}
                     onClick={() => {
-                      setSelectedSector(sector);
+                      setSelectedSector(null);
                       setShowSectorDropdown(false);
                     }}
-                    className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-blue-600 hover:text-white transition-colors"
+                    className={`w-full text-left px-4 py-3 text-sm transition-colors ${
+                      !selectedSector
+                        ? 'bg-blue-50 text-blue-700 font-medium'
+                        : 'hover:bg-gray-50 text-gray-700'
+                    }`}
                   >
-                    {sector}
+                    All Courses
                   </button>
-                ))}
+                  <SectorsDropdown />
+                </div>
               </div>
             )}
           </div>
+
+          {/* Courses Grid */}
+          <PopularCoursesSection />
         </div>
 
-        {/* Selected Sector Badge */}
-        {selectedSector && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500">Filtered by:</span>
-            <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full flex items-center gap-2">
-              {selectedSector}
-              <button 
-                onClick={() => setSelectedSector(null)}
-                className="hover:bg-blue-200 rounded-full p-0.5"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
+        {/* Course Modal */}
+        {showCourseModal && selectedCourse && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg max-w-md w-full mx-4 p-6">
+              <div className="flex justify-between items-start mb-4">
+                <h2 className="text-xl font-bold">{selectedCourse.name}</h2>
+                <button
+                  onClick={() => setShowCourseModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <p className="text-gray-600 text-sm mb-4">{selectedCourse.description}</p>
+
+              <div className="space-y-2 text-sm mb-6">
+                <p><span className="font-medium">Level:</span> {selectedCourse.level}</p>
+                <p><span className="font-medium">Duration:</span> {selectedCourse.duration?.weeks} weeks</p>
+                <p><span className="font-medium">Available Slots:</span> {selectedCourse.capacity - selectedCourse.currentEnrollments}</p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCourseModal(false)}
+                  className="flex-1 px-4 py-2 text-gray-700 border border-gray-300 rounded hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleApplyToCourse}
+                  disabled={loadingApply || activeEnrollment}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loadingApply ? 'Applying...' : 'Apply Now'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Courses Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredCourses.map((course) => (
-            <div 
-              key={course.id}
-              onClick={() => handleCourseClick(course)}
-              className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group"
-            >
-              {/* Course Image */}
-              <div className="relative h-48 bg-gradient-to-br from-blue-100 to-purple-100 overflow-hidden">
-                <img 
-                  src={course.image} 
-                  alt={course.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.parentElement.innerHTML = `
-                      <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-400 to-purple-500">
-                        <span class="text-white text-4xl font-bold opacity-50">${course.title.charAt(0)}</span>
-                      </div>
-                    `;
-                  }}
-                />
-              </div>
-
-              {/* Course Info */}
-              <div className="p-5">
-                <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-                  <span className="font-medium">Expert instructor</span>
-                  <span className="text-gray-300">|</span>
-                  <span>{course.instructor}</span>
-                </div>
-
-                <h3 className="text-lg font-bold text-gray-900 mb-3 group-hover:text-blue-600 transition-colors">
-                  {course.title}
-                </h3>
-
-                {/* Rating */}
-                <div className="flex items-center gap-1 mb-4">
-                  {[...Array(5)].map((_, i) => (
-                    <Star 
-                      key={i} 
-                      className={`w-4 h-4 ${i < Math.floor(course.rating) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} 
-                    />
-                  ))}
-                  <span className="text-sm text-gray-500 ml-1">({course.reviews} reviews)</span>
-                </div>
-
-                {/* Stats */}
-                <div className="flex items-center justify-between text-sm text-gray-500 pt-4 border-t border-gray-100">
-                  <div className="flex items-center gap-1">
-                    <FileText className="w-4 h-4" />
-                    <span>{course.lessons} Lessons</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Users className="w-4 h-4" />
-                    <span>{course.students} Students</span>
-                  </div>
-                </div>
-              </div>
+        {/* Enrollment Warning Modal */}
+        {showEnrollWarning && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg max-w-md w-full mx-4 p-6">
+              <h2 className="text-xl font-bold text-red-600 mb-4">Active Enrollment</h2>
+              <p className="text-gray-700 mb-6">
+                You currently have an active enrollment. You can only enroll in one course at a time.
+                Please complete or terminate your current course before applying to another.
+              </p>
+              <button
+                onClick={() => setShowEnrollWarning(false)}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                OK, Got it
+              </button>
             </div>
-          ))}
-        </div>
-
-        {/* Empty State for filtered courses */}
-        {filteredCourses.length === 0 && (
-          <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
-            <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-700">No courses found</h3>
-            <p className="text-gray-500">No courses available in this sector</p>
           </div>
         )}
       </div>
-
-      {/* Course View Modal */}
-      {showCourseModal && selectedCourse && (
-        <div className="fixed inset-0 z-[9999] overflow-y-auto p-4 sm:p-6">
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setShowCourseModal(false)}
-          />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-          <div className="relative bg-white rounded-2xl w-full max-w-3xl shadow-2xl max-h-[90vh] overflow-hidden">
-            {/* Modal Header */}
-            <div className="relative h-56 bg-gradient-to-br from-blue-400 to-purple-500 overflow-hidden">
-              <img 
-                src={selectedCourse.image} 
-                alt={selectedCourse.title}
-                className="w-full h-full object-cover opacity-60"
-                onError={(e) => { 
-                  e.target.style.display = 'none';
-                }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <button 
-                onClick={() => setShowCourseModal(false)}
-                className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5 text-white" />
-              </button>
-              <div className="absolute bottom-4 left-6 right-6">
-                <span className="px-3 py-1 bg-blue-500 text-white text-xs font-bold rounded-full mb-2 inline-block">
-                  {selectedCourse.sector}
-                </span>
-                <h2 className="text-2xl font-bold text-white">{selectedCourse.title}</h2>
-                <p className="text-white/80">Instructor: {selectedCourse.instructor}</p>
-              </div>
-            </div>
-
-            {/* Modal Content */}
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-14rem)]">
-              {/* Course Stats */}
-              <div className="grid grid-cols-4 gap-4 mb-6">
-                <div className="bg-gray-50 rounded-xl p-4 text-center">
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-                    <span className="text-xl font-bold text-gray-900">{selectedCourse.rating}</span>
-                  </div>
-                  <p className="text-sm text-gray-500">Rating</p>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-4 text-center">
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <FileText className="w-5 h-5 text-blue-500" />
-                    <span className="text-xl font-bold text-gray-900">{selectedCourse.lessons}</span>
-                  </div>
-                  <p className="text-sm text-gray-500">Lessons</p>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-4 text-center">
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <Users className="w-5 h-5 text-green-500" />
-                    <span className="text-xl font-bold text-gray-900">{selectedCourse.students}</span>
-                  </div>
-                  <p className="text-sm text-gray-500">Students</p>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-4 text-center">
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <Clock className="w-5 h-5 text-purple-500" />
-                    <span className="text-xl font-bold text-gray-900">{selectedCourse.reviews}</span>
-                  </div>
-                  <p className="text-sm text-gray-500">Reviews</p>
-                </div>
-              </div>
-
-              {/* Course Description */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <BookOpen className="w-5 h-5 text-[#0D4291]" />
-                  Course Overview
-                </h3>
-                <p className="text-gray-600 leading-relaxed">
-                  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-                </p>
-              </div>
-
-              {/* What You'll Learn */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <Award className="w-5 h-5 text-[#0D4291]" />
-                  What You'll Learn
-                </h3>
-                <ul className="space-y-2">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-600">Lorem ipsum dolor sit amet, consectetur adipiscing elit</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-600">Sed do eiusmod tempor incididunt ut labore et dolore</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-600">Ut enim ad minim veniam, quis nostrud exercitation</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-600">Duis aute irure dolor in reprehenderit in voluptate</span>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Course Content */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-[#0D4291]" />
-                  Course Content
-                </h3>
-                <div className="space-y-2">
-                  {['Module 1: Introduction & Fundamentals', 'Module 2: Core Concepts', 'Module 3: Practical Applications', 'Module 4: Advanced Techniques', 'Module 5: Final Assessment'].map((module, index) => (
-                    <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                        <Play className="w-4 h-4 text-blue-500" />
-                      </div>
-                      <span className="text-gray-700 font-medium">{module}</span>
-                      <span className="ml-auto text-sm text-gray-500">{3 + index} lessons</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Enroll Button */}
-              <div className="flex gap-3 pt-4 border-t border-gray-200">
-                <button 
-                  onClick={() => setShowCourseModal(false)}
-                  className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
-                >
-                  Close
-                </button>
-                <button 
-                  onClick={handleEnroll}
-                  className="flex-1 px-4 py-3 bg-[#0D4291] text-white rounded-xl font-medium hover:bg-[#0a3577] transition-colors flex items-center justify-center gap-2"
-                >
-                  <BookOpen className="w-5 h-5" />
-                  Enroll Now
-                </button>
-              </div>
-            </div>
-          </div>
-          </div>
-        </div>
-      )}
-
-      {/* Enrollment Warning Modal */}
-      {showEnrollWarning && (
-        <div className="fixed inset-0 z-[10000] overflow-y-auto p-4 sm:p-6">
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-          <div className="relative bg-white rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertTriangle className="w-8 h-8 text-orange-500" />
-              </div>
-              
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Cannot Enroll</h3>
-              <p className="text-gray-500 mb-6">
-                You currently have an ongoing course <span className="font-semibold text-gray-700">(Barista NCII)</span>. Please complete your current course before enrolling in a new one.
-              </p>
-
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => setShowEnrollWarning(false)}
-                  className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
-                >
-                  Close
-                </button>
-                <button 
-                  onClick={() => {
-                    setShowEnrollWarning(false);
-                    setShowCourseModal(false);
-                    navigate('/student/courses/1');
-                  }}
-                  className="flex-1 px-4 py-2.5 bg-[#0D4291] text-white rounded-xl font-medium hover:bg-[#0a3577] transition-colors"
-                >
-                  Go to My Course
-                </button>
-              </div>
-            </div>
-          </div>
-          </div>
-        </div>
-      )}
-    </div>
   );
 };
 

@@ -31,43 +31,68 @@ export const useProfileAvatar = (role) => {
   useEffect(() => {
     if (!db || !uid) {
       setAvatarState(null);
-      return;
+      return () => {};
     }
     const settingsRef = doc(db, 'userSettings', uid);
     let unsub = null;
-    let fetched = false;
+    let isMounted = true;
+
     const fetchAvatar = async () => {
       try {
         // One-time fetch for initial load
         const snapshot = await import('firebase/firestore').then(m => m.getDoc(settingsRef));
-        if (snapshot.exists()) {
+        if (isMounted && snapshot.exists()) {
           const roleSettings = snapshot.data()?.[normalizedRole] || null;
           const remoteAvatar = roleSettings?.avatarUrl || roleSettings?.avatarPreview || roleSettings?.avatarBase64 || null;
           if (remoteAvatar) {
             localStorage.setItem(getKey(normalizedRole, uid), remoteAvatar);
             setAvatarState(remoteAvatar);
-            fetched = true;
           }
         }
       } catch {
         // fallback to localStorage if fetch fails
-        setAvatarState(readAvatar(normalizedRole, uid));
+        if (isMounted) {
+          setAvatarState(readAvatar(normalizedRole, uid));
+        }
       }
     };
+
     fetchAvatar();
+
     // Subscribe to changes for live updates
-    unsub = onSnapshot(settingsRef, (snapshot) => {
-      const roleSettings = snapshot.exists() ? snapshot.data()?.[normalizedRole] || null : null;
-      const remoteAvatar = roleSettings?.avatarUrl || roleSettings?.avatarPreview || roleSettings?.avatarBase64 || null;
-      if (remoteAvatar) {
-        localStorage.setItem(getKey(normalizedRole, uid), remoteAvatar);
-        setAvatarState(remoteAvatar);
-      } else {
+    try {
+      unsub = onSnapshot(
+        settingsRef,
+        (snapshot) => {
+          if (!isMounted) return;
+          const roleSettings = snapshot.exists() ? snapshot.data()?.[normalizedRole] || null : null;
+          const remoteAvatar = roleSettings?.avatarUrl || roleSettings?.avatarPreview || roleSettings?.avatarBase64 || null;
+          if (remoteAvatar) {
+            localStorage.setItem(getKey(normalizedRole, uid), remoteAvatar);
+            setAvatarState(remoteAvatar);
+          } else {
+            setAvatarState(readAvatar(normalizedRole, uid));
+          }
+        },
+        () => {
+          if (isMounted) {
+            setAvatarState(readAvatar(normalizedRole, uid));
+          }
+        }
+      );
+    } catch (err) {
+      console.warn('Avatar listener setup failed:', err);
+      if (isMounted) {
         setAvatarState(readAvatar(normalizedRole, uid));
       }
-    });
+    }
+
     return () => {
-      if (unsub) unsub();
+      isMounted = false;
+      if (unsub) {
+        unsub();
+        unsub = null;
+      }
     };
   }, [normalizedRole, uid]);
 

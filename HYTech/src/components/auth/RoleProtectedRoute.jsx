@@ -20,63 +20,116 @@ const RoleProtectedRoute = ({ allowedRole, children }) => {
     }
 
     let unsubscribeUserStatus = null;
+    let isMounted = true;
 
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      // Immediately clean up listener when user signs out
       if (unsubscribeUserStatus) {
         unsubscribeUserStatus();
         unsubscribeUserStatus = null;
       }
 
       if (!user) {
-        setIsAuthenticated(false);
-        setUserRole('');
-        setIsLoading(false);
+        if (isMounted) {
+          setIsAuthenticated(false);
+          setUserRole('');
+          setIsLoading(false);
+        }
         return;
       }
 
-      setIsAuthenticated(true);
-      setIsLoading(true);
+      if (isMounted) {
+        setIsAuthenticated(true);
+        setIsLoading(true);
+      }
 
-      unsubscribeUserStatus = onSnapshot(
-        doc(db, 'users', user.uid),
-        async (userSnap) => {
-          const status = userSnap.exists() ? (userSnap.data()?.status || 'Active') : 'Active';
+      // Set up listener only for authenticated users
+      try {
+        unsubscribeUserStatus = onSnapshot(
+          doc(db, 'users', user.uid),
+          async (userSnap) => {
+            if (!isMounted) return;
 
-          if (status !== 'Active') {
-            await signOut(auth);
-            setIsAuthenticated(false);
-            setUserRole('');
-            setIsLoading(false);
-            return;
-          }
+            const status = userSnap.exists() ? (userSnap.data()?.status || 'Active') : 'Active';
 
-          try {
-            const role = await resolveEffectiveRole({ uid: user.uid, email: user.email, database: db });
-            setUserRole(role);
-          } catch {
-            setUserRole('student');
-          } finally {
-            setIsLoading(false);
+            if (status !== 'Active') {
+              await signOut(auth);
+              if (isMounted) {
+                setIsAuthenticated(false);
+                setUserRole('');
+                setIsLoading(false);
+              }
+              return;
+            }
+
+            try {
+              const role = await resolveEffectiveRole({ uid: user.uid, email: user.email, database: db });
+              if (isMounted) {
+                setUserRole(role);
+              }
+            } catch {
+              if (isMounted) {
+                setUserRole('student');
+              }
+            } finally {
+              if (isMounted) {
+                setIsLoading(false);
+              }
+            }
+          },
+          // Error handler for snapshot listener
+          (error) => {
+            if (!isMounted) return;
+            
+            console.warn('User document access failed:', error?.code);
+            
+            // If user document doesn't exist or permission denied, continue with default role
+            if (error?.code === 'permission-denied' || error?.code === 'not-found') {
+              try {
+                // Try async role resolution as fallback
+                resolveEffectiveRole({ uid: user.uid, email: user.email, database: db })
+                  .then((role) => {
+                    if (isMounted) setUserRole(role);
+                  })
+                  .catch(() => {
+                    if (isMounted) setUserRole('student');
+                  })
+                  .finally(() => {
+                    if (isMounted) setIsLoading(false);
+                  });
+              } catch {
+                if (isMounted) {
+                  setUserRole('student');
+                  setIsLoading(false);
+                }
+              }
+            } else {
+              // For other errors, set default role
+              if (isMounted) {
+                setUserRole('student');
+                setIsLoading(false);
+              }
+            }
           }
-        },
-        async () => {
-          try {
-            const role = await resolveEffectiveRole({ uid: user.uid, email: user.email, database: db });
-            setUserRole(role);
-          } catch {
-            setUserRole('student');
-          } finally {
-            setIsLoading(false);
-          }
+        );
+      } catch (err) {
+        console.error('Error setting up user listener:', err);
+        if (isMounted) {
+          setUserRole('student');
+          setIsLoading(false);
         }
-      );
+      }
     });
 
     return () => {
+      isMounted = false;
       if (unsubscribeUserStatus) {
         unsubscribeUserStatus();
+        unsubscribeUserStatus = null;
       }
-      unsubscribeAuth();
+      if (unsubscribeAuth) {
+        unsubscribeAuth();
+      }
     };
   }, []);
 

@@ -11,14 +11,20 @@ import {
   ChevronDown,
   ChevronUp,
   Menu,
-  X
+  X,
+  Loader
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { getCourses } from '../../utils/firestoreService';
 
 const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isCoursesExpanded, setIsCoursesExpanded] = useState(true);
+  const [isCoursesExpanded, setIsCoursesExpanded] = useState(false);
+  const [enrolledCourses, setEnrolledCourses] = useState([]);
+  const [loadingCourses, setLoadingCourses] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -29,8 +35,39 @@ const Sidebar = () => {
     );
   }, [isCollapsed]);
 
+  // Fetch trainer's active classes
+  useEffect(() => {
+    const fetchCourses = async () => {
+      if (!user?.uid) return;
+      setLoadingCourses(true);
+      try {
+        const coursesData = await getCourses({
+          trainerId: user.uid,
+          status: 'Active',
+        });
+        // Transform courses to sidebar format
+        const formattedCourses = (coursesData || []).map((course) => ({
+          id: course.id,
+          name: course.name,
+          code: course.name.substring(0, 2).toUpperCase() || 'N/A',
+          color: 'bg-blue-100 text-blue-700',
+        }));
+        setEnrolledCourses(formattedCourses);
+      } catch (error) {
+        console.error('Error fetching trainer courses:', error);
+      } finally {
+        setLoadingCourses(false);
+      }
+    };
+
+    fetchCourses();
+  }, [user?.uid]);
+
   // Check if current path is a course page
-  const isCoursePath = location.pathname.includes('/trainer/courses');
+  const isCoursePath = location.pathname.includes('/trainer/courses') || 
+    (location.pathname.startsWith('/trainer/') && 
+     !location.pathname.match(/\/(tasks|archived|settings|$)$/) &&
+     location.pathname !== '/trainer');
 
   const mainNavItems = [
     { path: '/trainer', icon: Home, label: 'Home', exact: true },
@@ -38,26 +75,8 @@ const Sidebar = () => {
 
   const bottomNavItems = [
     { path: '/trainer/tasks', icon: ClipboardList, label: 'Tasks' },
-    { path: '/trainer/sectors', icon: FolderOpen, label: 'Sectors' },
     { path: '/trainer/archived', icon: Archive, label: 'Archived Courses' },
     { path: '/trainer/settings', icon: Settings, label: 'Settings' },
-  ];
-
-  // Mock enrolled courses
-  const enrolledCourses = [
-    { id: 1, name: 'AUTOMOTIVE SERVICES NCII', code: 'KC', color: 'bg-orange-100 text-orange-700' },
-    { id: 2, name: 'PLUMBING NCII', code: 'P', color: 'bg-blue-100 text-blue-700' },
-    { id: 3, name: 'HILOT (WELLNESS)MASSAGE', code: 'HM', color: 'bg-green-100 text-green-700' },
-    { id: 4, name: 'CAREGIVING NCII', code: 'CG', color: 'bg-teal-100 text-teal-700' },
-    { id: 5, name: 'BEAUTY CARE (SKINCARE)', code: 'BS', color: 'bg-pink-100 text-pink-700' },
-    { id: 6, name: 'BEAUTY CARE (NAIL CARE)', code: 'BN', color: 'bg-rose-100 text-rose-700' },
-    { id: 7, name: 'VISUAL GRAPHICS DESIGN', code: 'VG', color: 'bg-indigo-100 text-indigo-700' },
-    { id: 8, name: 'COMPUTER SYSTEM SERVICING', code: 'CS', color: 'bg-cyan-100 text-cyan-700' },
-    { id: 9, name: 'BOOKKEEPING NCII', code: 'BK', color: 'bg-purple-100 text-purple-700' },
-    { id: 10, name: 'HOUSEKEEPING NCII', code: 'HK', color: 'bg-yellow-100 text-yellow-700' },
-    { id: 11, name: 'EVENT MANAGEMENT SERVICES', code: 'EM', color: 'bg-sky-100 text-sky-700' },
-    { id: 12, name: 'BARISTA NCII', code: 'BA', color: 'bg-amber-100 text-amber-700' },
-    { id: 13, name: 'FOOD AND BEVERAGE SERVICES', code: 'FB', color: 'bg-emerald-100 text-emerald-700' }
   ];
 
   const NavItem = ({ item }) => {
@@ -120,7 +139,7 @@ const Sidebar = () => {
             <NavItem key={item.path} item={item} />
           ))}
 
-          {/* My Courses - Expandable */}
+          {/* My Classes - Expandable */}
           {(!isCollapsed || isMobileOpen) && (
             <div className="space-y-1">
               <button
@@ -134,7 +153,7 @@ const Sidebar = () => {
               >
                 <div className="flex items-center gap-3">
                   <BookOpen className="w-5 h-5" />
-                  <span className="font-medium">My Courses</span>
+                  <span className="font-medium">My Classes</span>
                 </div>
                 {isCoursesExpanded ? (
                   <ChevronUp className="w-4 h-4" />
@@ -146,25 +165,34 @@ const Sidebar = () => {
               {/* Course Submenu */}
               {isCoursesExpanded && (
                 <div className="ml-4 space-y-1 animate-slide-down">
-                  {enrolledCourses.map(course => (
-                    <NavLink
-                      key={course.id}
-                      to={`/trainer/courses/${course.id}`}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200
-                        ${isActive
-                          ? 'bg-gray-100 text-gray-900'
-                          : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                        }`
-                      }
-                      onClick={() => setIsMobileOpen(false)}
-                    >
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${course.color}`}>
-                        {course.code}
-                      </div>
-                      <span className="text-sm font-medium">{course.name}</span>
-                    </NavLink>
-                  ))}
+                  {loadingCourses ? (
+                    <div className="flex items-center justify-center py-2">
+                      <Loader className="w-4 h-4 animate-spin text-gray-400" />
+                    </div>
+                  ) : enrolledCourses.length === 0 ? (
+                    <p className="text-xs text-gray-400 px-4 py-2">No active classes</p>
+                  ) : (
+                    enrolledCourses.map(course => (
+                      <NavLink
+                        key={course.id}
+                        to={`/trainer/${encodeURIComponent(course.name)}`}
+                        className={({ isActive }) =>
+                          `flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200
+                          ${isActive
+                            ? 'bg-gray-100 text-gray-900'
+                            : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                          }`
+                        }
+                        onClick={() => setIsMobileOpen(false)}
+                        title={course.name}
+                      >
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${course.color}`}>
+                          {course.code}
+                        </div>
+                        <span className="text-sm font-medium line-clamp-1">{course.name}</span>
+                      </NavLink>
+                    ))
+                  )}
                 </div>
               )}
             </div>
@@ -180,10 +208,11 @@ const Sidebar = () => {
         <div className="hidden lg:block p-4 border-t border-gray-100">
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-all duration-200"
+            className="w-full flex items-center justify-end gap-2 px-4 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-all duration-200"
           >
-            <ChevronRight className={`w-5 h-5 transition-transform duration-300 ${isCollapsed ? '' : 'rotate-180'}`} />
-            {!isCollapsed && <span className="text-sm">Collapse</span>}
+            <div className={`w-8 h-8 rounded-full items-center justify-center flex ${isCollapsed ? '' : 'bg-blue-100'}`}>
+              <ChevronRight className={`w-5 h-5 transition-transform duration-300 ${isCollapsed ? '' : 'rotate-180'}`} />
+            </div>
           </button>
         </div>
       </aside>

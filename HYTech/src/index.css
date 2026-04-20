@@ -146,6 +146,86 @@ body {
   animation: slideUp 0.5s ease-out forwards;
 }
 
+.landing-hero-image {
+  animation: landingHeroZoom 18s ease-in-out infinite alternate;
+  transform-origin: center center;
+}
+
+.landing-float-card {
+  animation: landingFloat 7s ease-in-out infinite;
+}
+
+.landing-float-card.animate-landing-float-delayed {
+  animation-delay: 1.5s;
+}
+
+.animate-landing-shimmer {
+  animation: landingShimmer 8s linear infinite;
+}
+
+.landing-logo-glow {
+  position: relative;
+}
+
+.landing-logo-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(251,146,60,0.22), transparent 65%);
+  filter: blur(18px);
+  z-index: -1;
+  animation: landingPulse 4s ease-in-out infinite;
+}
+
+@keyframes landingHeroZoom {
+  0% {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  100% {
+    transform: scale(1.08) translate3d(-1.5%, -1%, 0);
+  }
+}
+
+@keyframes landingFloat {
+  0%,
+  100% {
+    transform: translateY(0px) translateX(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-12px) translateX(-6px) rotate(-1deg);
+  }
+}
+
+@keyframes landingShimmer {
+  0% {
+    transform: translateX(-40%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.25;
+  }
+  100% {
+    transform: translateX(40%);
+    opacity: 0;
+  }
+}
+
+@keyframes landingPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.05);
+  }
+}
+
 .stagger-1 { animation-delay: 0.1s; }
 .stagger-2 { animation-delay: 0.2s; }
 .stagger-3 { animation-delay: 0.3s; }
@@ -174,4 +254,84 @@ body {
 
 .tooltip-trigger:hover .tooltip {
   @apply opacity-100 visible;
+}
+
+/* Auth Page Animations */
+.auth-logo-glow {
+  position: relative;
+}
+
+.auth-logo-glow::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(251,146,60,0.25), transparent 70%);
+  filter: blur(20px);
+  z-index: -1;
+  animation: authPulse 3s ease-in-out infinite;
+}
+
+@keyframes authPulse {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.08);
+  }
+}
+
+/* Animation Delay Utilities */
+.animation-delay-100ms {
+  animation-delay: 100ms;
+}
+
+.animation-delay-200ms {
+  animation-delay: 200ms;
+}
+
+.animation-delay-300ms {
+  animation-delay: 300ms;
+}
+
+.animation-delay-400ms {
+  animation-delay: 400ms;
+}
+
+.animation-delay-500ms {
+  animation-delay: 500ms;
+}
+
+.animation-delay-600ms {
+  animation-delay: 600ms;
+}
+
+.animation-delay-700ms {
+  animation-delay: 700ms;
+}
+
+.animation-delay-1s {
+  animation-delay: 1s;
+}
+
+.animation-delay-2s {
+  animation-delay: 2s;
+}
+
+/* Float Animation for Auth Pages */
+@keyframes floatSmooth {
+  0%,
+  100% {
+    transform: translateY(0px) translateX(0px);
+  }
+  50% {
+    transform: translateY(-10px) translateX(5px);
+  }
+}
+
+.animate-float {
+  animation: floatSmooth 6s ease-in-out infinite;
 }

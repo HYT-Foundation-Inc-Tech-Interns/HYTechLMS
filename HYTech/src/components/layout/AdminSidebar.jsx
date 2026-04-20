@@ -6,6 +6,7 @@ import {
   FolderOpen, 
   FileText, 
   Settings,
+  BookOpen,
   ChevronRight,
   Menu,
   X
@@ -29,6 +30,7 @@ const AdminSidebar = () => {
     { path: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
     { path: '/admin/users', icon: Users, label: 'User Management' },
     { path: '/admin/sectors', icon: FolderOpen, label: 'Sectors' },
+    { path: '/admin/classes', icon: BookOpen, label: 'Classes' },
     { path: '/admin/logs', icon: FileText, label: 'System Logs' },
     { path: '/admin/settings', icon: Settings, label: 'Settings' },
   ];
@@ -97,10 +99,11 @@ const AdminSidebar = () => {
         <div className="hidden lg:block p-4 border-t border-gray-100">
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-all duration-200"
+            className="w-full flex items-center justify-end gap-2 px-4 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-all duration-200"
           >
-            <ChevronRight className={`w-5 h-5 transition-transform duration-300 ${isCollapsed ? '' : 'rotate-180'}`} />
-            {!isCollapsed && <span className="text-sm">Collapse</span>}
+            <div className={`w-8 h-8 rounded-full items-center justify-center flex ${isCollapsed ? '' : 'bg-blue-100'}`}>
+              <ChevronRight className={`w-5 h-5 transition-transform duration-300 ${isCollapsed ? '' : 'rotate-180'}`} />
+            </div>
           </button>
         </div>
       </aside>

@@ -27,15 +27,28 @@ export const inferRoleFromEmail = (email) => {
 };
 
 export const resolveUserRole = async (uid, database) => {
-  const directUserDoc = await getDoc(doc(database, 'users', uid));
-  if (directUserDoc.exists()) {
-    return directUserDoc.data()?.role || null;
+  try {
+    const directUserDoc = await getDoc(doc(database, 'users', uid));
+    if (directUserDoc.exists()) {
+      return directUserDoc.data()?.role || null;
+    }
+  } catch (err) {
+    // If permission denied (user doc doesn't exist yet), continue to fallback
+    if (err?.code === 'permission-denied') {
+      console.debug('User doc not accessible yet (will be created by AuthContext)');
+    } else {
+      console.error('Error fetching user document:', err);
+    }
   }
 
-  const usersByUidQuery = query(collection(database, 'users'), where('uid', '==', uid), limit(1));
-  const userResults = await getDocs(usersByUidQuery);
-  if (!userResults.empty) {
-    return userResults.docs[0].data()?.role || null;
+  try {
+    const usersByUidQuery = query(collection(database, 'users'), where('uid', '==', uid), limit(1));
+    const userResults = await getDocs(usersByUidQuery);
+    if (!userResults.empty) {
+      return userResults.docs[0].data()?.role || null;
+    }
+  } catch (err) {
+    console.debug('Could not query users by uid:', err?.message);
   }
 
   return null;

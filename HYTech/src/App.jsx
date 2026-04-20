@@ -5,12 +5,14 @@ import SignUp from './components/auth/SignUp';
 import SignIn from './components/auth/SignIn';
 import RoleProtectedRoute from './components/auth/RoleProtectedRoute';
 import PublicOnlyRoute from './components/auth/PublicOnlyRoute';
+import AuthenticatedRoute from './components/auth/AuthenticatedRoute';
 
 // Admin imports
 import AdminDashboardLayout from './components/layout/AdminDashboardLayout';
 import Dashboard from './components/dashboard/Dashboard';
 import UserManagement from './components/users/UserManagement';
 import Sectors from './components/sectors/Sectors';
+import Classes from './components/admin/Classes';
 import SystemLogs from './components/logs/SystemLogs';
 import Settings from './components/settings/Settings';
 import NotificationsPage from './components/shared/NotificationsPage';
@@ -19,8 +21,8 @@ import NotificationsPage from './components/shared/NotificationsPage';
 import DashboardLayout from './components/layout/DashboardLayout';
 import TrainerHome from './components/trainer/TrainerHome';
 import Course from './components/trainer/Course';
+import ClassDetail from './components/trainer/ClassDetail';
 import Tasks from './components/trainer/Tasks';
-import TrainerSectors from './components/trainer/TrainerSectors';
 import SectorDetail from './components/trainer/SectorDetail';
 import ArchivedCourses from './components/trainer/ArchivedCourses';
 import TrainerSettings from './components/trainer/TrainerSettings';
@@ -79,6 +81,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="users" element={<UserManagement />} />
           <Route path="sectors" element={<Sectors />} />
+          <Route path="classes" element={<Classes />} />
           <Route path="logs" element={<SystemLogs />} />
           <Route path="settings" element={<Settings />} />
           <Route path="notifications" element={<NotificationsPage role="admin" />} />
@@ -95,8 +98,8 @@ function App() {
         >
           <Route index element={<TrainerHome />} />
           <Route path="courses/:courseId" element={<Course />} />
+          <Route path=":className" element={<ClassDetail />} />
           <Route path="tasks" element={<Tasks />} />
-          <Route path="sectors" element={<TrainerSectors />} />
           <Route path="sectors/:sectorId" element={<SectorDetail />} />
           <Route path="archived" element={<ArchivedCourses />} />
           <Route path="settings" element={<TrainerSettings />} />
@@ -132,13 +135,23 @@ function App() {
         >
           <Route index element={<StudentHome />} />
           <Route path="calendar" element={<StudentCalendar />} />
-          <Route path="courses/:courseId" element={<StudentCourse />} />
+          <Route path=":classname" element={<StudentCourse />} />
           <Route path="tasks" element={<StudentTasks />} />
           <Route path="certificates" element={<StudentCertificates />} />
           <Route path="archived" element={<StudentArchivedCourses />} />
           <Route path="settings" element={<StudentSettings />} />
           <Route path="notifications" element={<NotificationsPage role="student" />} />
         </Route>
+
+        {/* Class Detail Route - Accessible to all authenticated users */}
+        <Route
+          path="/class/:className"
+          element={
+            <AuthenticatedRoute>
+              <ClassDetail />
+            </AuthenticatedRoute>
+          }
+        />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

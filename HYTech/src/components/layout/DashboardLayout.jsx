@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, useParams } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import HytBot from '../hytbot/HytBot';
+import { getCourseByName, getCourseTemplateById } from '../../utils/firestoreService';
 
 const TRAINER_COURSE_TITLES = {
   1: 'AUTOMOTIVE SERVICES NCII',
@@ -23,6 +24,26 @@ const TRAINER_COURSE_TITLES = {
 const DashboardLayout = () => {
   const location = useLocation();
   const params = useParams();
+  const [classData, setClassData] = useState(null);
+  const [courseData, setCourseData] = useState(null);
+
+  // Fetch class data when viewing a class
+  useEffect(() => {
+    if (params.className) {
+      const decodedClassName = decodeURIComponent(params.className);
+      getCourseByName(decodedClassName)
+        .then(data => {
+          setClassData(data);
+          // If class has courseId, fetch the course template
+          if (data?.courseId) {
+            getCourseTemplateById(data.courseId)
+              .then(courseData => setCourseData(courseData))
+              .catch(err => console.error('Error fetching course template:', err));
+          }
+        })
+        .catch(err => console.error('Error fetching class data:', err));
+    }
+  }, [params.className]);
 
   // Get page title based on route
   const getPageInfo = () => {
@@ -52,6 +73,22 @@ const DashboardLayout = () => {
     }
     if (path === '/trainer/notifications') {
       return { title: 'Notifications', subtitle: 'View all trainer notifications and updates.' };
+    }
+    if (params.className) {
+      // ClassDetail route - show class name as title and course name + level as subtitle
+      const decodedClassName = decodeURIComponent(params.className);
+      
+      // Format subtitle as "COURSE NAME LEVEL" (e.g., "BARISTA NC II")
+      let courseSubtitle = decodedClassName;
+      
+      if (courseData && courseData.name && courseData.level) {
+        courseSubtitle = `${courseData.name} ${courseData.level}`.toUpperCase();
+      } else if (classData && classData.level) {
+        // Fallback to class level if course data not available yet
+        courseSubtitle = `${decodedClassName.replace(/\s*\(\d{4}-\d{4}\)/, '')} ${classData.level}`.toUpperCase();
+      }
+      
+      return { title: decodedClassName, subtitle: courseSubtitle };
     }
     return { title: '', subtitle: '' };
   };

@@ -287,7 +287,15 @@ const SignIn = () => {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex relative overflow-hidden">
+      {/* Animated Background Layers */}
+      <div className="absolute inset-0 -z-10 bg-gradient-to-br from-blue-50 via-white to-orange-50" />
+      <div className="absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-orange-300/15 rounded-full blur-3xl animate-pulse-slow" />
+        <div className="absolute top-1/2 -left-40 w-96 h-96 bg-blue-300/15 rounded-full blur-3xl animate-pulse-slow animation-delay-1s" />
+        <div className="absolute bottom-0 right-1/3 w-72 h-72 bg-purple-300/10 rounded-full blur-3xl animate-pulse-slow animation-delay-2s" />
+      </div>
+
       {/* Left Side - Hero Section */}
       <div 
         className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
@@ -304,7 +312,7 @@ const SignIn = () => {
         <div className="relative z-10 flex flex-col items-center justify-center w-full p-12 text-white text-center">
           {/* Logo - Made Much Bigger */}
           <div className="mb-6 animate-fade-in">
-            <div className="w-56 h-56 mx-auto mb-6 relative translate-y-11 ">
+            <div className="w-56 h-56 mx-auto mb-6 relative translate-y-11 auth-logo-glow">
               <div className="absolute inset-0 bg-white/10 rounded-full blur-2xl scale-110" />
               <img 
                 src="/images/hyt_logo.png" 
@@ -320,10 +328,10 @@ const SignIn = () => {
           {/* Welcome Text */}
           <div className="animate-slide-up">
             <h1 className="text-4xl lg:text-4xl font-bold mb-4">
-              Welcome to
+              Welcome Back to
             </h1>
             <h2 className="text-3xl lg:text-5xl font-bold text-orange-400">
-              HYT Global Institute
+              HYTech
             </h2>
           </div>
 
@@ -333,88 +341,97 @@ const SignIn = () => {
       </div>
 
       {/* Right Side - Form Section */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-gradient-to-br from-gray-50 to-white relative">
-        {/* Decorative Illustration */}
-        <div className="absolute top-8 right-8 w-64 h-64 opacity-20 hidden xl:block">
-          <svg viewBox="0 0 200 200" className="w-full h-full">
-            <circle cx="100" cy="100" r="80" fill="#f97316" opacity="0.1" />
-            <circle cx="100" cy="100" r="60" fill="#1e2a4a" opacity="0.1" />
-            <path d="M60,100 Q100,60 140,100 Q100,140 60,100" fill="none" stroke="#f97316" strokeWidth="2" opacity="0.3" />
-          </svg>
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 relative">
+        {/* Decorative Elements */}
+        <div className="absolute top-10 right-10 w-48 h-48 opacity-10 hidden xl:block animate-float">
+          <div className="w-full h-full rounded-full border-2 border-orange-400" />
+        </div>
+        <div className="absolute bottom-20 left-10 w-32 h-32 opacity-5 hidden xl:block animate-float animation-delay-2s">
+          <div className="w-full h-full rounded-full border-2 border-blue-400" />
         </div>
 
         <div className="w-full max-w-md animate-fade-in relative z-10">
           {/* Mobile Logo */}
-          <div className="lg:hidden text-center mb-8">
-            <div className="w-20 h-20 mx-auto mb-4 bg-navy-500 rounded-2xl flex items-center justify-center shadow-xl">
+          <div className="lg:hidden text-center mb-6 sm:mb-8">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 sm:mb-4 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow duration-300 animate-scale-in">
               <img 
                 src="/images/hyt_logo.png" 
                 alt="HYT Logo" 
-                className="w-16 h-16 object-contain"
+                className="w-12 sm:w-16 h-12 sm:h-16 object-contain"
                 onError={(e) => {
                   e.target.style.display = 'none';
-                  e.target.parentElement.innerHTML = '<span class="text-white font-bold text-2xl">HYT</span>';
+                  e.target.parentElement.innerHTML = '<span class="text-white font-bold text-xl sm:text-2xl">HYT</span>';
                 }}
               />
             </div>
-            <h1 className="text-2xl font-bold text-navy-500">HYT Global Institute</h1>
+            <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-navy-600 to-orange-500 bg-clip-text text-transparent">HYT Global Institute</h1>
           </div>
 
           {/* Form Header */}
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-800 mb-2">Welcome Back</h2>
-            <p className="text-gray-500">Sign in to your account to continue</p>
+          <div className="text-center mb-6 sm:mb-8 animate-slide-up animation-delay-100ms">
+            <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-2">Welcome Back</h2>
+            <p className="text-sm sm:text-base text-gray-500">Sign in to continue your learning journey</p>
           </div>
 
-          <div className="mb-6" />
-
+          {/* Form Container */}
+          <div className="bg-white/40 backdrop-blur-sm rounded-2xl p-6 sm:p-8 border border-white/20 shadow-lg animate-fade-in animation-delay-250ms">
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             {/* Email Input */}
-            <div className="relative group">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors">
-                <Mail className="w-5 h-5" />
+            <div className="relative group animate-slide-up animation-delay-300ms">
+              <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors">
+                Email
+              </label>
+              <div className="relative">
+                <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors">
+                  <Mail className="w-4 sm:w-5 h-4 sm:h-5" />
+                </div>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="Enter your email"
+                  className="input-field pl-10 sm:pl-12 text-sm sm:text-base focus:ring-2 focus:ring-orange-400 focus:scale-105 transition-transform duration-200 group-focus-within:bg-orange-50/50"
+                  required
+                />
               </div>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="Email"
-                className="input-field pl-12"
-                required
-              />
             </div>
 
             {/* Password Input */}
-            <div className="relative group">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors">
-                <Lock className="w-5 h-5" />
+            <div className="relative group animate-slide-up animation-delay-400ms">
+              <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors">
+                Password
+              </label>
+              <div className="relative">
+                <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors">
+                  <Lock className="w-4 sm:w-5 h-4 sm:h-5" />
+                </div>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Enter your password"
+                  className="input-field pl-10 sm:pl-12 pr-10 sm:pr-12 text-sm sm:text-base focus:ring-2 focus:ring-orange-400 focus:scale-105 transition-transform duration-200 group-focus-within:bg-orange-50/50"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 sm:w-5 h-4 sm:h-5" /> : <Eye className="w-4 sm:w-5 h-4 sm:h-5" />}
+                </button>
               </div>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="Password"
-                className="input-field pl-12 pr-12"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
             </div>
 
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-end">
+            {/* Forgot Password */}
+            <div className="flex justify-end animate-slide-up animation-delay-500ms">
               <button
                 type="button"
                 onClick={() => setShowForgotPasswordModal(true)}
-                className="text-sm text-orange-500 hover:text-orange-600 font-medium transition-colors"
+                className="text-xs sm:text-sm text-orange-500 hover:text-orange-600 font-semibold transition-all hover:underline"
               >
                 Forgot Password?
               </button>
@@ -424,7 +441,7 @@ const SignIn = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full btn-primary py-4 text-lg font-semibold disabled:opacity-70 disabled:cursor-not-allowed mt-6"
+              className="w-full btn-primary py-2.5 sm:py-3 text-sm sm:text-base font-semibold disabled:opacity-70 disabled:cursor-not-allowed mt-6 sm:mt-8 animate-slide-up animation-delay-600ms hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 transform"
             >
               {isLoading ? (
                 <div className="flex items-center justify-center gap-2">
@@ -436,13 +453,14 @@ const SignIn = () => {
               )}
             </button>
           </form>
+          </div>
 
           {/* Sign Up Link */}
-          <p className="mt-6 text-center text-gray-600">
+          <p className="mt-6 text-center text-gray-600 animate-slide-up animation-delay-700ms">
             Don't have account?{' '}
             <Link 
               to="/signup" 
-              className="text-orange-500 font-semibold hover:text-orange-600 transition-colors"
+              className="text-orange-500 font-semibold hover:text-orange-600 transition-all duration-300 hover:underline underline-offset-4"
             >
               Sign up
             </Link>

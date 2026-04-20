@@ -7,15 +7,16 @@ import {
   createUserWithEmailAndPassword,
   setPersistence,
 } from 'firebase/auth';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { auth, db, firebaseInitError } from '../../firebase';
+import { auth, firebaseInitError } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
+import { createUserProfile } from '../../utils/firestoreService';
 
 const SignUp = () => {
   const SIGN_UP_DRAFT_KEY = 'hyt:signup:draft';
   const navigate = useNavigate();
   const { addToast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
   const [rememberMe, setRememberMe] = useState(() => {
     try {
       const saved = localStorage.getItem(SIGN_UP_DRAFT_KEY);
@@ -65,6 +66,11 @@ const SignUp = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
 
+  // Clear form on page load/refresh
+  useEffect(() => {
+    localStorage.removeItem(SIGN_UP_DRAFT_KEY);
+  }, []);
+
   useEffect(() => {
     localStorage.setItem(
       SIGN_UP_DRAFT_KEY,
@@ -81,20 +87,69 @@ const SignUp = () => {
     );
   }, [formData, rememberMe]);
 
+  const clearForm = () => {
+    setFormData({
+      firstName: '',
+      middleName: '',
+      lastName: '',
+      nameExtension: '',
+      birthDate: '',
+      email: '',
+      phone: '',
+      password: '',
+    });
+    setCurrentStep(1);
+    localStorage.removeItem(SIGN_UP_DRAFT_KEY);
+    addToast('Form cleared successfully!', 'success');
+  };
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleNextStep = () => {
+    // Validate Step 1
+    if (!formData.firstName.trim()) {
+      addToast('Please enter your first name.', 'error');
+      return;
+    }
+    if (!formData.lastName.trim()) {
+      addToast('Please enter your last name.', 'error');
+      return;
+    }
+    if (!formData.birthDate) {
+      addToast('Please enter your birth date.', 'error');
+      return;
+    }
+    // Move to step 2
+    setCurrentStep(2);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // If on step 1, move to step 2
+    if (currentStep === 1) {
+      handleNextStep();
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      if (!auth || !db) {
+      if (!auth) {
         addToast(firebaseInitError || 'Firebase is not configured correctly.', 'error');
         return;
       }
 
+      if (!formData.email.trim()) {
+        addToast('Please enter your email address.', 'error');
+        return;
+      }
+      if (!formData.phone.trim()) {
+        addToast('Please enter your phone number.', 'error');
+        return;
+      }
       if (formData.password.length < 8) {
         addToast('Password must be at least 8 characters.', 'error');
         return;
@@ -111,19 +166,19 @@ const SignUp = () => {
         formData.password
       );
 
-      await setDoc(doc(db, 'users', credential.user.uid), {
-        uid: credential.user.uid,
-        firstName: formData.firstName.trim(),
-        middleName: formData.middleName.trim(),
-        lastName: formData.lastName.trim(),
-        nameExtension: formData.nameExtension.trim(),
-        birthDate: formData.birthDate,
-        name: `${formData.firstName.trim()} ${formData.middleName.trim()} ${formData.lastName.trim()}${formData.nameExtension.trim() ? ` ${formData.nameExtension.trim()}` : ''}`.replace(/\s+/g, ' ').trim(),
+      // Use the new Firestore service to create user profile with lmsExperience
+      await createUserProfile(credential.user.uid, {
         email: formData.email.trim(),
-        phone: formData.phone.trim(),
+        displayName: `${formData.firstName.trim()} ${formData.middleName.trim()} ${formData.lastName.trim()}${formData.nameExtension.trim() ? ` ${formData.nameExtension.trim()}` : ''}`.replace(/\s+/g, ' ').trim(),
+        profile: {
+          firstName: formData.firstName.trim(),
+          middleName: formData.middleName.trim(),
+          lastName: formData.lastName.trim(),
+          nameExtension: formData.nameExtension.trim(),
+          phoneNumber: formData.phone.trim(),
+          dateOfBirth: formData.birthDate,
+        },
         role: 'student',
-        status: 'Active',
-        createdAt: serverTimestamp(),
       });
 
       addToast('Student account created successfully. You can now sign in.', 'success');
@@ -153,7 +208,15 @@ const SignUp = () => {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex relative overflow-hidden">
+      {/* Animated Background Layers */}
+      <div className="absolute inset-0 -z-10 bg-gradient-to-br from-blue-50 via-white to-orange-50" />
+      <div className="absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-orange-300/15 rounded-full blur-3xl animate-pulse-slow" />
+        <div className="absolute top-1/2 -left-40 w-96 h-96 bg-blue-300/15 rounded-full blur-3xl animate-pulse-slow animation-delay-1s" />
+        <div className="absolute bottom-0 right-1/3 w-72 h-72 bg-purple-300/10 rounded-full blur-3xl animate-pulse-slow animation-delay-2s" />
+      </div>
+
       {/* Left Side - Hero Section */}
       <div 
         className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
@@ -170,7 +233,7 @@ const SignUp = () => {
         <div className="relative z-10 flex flex-col items-center justify-center w-full p-12 text-white text-center">
           {/* Logo - Made Much Bigger */}
           <div className="mb-6 animate-fade-in">
-            <div className="w-56 h-56 mx-auto mb-6 relative translate-y-11">
+            <div className="w-56 h-56 mx-auto mb-6 relative translate-y-11 auth-logo-glow">
               <div className="absolute inset-0 bg-white/10 rounded-full blur-2xl scale-110" />
               <img 
                 src="/images/hyt_logo.png" 
@@ -189,7 +252,7 @@ const SignUp = () => {
               Welcome to
             </h1>
             <h2 className="text-3xl lg:text-5xl font-bold text-orange-400">
-              HYT Global Institute
+              HYTech
             </h2>
           </div>
 
@@ -199,44 +262,75 @@ const SignUp = () => {
       </div>
 
       {/* Right Side - Form Section */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-gradient-to-br from-gray-50 to-white">
-        <div className="w-full max-w-md animate-fade-in">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 relative">
+        {/* Decorative Elements */}
+        <div className="absolute top-10 right-10 w-48 h-48 opacity-10 hidden xl:block animate-float">
+          <div className="w-full h-full rounded-full border-2 border-orange-400" />
+        </div>
+        <div className="absolute bottom-20 left-10 w-32 h-32 opacity-5 hidden xl:block animate-float animation-delay-2s">
+          <div className="w-full h-full rounded-full border-2 border-blue-400" />
+        </div>
+
+        <div className="w-full max-w-md animate-fade-in relative z-10">
           {/* Mobile Logo */}
-          <div className="lg:hidden text-center mb-8">
-            <div className="w-20 h-20 mx-auto mb-4 bg-navy-500 rounded-2xl flex items-center justify-center shadow-xl">
+          <div className="lg:hidden text-center mb-6 sm:mb-8">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 sm:mb-4 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow duration-300 animate-scale-in">
               <img 
                 src="/images/hyt_logo.png" 
                 alt="HYT Logo" 
-                className="w-16 h-16 object-contain"
+                className="w-12 sm:w-16 h-12 sm:h-16 object-contain"
                 onError={(e) => {
                   e.target.style.display = 'none';
-                  e.target.parentElement.innerHTML = '<span class="text-white font-bold text-2xl">HYT</span>';
+                  e.target.parentElement.innerHTML = '<span class="text-white font-bold text-xl sm:text-2xl">HYT</span>';
                 }}
               />
             </div>
-            <h1 className="text-2xl font-bold text-navy-500">HYT Global Institute</h1>
+            <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-navy-600 to-orange-500 bg-clip-text text-transparent">HYT Global Institute</h1>
           </div>
 
           {/* Form Header */}
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-800 mb-2">Getting Started</h2>
-            <p className="text-gray-500">Create account to continue!</p>
+          <div className="text-center mb-6 sm:mb-8 animate-slide-up animation-delay-100ms">
+            <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-2">Getting Started</h2>
+            <p className="text-sm sm:text-base text-gray-500">Create your account to access HYTech</p>
           </div>
 
-          <div className="mb-6" />
+          {/* Progress Indicator */}
+          <div className="animate-slide-up animation-delay-200ms">
+            <div className="flex justify-between mb-2">
+              <span className="text-xs sm:text-sm font-medium text-gray-600">Step {currentStep} of 2</span>
+              <span className="text-xs sm:text-sm font-medium text-orange-500">{currentStep === 1 ? 'Personal Info' : 'Account Details'}</span>
+            </div>
+            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden shadow-sm mb-2">
+              <div className={`h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full transition-all duration-700 ease-out shadow-lg ${currentStep === 1 ? 'w-1/2' : 'w-full'}`} />
+            </div>
+            <div className="flex justify-end mb-2 mb-2 sm:mb-3 text-right animate-slide-up animation-delay-250ms">
+              <button
+                type="button"
+                onClick={clearForm}
+                className="text-xs sm:text-sm text-gray-500 hover:text-orange-500 transition-colors font-medium underline underline-offset-2"
+                title="Clear form and start over"
+              >
+                Clear Form
+              </button>
+            </div>
+          </div>
 
+          {/* Form Container */}
+          <div className="bg-white/40 backdrop-blur-sm rounded-2xl p-6 sm:p-8 border border-white/20 shadow-lg animate-fade-in animation-delay-300ms">
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
 
-            {/* Name Inputs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* STEP 1: Name Inputs */}
+            {currentStep === 1 && (
+            <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-slide-up animation-delay-300ms">
               <div className="group">
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors">
                   First Name <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors">
-                    <User className="w-5 h-5" />
+                  <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none z-10">
+                    <User className="w-4 sm:w-5 h-4 sm:h-5" />
                   </div>
                   <input
                     type="text"
@@ -244,19 +338,19 @@ const SignUp = () => {
                     value={formData.firstName}
                     onChange={handleChange}
                     placeholder="Enter first name"
-                    className="input-field pl-12"
+                    className="input-field pl-10 sm:pl-12 text-sm sm:text-base focus:ring-2 focus:ring-orange-400 focus:scale-105 transition-transform duration-200 group-focus-within:bg-orange-50/50"
                     required
                   />
                 </div>
               </div>
 
               <div className="group">
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors">
                   Middle Name
                 </label>
                 <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors">
-                    <User className="w-5 h-5" />
+                  <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none z-10">
+                    <User className="w-4 sm:w-5 h-4 sm:h-5" />
                   </div>
                   <input
                     type="text"
@@ -264,18 +358,18 @@ const SignUp = () => {
                     value={formData.middleName}
                     onChange={handleChange}
                     placeholder="Enter middle name"
-                    className="input-field pl-12"
+                    className="input-field pl-10 sm:pl-12 text-sm sm:text-base focus:ring-2 focus:ring-orange-400 focus:scale-105 transition-transform duration-200 group-focus-within:bg-orange-50/50"
                   />
                 </div>
               </div>
 
               <div className="group">
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors">
                   Last Name <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors">
-                    <User className="w-5 h-5" />
+                  <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none z-10">
+                    <User className="w-4 sm:w-5 h-4 sm:h-5" />
                   </div>
                   <input
                     type="text"
@@ -283,33 +377,33 @@ const SignUp = () => {
                     value={formData.lastName}
                     onChange={handleChange}
                     placeholder="Enter last name"
-                    className="input-field pl-12"
+                    className="input-field pl-10 sm:pl-12 text-sm sm:text-base focus:ring-2 focus:ring-orange-400 focus:scale-105 transition-transform duration-200 group-focus-within:bg-orange-50/50"
                     required
                   />
                 </div>
               </div>
 
               <div className="group">
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Name Extension
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors">
+                  Extension
                 </label>
                 <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors">
-                    <User className="w-5 h-5" />
+                  <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none z-10">
+                    <User className="w-4 sm:w-5 h-4 sm:h-5" />
                   </div>
                   <input
                     type="text"
                     name="nameExtension"
                     value={formData.nameExtension}
                     onChange={handleChange}
-                    placeholder="Jr., Sr., III, etc."
-                    className="input-field pl-12"
+                    placeholder="Jr., Sr., III..."
+                    className="input-field pl-10 sm:pl-12 text-sm sm:text-base focus:ring-2 focus:ring-orange-400 focus:scale-105 transition-transform duration-200 group-focus-within:bg-orange-50/50"
                   />
                 </div>
               </div>
 
               <div className="group">
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors">
                   Birth Date <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -317,20 +411,25 @@ const SignUp = () => {
                   name="birthDate"
                   value={formData.birthDate}
                   onChange={handleChange}
-                  className="input-field"
+                  className="input-field text-sm sm:text-base focus:ring-2 focus:ring-orange-400 focus:scale-105 transition-transform duration-200"
                   required
                 />
               </div>
             </div>
+            </>
+            )}
 
+            {/* STEP 2: Email, Phone, Password Inputs */}
+            {currentStep === 2 && (
+            <>
             {/* Email Input */}
-            <div className="group">
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <div className="group animate-slide-up animation-delay-300ms">
+              <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors">
                 Email <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors">
-                  <Mail className="w-5 h-5" />
+                <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none z-10">
+                  <Mail className="w-4 sm:w-5 h-4 sm:h-5" />
                 </div>
                 <input
                   type="email"
@@ -338,20 +437,20 @@ const SignUp = () => {
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="Enter email"
-                  className="input-field pl-12"
+                  className="input-field pl-10 sm:pl-12 text-sm sm:text-base focus:ring-2 focus:ring-orange-400 focus:scale-105 transition-transform duration-200 group-focus-within:bg-orange-50/50"
                   required
                 />
               </div>
             </div>
 
             {/* Phone Input */}
-            <div className="group">
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <div className="group animate-slide-up animation-delay-400ms">
+              <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors">
                 Phone <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors">
-                  <Phone className="w-5 h-5" />
+                <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none z-10">
+                  <Phone className="w-4 sm:w-5 h-4 sm:h-5" />
                 </div>
                 <input
                   type="tel"
@@ -359,20 +458,20 @@ const SignUp = () => {
                   value={formData.phone}
                   onChange={handleChange}
                   placeholder="Enter phone"
-                  className="input-field pl-12"
+                  className="input-field pl-10 sm:pl-12 text-sm sm:text-base focus:ring-2 focus:ring-orange-400 focus:scale-105 transition-transform duration-200 group-focus-within:bg-orange-50/50"
                   required
                 />
               </div>
             </div>
 
             {/* Password Input */}
-            <div className="group">
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <div className="group animate-slide-up animation-delay-500ms">
+              <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors">
                 Password <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors">
-                  <Lock className="w-5 h-5" />
+                <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none z-10">
+                  <Lock className="w-4 sm:w-5 h-4 sm:h-5" />
                 </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -380,42 +479,56 @@ const SignUp = () => {
                   value={formData.password}
                   onChange={handleChange}
                   placeholder="Enter password"
-                  className="input-field pl-12 pr-12"
+                  className="input-field pl-10 sm:pl-12 pr-10 sm:pr-12 text-sm sm:text-base focus:ring-2 focus:ring-orange-400 focus:scale-105 transition-transform duration-200"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPassword ? <EyeOff className="w-4 sm:w-5 h-4 sm:h-5" /> : <Eye className="w-4 sm:w-5 h-4 sm:h-5" />}
                 </button>
               </div>
             </div>
+            </>
+            )}
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full btn-primary py-4 text-lg font-semibold disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Creating Account...</span>
-                </div>
-              ) : (
-                'Sign Up'
+            {/* Action Buttons */}
+            <div className={`flex gap-3 mt-6 sm:mt-8 animate-slide-up ${currentStep === 1 ? 'animation-delay-700ms' : 'animation-delay-600ms'}`}>
+              {currentStep === 2 && (
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(1)}
+                  className="flex-1 px-4 py-2.5 sm:py-3 text-gray-700 hover:bg-gray-100 rounded-lg font-semibold transition-all duration-300 border border-gray-300 hover:border-gray-400"
+                >
+                  Back
+                </button>
               )}
-            </button>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className={`${currentStep === 2 ? 'flex-1' : 'w-full'} btn-primary py-2.5 sm:py-3 text-sm sm:text-base font-semibold disabled:opacity-70 disabled:cursor-not-allowed hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 transform`}
+              >
+                {isLoading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>{currentStep === 1 ? 'Processing...' : 'Creating Account...'}</span>
+                  </div>
+                ) : (
+                  currentStep === 1 ? 'Next' : 'Sign Up'
+                )}
+              </button>
+            </div>
           </form>
+          </div>
 
           {/* Sign In Link */}
-          <p className="mt-6 text-center text-gray-600">
+          <p className="mt-6 text-center text-gray-600 animate-slide-up animation-delay-800ms">
             Already have an account?{' '}
             <Link 
               to="/signin" 
-              className="text-orange-500 font-semibold hover:text-orange-600 transition-colors"
+              className="text-orange-500 font-semibold hover:text-orange-600 transition-all duration-300 hover:underline underline-offset-4"
             >
               Sign In
             </Link>

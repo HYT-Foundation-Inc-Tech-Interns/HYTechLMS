@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, User, Settings } from 'lucide-react';
+import { LogOut, User, Settings, Users, BookOpen, ClipboardList } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import NotificationDropdown from '../shared/NotificationDropdown';
 import FlappyBirdGame from '../shared/FlappyBirdGame';

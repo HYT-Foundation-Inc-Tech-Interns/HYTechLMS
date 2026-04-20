@@ -1,26 +1,85 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   GraduationCap, 
   FolderOpen, 
   BookOpen, 
-  Award,
   AlertTriangle,
   Bell,
   ChevronRight,
-  TrendingUp
+  TrendingUp,
+  Loader
 } from 'lucide-react';
+import { getCourses, getSectors, getCoursesTemplates } from '../../utils/firestoreService';
+import { useToast } from '../../context/ToastContext';
+import { db } from '../../firebase';
+import { collection, getDocs, where, query } from 'firebase/firestore';
 
 const Dashboard = () => {
-  // Stats data
-  const stats = [
-    { label: 'Total Participants', value: '250', icon: Users, change: '+18%', changeType: 'positive', color: 'blue' },
-    { label: 'Active Trainers', value: '5', icon: GraduationCap, change: '5%', changeType: 'neutral', color: 'purple' },
-    { label: 'Active Students', value: '245', icon: Users, change: '+12%', changeType: 'positive', color: 'cyan' },
-    { label: 'Total Sectors', value: '9', icon: FolderOpen, change: '+8%', changeType: 'positive', color: 'green' },
-    { label: 'Active Programs', value: '156', icon: BookOpen, change: '+8%', changeType: 'positive', color: 'orange' },
-    { label: 'Certification Rate', value: '84%', icon: Award, change: '+18%', changeType: 'positive', color: 'teal' },
-  ];
+  const [stats, setStats] = useState([
+    { label: 'Total Participants', value: '0', icon: Users, change: '+0%', changeType: 'positive', color: 'blue' },
+    { label: 'Active Trainers', value: '0', icon: GraduationCap, change: '0%', changeType: 'neutral', color: 'purple' },
+    { label: 'Active Students', value: '0', icon: Users, change: '+0%', changeType: 'positive', color: 'cyan' },
+    { label: 'Total Sectors', value: '0', icon: FolderOpen, change: '+0%', changeType: 'positive', color: 'green' },
+    { label: 'Active Programs', value: '0', icon: BookOpen, change: '+0%', changeType: 'positive', color: 'orange' },
+    { label: 'Total Courses', value: '0', icon: BookOpen, change: '+0%', changeType: 'positive', color: 'teal' },
+  ]);
+  
+  const [loading, setLoading] = useState(true);
+  const { addToast } = useToast();
+
+  // Fetch real data from Firestore
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch total sectors
+        const sectorsData = await getSectors();
+        const totalSectors = (sectorsData || []).length;
+        
+        // Fetch active classes (courses with status Active)
+        const coursesData = await getCourses({ status: 'Active' });
+        const activeClasses = (coursesData || []).length;
+        
+        // Fetch total courses
+        const allCoursesData = await getCoursesTemplates();
+        const totalCourses = (allCoursesData || []).length;
+        
+        // Count total users by role
+        const usersCollection = collection(db, 'users');
+        const allUsersSnapshot = await getDocs(usersCollection);
+        const totalAccounts = allUsersSnapshot.size;
+        
+        // Count trainers
+        const trainersQuery = query(usersCollection, where('role', '==', 'trainer'));
+        const trainersSnapshot = await getDocs(trainersQuery);
+        const totalTrainers = trainersSnapshot.size;
+        
+        // Count enrolled students (all enrollments)
+        const enrollmentsCollection = collection(db, 'enrollments');
+        const enrollmentsSnapshot = await getDocs(enrollmentsCollection);
+        const enrolledStudents = enrollmentsSnapshot.size;
+        
+        // Update stats with new order: Accounts, Active Trainers, Active Students (enrolled), Sectors, Courses, Classes
+        setStats([
+          { label: 'Accounts', value: totalAccounts.toString(), icon: Users, color: 'blue' },
+          { label: 'Active Trainers', value: totalTrainers.toString(), icon: GraduationCap, color: 'purple' },
+          { label: 'Active Students', value: enrolledStudents.toString(), icon: Users, color: 'cyan' },
+          { label: 'Sectors', value: totalSectors.toString(), icon: FolderOpen, color: 'green' },
+          { label: 'Courses', value: totalCourses.toString(), icon: BookOpen, color: 'teal' },
+          { label: 'Classes', value: activeClasses.toString(), icon: BookOpen, color: 'orange' },
+        ]);
+      } catch (err) {
+        console.error('Error loading dashboard data:', err);
+        addToast('Failed to load dashboard data', 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadDashboardData();
+  }, [addToast]);
 
   // Alerts data
   const alerts = [
@@ -54,12 +113,12 @@ const Dashboard = () => {
 
   const getColorClasses = (color) => {
     const colors = {
-      blue: 'bg-blue-50 text-blue-600',
-      purple: 'bg-purple-50 text-purple-600',
-      cyan: 'bg-cyan-50 text-cyan-600',
-      green: 'bg-green-50 text-green-600',
-      orange: 'bg-orange-50 text-orange-600',
-      teal: 'bg-teal-50 text-teal-600',
+      blue: { bg: 'bg-gradient-to-br from-blue-50 to-blue-100', icon: 'bg-gradient-to-br from-blue-500 to-blue-600 text-white', border: 'border-blue-200' },
+      purple: { bg: 'bg-gradient-to-br from-purple-50 to-purple-100', icon: 'bg-gradient-to-br from-purple-500 to-purple-600 text-white', border: 'border-purple-200' },
+      cyan: { bg: 'bg-gradient-to-br from-cyan-50 to-cyan-100', icon: 'bg-gradient-to-br from-cyan-500 to-cyan-600 text-white', border: 'border-cyan-200' },
+      green: { bg: 'bg-gradient-to-br from-green-50 to-green-100', icon: 'bg-gradient-to-br from-green-500 to-green-600 text-white', border: 'border-green-200' },
+      orange: { bg: 'bg-gradient-to-br from-orange-50 to-orange-100', icon: 'bg-gradient-to-br from-orange-500 to-orange-600 text-white', border: 'border-orange-200' },
+      teal: { bg: 'bg-gradient-to-br from-teal-50 to-teal-100', icon: 'bg-gradient-to-br from-teal-500 to-teal-600 text-white', border: 'border-teal-200' },
     };
     return colors[color] || colors.blue;
   };
@@ -72,28 +131,34 @@ const Dashboard = () => {
         <p className="text-gray-500">Here's your learning system overview for today</p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      {/* Loading State */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <Loader className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-2" />
+            <p className="text-gray-600">Loading dashboard data...</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
+          const colors = getColorClasses(stat.color);
           return (
             <div 
               key={index}
-              className="card p-4 hover:-translate-y-1 transition-all duration-300"
+              className={`${colors.bg} border ${colors.border} rounded-2xl p-6 shadow-sm hover:shadow-lg hover:-translate-y-2 transition-all duration-300 cursor-default group`}
               style={{ animationDelay: `${index * 0.1}s` }}
             >
-              <div className="flex items-start justify-between mb-3">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${getColorClasses(stat.color)}`}>
-                  <Icon className="w-5 h-5" />
+              <div className="flex items-start justify-between mb-4">
+                <div className={`${colors.icon} w-14 h-14 rounded-xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300`}>
+                  <Icon className="w-7 h-7" />
                 </div>
-                <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                  stat.changeType === 'positive' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {stat.change}
-                </span>
               </div>
-              <h3 className="text-2xl font-bold text-gray-800">{stat.value}</h3>
-              <p className="text-sm text-gray-500 mt-1">{stat.label}</p>
+              <h3 className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</h3>
+              <p className="text-sm font-medium text-gray-600">{stat.label}</p>
             </div>
           );
         })}
@@ -196,6 +261,8 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 };

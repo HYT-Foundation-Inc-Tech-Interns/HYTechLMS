@@ -45,8 +45,12 @@ import {
   Video,
   ExternalLink
 } from 'lucide-react';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
+import { useAuth } from '../../context/AuthContext';
 
 const Course = () => {
+  const { user } = useAuth();
   const { courseId } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
@@ -238,18 +242,38 @@ const Course = () => {
   };
 
   // Handle Google Meet
-  const handleStartMeeting = () => {
-    // Generate a random meeting ID
-    const meetingId = 'qqi-nwwk-txb';
-    const link = `https://meet.google.com/qqi-nwwk-txb`;
-    setMeetingLink(link);
-    setActiveMeeting({
-      id: meetingId,
-      link: link,
-      startTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      host: courseData.trainer
-    });
-    setShowMeetingModal(true);
+  const handleStartMeeting = async () => {
+    try {
+      // Generate a random meeting ID
+      const meetingId = 'qqi-nwwk-txb';
+      const link = `https://meet.google.com/qqi-nwwk-txb`;
+      setMeetingLink(link);
+      const meetingData = {
+        id: meetingId,
+        link: link,
+        startTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        host: courseData.trainer
+      };
+      setActiveMeeting(meetingData);
+      
+      // Write to Firestore 'classes' collection to sync with students
+      if (courseId) {
+        const classRef = doc(db, 'classes', courseId);
+        await updateDoc(classRef, {
+          'meeting.isActive': true,
+          'meeting.meetingCode': meetingId,
+          'meeting.meetingLink': link,
+          'meeting.trainerName': user?.displayName || courseData.trainer,
+          'meeting.startTime': new Date(),
+          'meeting.participants': 1
+        });
+      }
+      
+      setShowMeetingModal(true);
+    } catch (error) {
+      console.error('Error starting meeting:', error);
+      showToast('Error starting meeting', 'error');
+    }
   };
 
   const handleJoinMeeting = () => {
@@ -258,10 +282,24 @@ const Course = () => {
     }
   };
 
-  const handleEndMeeting = () => {
-    setActiveMeeting(null);
-    setMeetingLink('');
-    showToast('Meeting ended');
+  const handleEndMeeting = async () => {
+    try {
+      setActiveMeeting(null);
+      setMeetingLink('');
+      
+      // Update Firestore 'classes' collection to notify students
+      if (courseId) {
+        const classRef = doc(db, 'classes', courseId);
+        await updateDoc(classRef, {
+          'meeting.isActive': false
+        });
+      }
+      
+      showToast('Meeting ended');
+    } catch (error) {
+      console.error('Error ending meeting:', error);
+      showToast('Error ending meeting', 'error');
+    }
   };
 
   const copyMeetingLink = () => {
@@ -1366,10 +1404,19 @@ const Course = () => {
 
       {/* Create Item Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-slide-up">
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-gray-900">Create {createType}</h2>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl animate-slide-up my-8 max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100 flex-shrink-0">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Create {createType}</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {createType === 'Assignment' && 'Add a task with deadline and attachments'}
+                  {createType === 'Quiz Assignment' && 'Build a graded assessment'}
+                  {createType === 'Materials' && 'Share learning resources'}
+                  {createType === 'Topic' && 'Create a new section'}
+                </p>
+              </div>
               <button 
                 onClick={() => setShowCreateModal(false)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -1377,62 +1424,99 @@ const Course = () => {
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            <form onSubmit={handleSaveItem} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+
+            {/* Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Title Section */}
+              <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
+                <label className="block text-sm font-semibold text-gray-900 mb-3">Title *</label>
                 <input 
                   type="text"
                   placeholder={`Enter ${createType.toLowerCase()} title`}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-gray-900 placeholder-gray-400"
                   required
                 />
               </div>
+
+              {/* Instructions/Description */}
               {createType !== 'Topic' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-3">Instructions</label>
+                  <textarea 
+                    rows={5}
+                    placeholder="Add instructions, description, or requirements..."
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none text-gray-900 placeholder-gray-400"
+                  />
+                </div>
+              )}
+
+              {/* Assignment/Quiz Specific Fields */}
+              {(createType === 'Assignment' || createType === 'Quiz Assignment') && (
                 <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Instructions</label>
-                    <textarea 
-                      rows={4}
-                      placeholder="Add instructions or description..."
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
-                    />
-                  </div>
-                  {(createType === 'Assignment' || createType === 'Quiz Assignment') && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
-                        <div className="relative">
-                          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                          <input 
-                            type="date"
-                            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Points</label>
+                  {/* Due Date and Points */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-900 mb-3">Due Date</label>
+                      <div className="relative">
+                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input 
-                          type="number"
-                          placeholder="100"
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                          type="date"
+                          className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-gray-900"
                         />
                       </div>
                     </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Attachments</label>
-                    <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-blue-400 hover:bg-blue-50/50 transition-all cursor-pointer">
-                      <Paperclip className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-500">Click to upload or drag and drop</p>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-900 mb-3">Total Points</label>
+                      <input 
+                        type="number"
+                        placeholder="100"
+                        defaultValue="100"
+                        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-gray-900 placeholder-gray-400"
+                      />
                     </div>
+                  </div>
+
+                  {/* Attachments */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-3">Attachments</label>
+                    <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-300 rounded-xl p-8 hover:border-blue-400 hover:bg-blue-50/50 transition-all cursor-pointer group">
+                      <div className="p-3 bg-gray-100 rounded-lg group-hover:bg-blue-100 transition-colors">
+                        <Paperclip className="w-6 h-6 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                      </div>
+                      <div className="text-center">
+                        <p className="font-medium text-gray-700">Click to upload or drag and drop</p>
+                        <p className="text-sm text-gray-500 mt-1">PNG, PDF, DOCX up to 500KB</p>
+                      </div>
+                    </label>
                   </div>
                 </>
               )}
-              <div className="flex justify-end gap-3 pt-4">
+
+              {/* Materials Specific */}
+              {createType === 'Materials' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-3">Upload Material</label>
+                  <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-300 rounded-xl p-8 hover:border-green-400 hover:bg-green-50/50 transition-all cursor-pointer group">
+                    <div className="p-3 bg-gray-100 rounded-lg group-hover:bg-green-100 transition-colors">
+                      <FileText className="w-6 h-6 text-gray-400 group-hover:text-green-600 transition-colors" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-medium text-gray-700">Click to upload or drag and drop</p>
+                      <p className="text-sm text-gray-500 mt-1">PDF, DOCX, PPTX, VIDEO up to 500KB</p>
+                    </div>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between p-6 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+              <span className="text-sm text-gray-500">All fields marked * are required</span>
+              <div className="flex gap-3">
                 <button 
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-5 py-2.5 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition-colors"
+                  className="px-5 py-2.5 text-gray-700 hover:bg-gray-200 rounded-xl font-medium transition-colors"
                 >
                   Cancel
                 </button>
@@ -1441,10 +1525,10 @@ const Course = () => {
                   className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
                 >
                   <Save className="w-4 h-4" />
-                  Create
+                  Create {createType}
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

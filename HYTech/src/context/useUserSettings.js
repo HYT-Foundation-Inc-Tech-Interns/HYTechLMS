@@ -39,20 +39,40 @@ export const useUserSettings = (role) => {
 
     setIsSettingsLoading(true);
     const settingsRef = doc(db, 'userSettings', uid);
-    const unsubscribe = onSnapshot(
-      settingsRef,
-      (snapshot) => {
-        const roleSettings = snapshot.exists() ? snapshot.data()?.[role] || null : null;
-        setSettingsData(roleSettings);
-        setIsSettingsLoading(false);
-      },
-      () => {
+    let isMounted = true;
+    let unsubscribe = null;
+
+    try {
+      unsubscribe = onSnapshot(
+        settingsRef,
+        (snapshot) => {
+          if (!isMounted) return;
+          const roleSettings = snapshot.exists() ? snapshot.data()?.[role] || null : null;
+          setSettingsData(roleSettings);
+          setIsSettingsLoading(false);
+        },
+        (error) => {
+          if (!isMounted) return;
+          console.warn('Settings listener error:', error?.code);
+          setSettingsData(null);
+          setIsSettingsLoading(false);
+        }
+      );
+    } catch (err) {
+      console.warn('Failed to set up settings listener:', err);
+      if (isMounted) {
         setSettingsData(null);
         setIsSettingsLoading(false);
       }
-    );
+    }
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      if (unsubscribe) {
+        unsubscribe();
+        unsubscribe = null;
+      }
+    };
   }, [uid, role]);
 
   const saveSettings = useCallback(

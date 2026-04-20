@@ -1,48 +1,88 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Award,
   Download,
   Eye,
   BookOpen,
-  X
+  X,
+  AlertCircle
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { getStudentEnrollments } from '../../utils/firestoreService';
 
 const StudentCertificates = () => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [earnedCertificates, setEarnedCertificates] = useState([]);
+  const [inProgressCourses, setInProgressCourses] = useState([]);
   const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [selectedCertificate, setSelectedCertificate] = useState(null);
-  const [showDownloadToast, setShowDownloadToast] = useState(false);
 
-  const earnedCertificates = [
-    {
-      id: 1,
-      course: 'Barista NCII',
-      dateIssued: 'Dec 15, 2025',
-      finalGrade: 'A',
-      credentialId: 'CERT-2025-001',
-      recipientName: 'Gerald Andrei Lat'
-    },
-    {
-      id: 2,
-      course: 'Visual Graphics Design',
-      dateIssued: 'Nov 20, 2025',
-      finalGrade: 'A-',
-      credentialId: 'CERT-2025-002',
-      recipientName: 'Gerald Andrei Lat'
+  // Load student enrollments
+  useEffect(() => {
+    if (user?.uid) {
+      loadCertificates();
     }
-  ];
+  }, [user?.uid]);
 
-  const inProgressCourses = [
-    {
-      id: 1,
-      course: 'Plumbing NCIII',
-      estCompletion: 'Feb 2026',
-      progress: 88
+  const loadCertificates = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const enrollments = await getStudentEnrollments(user.uid);
+      
+      // Separate completed and in-progress
+      const completed = enrollments.filter(e => e.status === 'completed');
+      const inProgress = enrollments.filter(e => e.status === 'ongoing');
+
+      // Map to certificate format
+      const certs = completed.map((enrollment) => ({
+        id: enrollment.id,
+        course: enrollment.courseName || 'Course',
+        dateIssued: enrollment.completedAt 
+          ? new Date(enrollment.completedAt.toDate?.() || enrollment.completedAt).toLocaleDateString('en-US', { 
+              year: 'numeric', 
+              month: 'short', 
+              day: 'numeric' 
+            })
+          : 'Date TBD',
+        finalGrade: enrollment.finalGrade || 'Pass',
+        credentialId: enrollment.certificateId || `CERT-${enrollment.id.substring(0, 8).toUpperCase()}`,
+        recipientName: user.displayName || 'Student',
+        enrollmentId: enrollment.id,
+      }));
+
+      setEarnedCertificates(certs);
+
+      // Map in-progress courses
+      const courses = inProgress.map((enrollment) => ({
+        id: enrollment.id,
+        course: enrollment.courseName || 'Course',
+        estCompletion: enrollment.expectedCompletionDate
+          ? new Date(enrollment.expectedCompletionDate.toDate?.() || enrollment.expectedCompletionDate).toLocaleDateString('en-US', { 
+              year: 'numeric', 
+              month: 'short', 
+              day: 'numeric' 
+            })
+          : 'TBD',
+        progress: enrollment.progress?.percentage || 0,
+        enrollmentId: enrollment.id,
+      }));
+
+      setInProgressCourses(courses);
+    } catch (err) {
+      console.error('Error loading certificates:', err);
+      setError('Failed to load certificates');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
   const handleDownload = (certificate) => {
-    setShowDownloadToast(true);
-    setTimeout(() => setShowDownloadToast(false), 4000);
+    // Note: Actual PDF generation would be done via Cloud Function
+    alert(`Downloading certificate: ${certificate.course} - ${certificate.credentialId}`);
   };
 
   const handleView = (certificate) => {
@@ -50,20 +90,29 @@ const StudentCertificates = () => {
     setShowCertificateModal(true);
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="w-10 h-10 rounded-full border-4 border-gray-300 border-t-[#0B005C] animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
-      {/* Download Toast */}
-      {showDownloadToast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-white rounded-xl shadow-2xl border border-gray-100 p-4 flex items-center gap-4 animate-slide-down">
+      {/* Error Alert */}
+      {error && (
+        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
           <div>
-            <p className="font-semibold text-gray-900">Download complete.</p>
-            <p className="text-sm text-gray-500">Barista NCII - COC.pdf (5mb)</p>
+            <p className="font-semibold text-red-900">{error}</p>
+            <button 
+              onClick={loadCertificates}
+              className="text-sm text-red-700 underline hover:no-underline mt-1"
+            >
+              Try Again
+            </button>
           </div>
-          <button 
-            className="px-4 py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
-          >
-            Open
-          </button>
         </div>
       )}
 
@@ -71,98 +120,117 @@ const StudentCertificates = () => {
       <div>
         <div className="flex items-center gap-2 mb-4">
           <Award className="w-5 h-5 text-orange-500" />
-          <h2 className="font-bold text-gray-900 uppercase text-sm">Earned Certificates</h2>
+          <h2 className="font-bold text-gray-900 uppercase text-sm">Earned Certificates ({earnedCertificates.length})</h2>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {earnedCertificates.map((cert) => (
-            <div 
-              key={cert.id}
-              className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all"
-            >
-              {/* Certificate Preview Header */}
-              <div className="bg-gradient-to-r from-[#3b5998] to-[#5b7bb5] p-6 text-center">
-                <Award className="w-12 h-12 text-white mx-auto mb-2" />
-                <h3 className="text-white font-bold">Certificate of Completion</h3>
-              </div>
-
-              {/* Certificate Info */}
-              <div className="p-5 space-y-3">
-                <h4 className="font-bold text-gray-900 text-lg">{cert.course}</h4>
-                
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Date Issued</span>
-                    <span className="font-medium text-gray-900">{cert.dateIssued}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Final Grade</span>
-                    <span className="font-medium text-gray-900">{cert.finalGrade}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Credential ID</span>
-                    <span className="font-medium text-gray-900">{cert.credentialId}</span>
-                  </div>
+        {earnedCertificates.length === 0 ? (
+          <div className="text-center py-12 bg-gray-50 rounded-lg">
+            <Award className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-600">No certificates earned yet. Complete courses to earn certificates.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {earnedCertificates.map((cert) => (
+              <div 
+                key={cert.id}
+                className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all"
+              >
+                {/* Certificate Preview Header */}
+                <div className="bg-gradient-to-r from-[#0B005C] to-[#1a1a7d] p-6 text-center">
+                  <Award className="w-12 h-12 text-white mx-auto mb-2" />
+                  <h3 className="text-white font-bold">Certificate of Completion</h3>
                 </div>
 
-                {/* Actions */}
-                <div className="flex gap-3 pt-3">
-                  <button 
-                    onClick={() => handleDownload(cert)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download
-                  </button>
-                  <button 
-                    onClick={() => handleView(cert)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-50:bg-gray-700 transition-colors"
-                  >
-                    View
-                  </button>
+                {/* Certificate Info */}
+                <div className="p-5 space-y-3">
+                  <h4 className="font-bold text-gray-900 text-lg line-clamp-2">{cert.course}</h4>
+                  
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Date Issued</span>
+                      <span className="font-medium text-gray-900">{cert.dateIssued}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Status</span>
+                      <span className="font-medium text-green-700">Completed</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Credential ID</span>
+                      <span className="font-medium text-gray-900 text-xs">{cert.credentialId}</span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-3 pt-3">
+                    <button 
+                      onClick={() => handleDownload(cert)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0B005C] text-white rounded-lg font-medium hover:bg-[#0B005C]/90 transition-colors"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download
+                    </button>
+                    <button 
+                      onClick={() => handleView(cert)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* In Progress Section */}
-      <div>
-        <h2 className="font-bold text-gray-900 mb-4">In Progress</h2>
-        
-        <div className="space-y-3">
-          {inProgressCourses.map((course) => (
-            <div 
-              key={course.id}
-              className="bg-white rounded-xl border border-gray-100 p-4 flex items-center justify-between hover:shadow-lg transition-all"
-            >
-              <div className="flex items-center gap-4">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <BookOpen className="w-5 h-5 text-blue-600" />
+      {inProgressCourses.length > 0 && (
+        <div>
+          <h2 className="font-bold text-gray-900 mb-4">In Progress ({inProgressCourses.length})</h2>
+          
+          <div className="space-y-3">
+            {inProgressCourses.map((course) => (
+              <div 
+                key={course.id}
+                className="bg-white rounded-xl border border-gray-100 p-4 flex items-center justify-between hover:shadow-lg transition-all"
+              >
+                <div className="flex items-center gap-4 flex-1">
+                  <div className="p-2 bg-blue-100 rounded-lg flex-shrink-0">
+                    <BookOpen className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 line-clamp-1">{course.course}</h3>
+                    <p className="text-sm text-gray-500">Est. completion: {course.estCompletion}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">{course.course}</h3>
-                  <p className="text-sm text-gray-500">Est. completion: {course.estCompletion}</p>
-                </div>
-              </div>
 
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-500">Progress</span>
-                <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-orange-500 rounded-full"
-                    style={{ width: `${course.progress}%` }}
-                  />
+                <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-orange-500 rounded-full transition-all"
+                        style={{ width: `${course.progress}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-bold text-orange-600 w-10 text-right">{course.progress}%</span>
+                  </div>
                 </div>
-                <span className="text-sm font-bold text-orange-600">{course.progress}%</span>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Certificate View Modal */}
+      {/* No enrollments state */}
+      {earnedCertificates.length === 0 && inProgressCourses.length === 0 && (
+        <div className="text-center py-12 bg-gray-50 rounded-lg">
+          <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-600">No courses enrolled yet. Browse courses to get started!</p>
+        </div>
+      )}
+
+      {/* Certificate Modal */}
       {showCertificateModal && selectedCertificate && (
         <div className="fixed inset-0 z-[100] overflow-y-auto p-4 sm:p-6">
           <div
@@ -170,113 +238,84 @@ const StudentCertificates = () => {
             onClick={() => setShowCertificateModal(false)}
           />
           <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-          <div className="relative bg-white rounded-2xl w-full max-w-3xl shadow-2xl animate-slide-up overflow-hidden">
-            {/* Close Button */}
-            <button 
-              onClick={() => setShowCertificateModal(false)}
-              className="absolute top-4 right-4 p-2 bg-gray-100 hover:bg-gray-200 rounded-full z-10"
-            >
-              <X className="w-5 h-5 text-gray-600" />
-            </button>
+            <div className="relative bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden">
+              {/* Close Button */}
+              <button 
+                onClick={() => setShowCertificateModal(false)}
+                className="absolute top-4 right-4 p-2 bg-gray-100 hover:bg-gray-200 rounded-full z-10"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
 
-            {/* Certificate Design */}
-            <div className="p-8 bg-white">
-              <div className="relative border-[5px] border-[#1e3a8a] p-3">
-                {/* Inner Border */}
-                <div className="border-[1.5px] border-[#1e3a8a] px-8 py-10">
-                  
-                  {/* Corner Decorations - Top Left */}
-                  <div className="absolute top-5 left-5 w-6 h-6 border-l-[3px] border-t-[3px] border-[#1e3a8a]" />
-                  
-                  {/* Corner Decorations - Top Right */}
-                  <div className="absolute top-5 right-5 w-6 h-6 border-r-[3px] border-t-[3px] border-[#1e3a8a]" />
-                  
-                  {/* Corner Decorations - Bottom Left */}
-                  <div className="absolute bottom-5 left-5 w-6 h-6 border-l-[3px] border-b-[3px] border-[#1e3a8a]" />
-                  
-                  {/* Corner Decorations - Bottom Right */}
-                  <div className="absolute bottom-5 right-5 w-6 h-6 border-r-[3px] border-b-[3px] border-[#1e3a8a]" />
+              {/* Certificate Design */}
+              <div className="p-8 bg-white">
+                <div className="relative border-[5px] border-[#0B005C] p-3">
+                  {/* Inner Border */}
+                  <div className="border-[1.5px] border-[#0B005C] px-8 py-10">
+                    
+                    {/* Corner Decorations */}
+                    <div className="absolute top-5 left-5 w-6 h-6 border-l-[3px] border-t-[3px] border-[#0B005C]" />
+                    <div className="absolute top-5 right-5 w-6 h-6 border-r-[3px] border-t-[3px] border-[#0B005C]" />
+                    <div className="absolute bottom-5 left-5 w-6 h-6 border-l-[3px] border-b-[3px] border-[#0B005C]" />
+                    <div className="absolute bottom-5 right-5 w-6 h-6 border-r-[3px] border-b-[3px] border-[#0B005C]" />
 
-                  {/* Side Diamonds */}
-                  <div className="absolute left-1 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-[#1e3a8a] rotate-45" />
-                  <div className="absolute right-1 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-[#1e3a8a] rotate-45" />
-
-                  {/* Certificate Content */}
-                  <div className="flex flex-col items-center text-center">
-                    {/* TESDA Logo */}
-                    <div className="mb-3">
-                      <svg width="60" height="60" viewBox="0 0 100 100" className="text-[#1e3a8a]">
-                        <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" strokeWidth="3"/>
-                        {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((angle, i) => (
-                          <rect key={i} x="47" y="8" width="6" height="8" fill="currentColor" transform={`rotate(${angle} 50 50)`}/>
-                        ))}
-                        <circle cx="50" cy="50" r="28" fill="none" stroke="currentColor" strokeWidth="2"/>
-                        <circle cx="50" cy="38" r="8" fill="currentColor"/>
-                        <path d="M 35 72 L 35 55 Q 50 45 65 55 L 65 72 L 50 62 Z" fill="currentColor"/>
-                      </svg>
-                      <p className="text-[#1e3a8a] font-bold text-xs tracking-[0.2em]">TESDA</p>
+                    {/* Header */}
+                    <div className="text-center mb-8 pt-4">
+                      <div className="text-4xl font-bold text-[#0B005C]">Certificate</div>
+                      <div className="text-xl text-[#0B005C] font-semibold">of Completion</div>
                     </div>
 
-                    {/* Certificate Title */}
-                    <h1 className="text-[#1e3a8a] text-3xl font-black tracking-wide mb-1" style={{ fontFamily: 'Georgia, serif' }}>
-                      CERTIFICATE OF
-                    </h1>
-                    <h1 className="text-[#1e3a8a] text-3xl font-black tracking-wide mb-4" style={{ fontFamily: 'Georgia, serif' }}>
-                      COMPLETION
-                    </h1>
-
-                    {/* This is to certify that */}
-                    <p className="text-gray-500 text-sm mb-1">This is to certify that</p>
-
-                    {/* Recipient Name */}
-                    <div className="relative mb-1">
-                      <h2 className="text-[#1e3a8a] text-4xl" style={{ fontFamily: "'Pinyon Script', cursive" }}>
-                        {selectedCertificate.recipientName}
-                      </h2>
-                      <svg className="w-full h-3 mt-1" viewBox="0 0 200 10" preserveAspectRatio="none">
-                        <path d="M 0 5 Q 50 0 100 5 Q 150 10 200 5" fill="none" stroke="#1e3a8a" strokeWidth="0.5" opacity="0.6"/>
-                      </svg>
-                    </div>
-
-                    {/* Has completed the course */}
-                    <p className="text-gray-500 text-sm mt-3 mb-1">Has completed the course</p>
-
-                    {/* Course Name */}
-                    <h3 className="text-[#1e3a8a] text-xl font-bold">{selectedCertificate.course}</h3>
-
-                    {/* Bottom Info */}
-                    <div className="w-full flex justify-between mt-8 px-4">
-                      <div className="text-left">
-                        <p className="text-gray-400 text-[10px] uppercase tracking-wider">Date Issued</p>
-                        <p className="font-semibold text-gray-800 text-sm">{selectedCertificate.dateIssued}</p>
+                    {/* Content */}
+                    <div className="text-center space-y-6">
+                      <p className="text-gray-600">This is to certify that</p>
+                      
+                      <div>
+                        <p className="text-2xl font-bold text-[#0B005C]">{selectedCertificate.recipientName}</p>
+                        <div className="mt-2 border-b-2 border-[#0B005C]" />
                       </div>
-                      <div className="text-right">
-                        <p className="text-gray-400 text-[10px] uppercase tracking-wider">Credential ID</p>
-                        <p className="font-semibold text-gray-800 text-sm">{selectedCertificate.credentialId}</p>
+
+                      <p className="text-gray-600">Has successfully completed the course</p>
+                      
+                      <div>
+                        <p className="text-xl font-bold text-[#0B005C]">{selectedCertificate.course}</p>
                       </div>
+
+                      <p className="text-gray-600 text-sm">On {selectedCertificate.dateIssued}</p>
+
+                      <div className="flex justify-around mt-12 pt-4">
+                        <div className="text-center">
+                          <div className="border-t-2 border-[#0B005C] w-32" />
+                          <p className="text-xs text-gray-600 mt-2">Authorized Signature</p>
+                        </div>
+                        <div className="text-center">
+                          <div className="border-t-2 border-[#0B005C] w-32" />
+                          <p className="text-xs text-gray-600 mt-2">Date</p>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-gray-500 pt-4">Credential ID: {selectedCertificate.credentialId}</p>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Actions */}
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
-              <button 
-                onClick={() => setShowCertificateModal(false)}
-                className="px-5 py-2.5 text-gray-700 hover:bg-gray-200 rounded-xl font-medium transition-colors"
-              >
-                Close
-              </button>
-              <button 
-                onClick={() => handleDownload(selectedCertificate)}
-                className="px-5 py-2.5 bg-orange-500 text-white rounded-xl font-medium hover:bg-orange-600 transition-colors flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                Download PDF
-              </button>
+              {/* Action Button */}
+              <div className="p-4 border-t border-gray-200 flex justify-end gap-3">
+                <button
+                  onClick={() => setShowCertificateModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => handleDownload(selectedCertificate)}
+                  className="px-4 py-2 bg-[#0B005C] text-white rounded-lg font-medium hover:bg-[#0B005C]/90 flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Download
+                </button>
+              </div>
             </div>
-          </div>
           </div>
         </div>
       )}
