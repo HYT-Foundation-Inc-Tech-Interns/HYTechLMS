@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { BookOpen, Check, Users, Save, ExternalLink, Calendar, Send, FileText, Video, Copy, Share2, Loader, AlertCircle, X, MessageSquare, Paperclip, ClipboardList, Edit2, Trash2, Download, Eye, Plus, Settings, GripVertical, Upload, Bell, MessageCircle as DiscussionIcon, Award, Clock } from 'lucide-react';
+import { BookOpen, Check, Users, Save, ExternalLink, Calendar, Send, FileText, Video, Copy, Share2, Loader, AlertCircle, X, MessageSquare, Paperclip, ClipboardList, Edit2, Trash2, Download, Eye, Plus, Settings, GripVertical, Upload, Bell, MessageCircle as DiscussionIcon, Award, Clock, Megaphone } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -43,6 +43,7 @@ const ClassDetail = () => {
   const [postComments, setPostComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [loadingComments, setLoadingComments] = useState(false);
+  const [submittingComment, setSubmittingComment] = useState(false);
   const [selectedAttachment, setSelectedAttachment] = useState(null);
   const [showAttachmentPreview, setShowAttachmentPreview] = useState(false);
   const [showCreateDropdown, setShowCreateDropdown] = useState(false);
@@ -1272,20 +1273,68 @@ const ClassDetail = () => {
           createdAt: announcementData.createdAt?.toDate?.() || new Date(announcementData.createdAt),
         };
         
+        // Fetch author's profile picture
+        if (completePost.authorId) {
+          try {
+            const authorProfile = await getUserProfile(completePost.authorId);
+            completePost.authorAvatar = authorProfile?.avatarBase64 || authorProfile?.avatarUrl || null;
+          } catch (error) {
+            console.error('Error loading author avatar:', error);
+          }
+        }
+        
         setSelectedPost(completePost);
         
         // Load comments initially, then set up live subscription
         try {
           const initialComments = await getAnnouncementComments(classData.id, post.id);
-          setPostComments(initialComments);
+          
+          // Fetch avatars for all comment authors
+          const commentsWithAvatars = await Promise.all(
+            (initialComments || []).map(async (comment) => {
+              if (comment.authorId) {
+                try {
+                  const authorProfile = await getUserProfile(comment.authorId);
+                  return {
+                    ...comment,
+                    authorAvatar: authorProfile?.avatarBase64 || authorProfile?.avatarUrl || null
+                  };
+                } catch (error) {
+                  console.error('Error loading comment author avatar:', error);
+                  return comment;
+                }
+              }
+              return comment;
+            })
+          );
+          
+          setPostComments(commentsWithAvatars);
           setLoadingComments(false);
           
           // Now set up real-time subscription for live updates
           commentUnsubscribeRef.current = subscribeToComments(
             classData.id, 
             post.id, 
-            (comments) => {
-              setPostComments(comments);
+            async (comments) => {
+              // Enrich new comments with avatars too
+              const enrichedComments = await Promise.all(
+                (comments || []).map(async (comment) => {
+                  if (comment.authorId && !comment.authorAvatar) {
+                    try {
+                      const authorProfile = await getUserProfile(comment.authorId);
+                      return {
+                        ...comment,
+                        authorAvatar: authorProfile?.avatarBase64 || authorProfile?.avatarUrl || null
+                      };
+                    } catch (error) {
+                      console.error('Error loading comment author avatar:', error);
+                      return comment;
+                    }
+                  }
+                  return comment;
+                })
+              );
+              setPostComments(enrichedComments);
             }
           );
         } catch (err) {
@@ -1315,10 +1364,26 @@ const ClassDetail = () => {
     };
   }, []);
 
+  // Format absolute time
+  const formatAbsoluteTime = (timestamp) => {
+    if (!timestamp) return '';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+  };
+
   // Handle add comment
   const handleAddComment = async () => {
     if (!newComment.trim() || !selectedPost) return;
     
+    setSubmittingComment(true);
     try {
       await addCommentToAnnouncement(classData.id, selectedPost.id, {
         author: user?.displayName || user?.email || 'User',
@@ -1328,12 +1393,31 @@ const ClassDetail = () => {
       addToast('Comment added!', 'success');
       setNewComment('');
       
-      // Reload comments
+      // Reload comments with avatars
       const comments = await getAnnouncementComments(classData.id, selectedPost.id);
-      setPostComments(comments);
+      const commentsWithAvatars = await Promise.all(
+        (comments || []).map(async (comment) => {
+          if (comment.authorId) {
+            try {
+              const authorProfile = await getUserProfile(comment.authorId);
+              return {
+                ...comment,
+                authorAvatar: authorProfile?.avatarBase64 || authorProfile?.avatarUrl || null
+              };
+            } catch (error) {
+              console.error('Error loading comment author avatar:', error);
+              return comment;
+            }
+          }
+          return comment;
+        })
+      );
+      setPostComments(commentsWithAvatars);
     } catch (err) {
       console.error('Error adding comment:', err);
       addToast('Failed to add comment', 'error');
+    } finally {
+      setSubmittingComment(false);
     }
   };
 
@@ -1344,9 +1428,26 @@ const ClassDetail = () => {
         await deleteComment(classData.id, selectedPost.id, commentId);
         addToast('Comment deleted!', 'success');
         
-        // Reload comments
+        // Reload comments with avatars
         const comments = await getAnnouncementComments(classData.id, selectedPost.id);
-        setPostComments(comments);
+        const commentsWithAvatars = await Promise.all(
+          (comments || []).map(async (comment) => {
+            if (comment.authorId) {
+              try {
+                const authorProfile = await getUserProfile(comment.authorId);
+                return {
+                  ...comment,
+                  authorAvatar: authorProfile?.avatarBase64 || authorProfile?.avatarUrl || null
+                };
+              } catch (error) {
+                console.error('Error loading comment author avatar:', error);
+                return comment;
+              }
+            }
+            return comment;
+          })
+        );
+        setPostComments(commentsWithAvatars);
       } catch (err) {
         console.error('Error deleting comment:', err);
         addToast('Failed to delete comment', 'error');
@@ -1958,167 +2059,135 @@ const ClassDetail = () => {
                 </div>
 
                 {/* Announcements & Assignments List - Activity Feed Timeline */}
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-gray-100 max-h-[560px] overflow-y-auto">
                   {loadingAnnouncements ? (
                     <div className="p-5 text-center">
                       <div className="inline-block animate-spin">
                         <div className="w-6 h-6 border-3 border-gray-300 border-t-blue-600 rounded-full"></div>
                       </div>
-                      <p className="text-gray-500 mt-2">Loading activity...</p>
+                      <p className="text-gray-500 mt-2 text-sm">Loading activity...</p>
                     </div>
                   ) : activityFeed.length > 0 ? (
-                    activityFeed.map((item, index) => {
-                      // Determine activity type and styling
-                      let icon = null;
-                      let iconBgColor = 'bg-orange-100';
-                      let iconColor = 'text-orange-600';
-                      let actionText = 'made an announcement';
-
-                      // Handle assignment items
-                      if (item.type === 'assignment') {
-                        iconBgColor = 'bg-blue-100';
-                        iconColor = 'text-blue-600';
-                        actionText = `posted a ${item.itemType.toLowerCase()}`;
-                        icon = <ClipboardList className="w-5 h-5" />;
-                      } else if (item.hasAttachments) {
-                        const fileType = item.attachments[0].type?.toLowerCase() || '';
-                        if (fileType.includes('pdf') || fileType.includes('document') || fileType.includes('word') || fileType.includes('sheet')) {
-                          iconBgColor = 'bg-blue-100';
-                          iconColor = 'text-blue-600';
-                          actionText = 'uploaded new learning material';
-                          icon = <Upload className="w-5 h-5" />;
-                        }
-                      }
-
+                    activityFeed.map((item) => {
                       // Calculate relative time
                       const getRelativeTime = (date) => {
-                        if (!(date instanceof Date)) {
-                          date = new Date(date);
+                        if (!date) return 'unknown';
+                        let dateObj = date;
+                        if (date.toDate && typeof date.toDate === 'function') {
+                          try {
+                            dateObj = date.toDate();
+                          } catch (e) {
+                            return 'unknown';
+                          }
+                        } else if (typeof date === 'string') {
+                          dateObj = new Date(date);
+                        } else if (typeof date === 'object' && date.seconds) {
+                          dateObj = new Date(date.seconds * 1000);
+                        } else if (!(date instanceof Date)) {
+                          dateObj = new Date(date);
+                        }
+                        if (isNaN(dateObj.getTime())) {
+                          return 'unknown';
                         }
                         const now = new Date();
-                        const diffMs = now - date;
+                        const diffMs = now - dateObj;
+                        if (diffMs < 0) return 'just now';
                         const diffMins = Math.floor(diffMs / 60000);
                         const diffHours = Math.floor(diffMins / 60);
                         const diffDays = Math.floor(diffHours / 24);
-
+                        const diffWeeks = Math.floor(diffDays / 7);
                         if (diffMins < 1) return 'just now';
-                        if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
-                        if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
-                        if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
-                        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+                        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+                        if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+                        if (diffWeeks < 4) return `${diffWeeks} week${diffWeeks > 1 ? 's' : ''} ago`;
+                        return dateObj.toLocaleString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true,
+                          year: dateObj.getFullYear() !== now.getFullYear() ? 'numeric' : undefined 
+                        });
                       };
 
-                      // Default icon if not set
-                      if (!icon) {
-                        icon = <Bell className="w-5 h-5" />;
-                      }
-
-                      return (
-                        <div key={item.id || index} className="p-5 hover:bg-gray-50 transition-colors group border-l-4 border-transparent hover:border-blue-400">
-                          {editingAnnouncementId === item.id && item.type === 'announcement' ? (
-                            <div className="space-y-3">
-                              <textarea
-                                value={editingAnnouncementText}
-                                onChange={(e) => setEditingAnnouncementText(e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                placeholder="Edit announcement..."
-                                rows="3"
-                              />
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleEditAnnouncement(item.id, editingAnnouncementText)}
-                                  className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setEditingAnnouncementId(null);
-                                    setEditingAnnouncementText('');
-                                  }}
-                                  className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors"
-                                >
-                                  Cancel
-                                </button>
+                      // Handle announcements
+                      if (item.type === 'announcement') {
+                        return (
+                          <div 
+                            key={item.id}
+                            className="p-5 hover:bg-gray-50 transition-colors group border-l-4 border-transparent hover:border-orange-400"
+                          >
+                            {editingAnnouncementId === item.id ? (
+                              <div className="space-y-3">
+                                <textarea
+                                  value={editingAnnouncementText}
+                                  onChange={(e) => setEditingAnnouncementText(e.target.value)}
+                                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                  placeholder="Edit announcement..."
+                                  rows="3"
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleEditAnnouncement(item.id, editingAnnouncementText)}
+                                    className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingAnnouncementId(null);
+                                      setEditingAnnouncementText('');
+                                    }}
+                                    className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          ) : (
-                            <>
+                            ) : (
                               <div 
-                                onClick={() => {
-                                  if (item.type === 'announcement') {
-                                    handleOpenPost(item);
-                                  } else if (item.type === 'assignment') {
-                                    setSelectedAssignmentDetail(item);
-                                    setAssignmentDetailTab('questions');
-                                    setShowAssignmentDetailModal(true);
-                                  }
-                                }}
-                                className={item.type === 'announcement' || item.type === 'assignment' ? 'flex gap-4 cursor-pointer' : 'flex gap-4'}
+                                onClick={() => handleOpenPost(item)}
+                                className="flex gap-4 cursor-pointer justify-between items-start"
                               >
-                                {/* Avatar with Icon Badge Overlay */}
+                                {/* Avatar with Icon Badge - Make clickable */}
                                 <div className="relative flex-shrink-0">
                                   {item.authorAvatar ? (
                                     <img 
                                       src={item.authorAvatar} 
-                                      alt={item.author}
-                                      className="w-14 h-14 rounded-full object-cover border-2 border-gray-200"
+                                      alt={item.author || 'Trainer'}
+                                      className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-gray-200"
                                     />
                                   ) : (
-                                    <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                                      {item.author?.charAt(0).toUpperCase() || 'T'}
+                                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                                      {(item.author || 'Trainer').split(' ').map(n => n[0]).join('').toUpperCase()}
                                     </div>
                                   )}
-                                  {/* Icon Badge Overlay */}
-                                  <div className={`absolute -bottom-0 -right-0 w-6 h-6 ${iconBgColor} rounded-full flex items-center justify-center ${iconColor} border-2 border-white shadow-sm`}>
-                                    <div className="w-3.5 h-3.5 flex items-center justify-center">
-                                      {icon}
-                                    </div>
+                                  <div className="absolute -bottom-0 -right-0 w-5 h-5 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 border-2 border-white shadow-sm">
+                                    <Megaphone className="w-3 h-3" />
                                   </div>
                                 </div>
 
-                                {/* Content */}
-                                <div className="flex-1 min-w-0 pt-1">
+                                {/* Content - Make clickable */}
+                                <div className="flex-1 min-w-0">
                                   {/* Author & Action */}
                                   <div className="mb-1">
                                     <span className="font-semibold text-gray-900">{item.author || 'Trainer'}</span>
-                                    <span className="text-gray-600 ml-1">{actionText}</span>
+                                    <span className="text-gray-600 ml-1">made an announcement:</span>
                                   </div>
 
-                                  {/* Title/Subject */}
+                                  {/* Title/Message - Show as the announcement content */}
                                   <p className="text-gray-900 font-medium mb-2 text-sm line-clamp-2">
                                     {item.title || (item.message?.length > 100 
                                       ? item.message.substring(0, 100) + '...' 
                                       : item.message)}
                                   </p>
 
-                                  {/* Assignment-specific details */}
-                                  {item.type === 'assignment' && (
-                                    <div className="bg-blue-50 rounded-lg p-3 mb-3 text-xs space-y-1">
-                                      {item.dueDate && (
-                                        <div className="flex items-center gap-2 text-gray-700">
-                                          <Calendar className="w-3 h-3" />
-                                          <span>Due: {new Date(item.dueDate).toLocaleDateString()} at 11:59 PM</span>
-                                        </div>
-                                      )}
-                                      <div className="flex items-center gap-2 text-gray-700">
-                                        <Award className="w-3 h-3" />
-                                        <span>{item.points} points</span>
-                                      </div>
-                                      {item.questions && item.questions.length > 0 && (
-                                        <div className="flex items-center gap-2 text-gray-700">
-                                          <ClipboardList className="w-3 h-3" />
-                                          <span>{item.questions.length} question{item.questions.length !== 1 ? 's' : ''}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-
                                   {/* Timestamp & Attachments */}
                                   <div className="flex items-center gap-3 text-xs text-gray-500">
                                     <span className="flex items-center gap-1">
                                       <Clock className="w-3 h-3" />
-                                      {getRelativeTime(item.timestamp || item.createdAt)}
+                                      {getRelativeTime(item.createdAt)}
                                     </span>
                                     {item.attachments && item.attachments.length > 0 && (
                                       <span className="flex items-center gap-1">
@@ -2131,53 +2200,136 @@ const ClassDetail = () => {
 
                                 {/* Action Buttons */}
                                 <div className="flex gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button
+                                  <button 
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleOpenPost(announcement);
+                                      handleOpenPost(item);
                                     }}
                                     className="p-2 hover:bg-green-100 rounded-lg transition-colors text-green-600"
-                                    title="View details and comments"
+                                    title="View full announcement"
                                   >
                                     <Eye className="w-4 h-4" />
                                   </button>
-                                  {item.type === 'announcement' && (
-                                    <>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setEditingAnnouncementId(item.id);
-                                          setEditingAnnouncementText(item.message);
-                                        }}
-                                        className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600"
-                                        title="Edit announcement"
-                                      >
-                                        <Edit2 className="w-4 h-4" />
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDeleteAnnouncement(item.id);
-                                        }}
-                                        className="p-2 hover:bg-red-100 rounded-lg transition-colors text-red-600"
-                                        title="Delete announcement"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </button>
-                                    </>
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingAnnouncementId(item.id);
+                                      setEditingAnnouncementText(item.message);
+                                    }}
+                                    className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600"
+                                    title="Edit your announcement"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteAnnouncement(item.id);
+                                    }}
+                                    className="p-2 hover:bg-red-100 rounded-lg transition-colors text-red-600"
+                                    title="Delete announcement"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      // Handle assignments
+                      else if (item.type === 'assignment') {
+                        return (
+                          <div 
+                            key={item.id}
+                            className="p-5 hover:bg-gray-50 transition-colors group border-l-4 border-transparent hover:border-purple-400"
+                          >
+                            <div className="flex gap-4 justify-between items-start cursor-pointer" onClick={() => {
+                              setSelectedAssignmentDetail(item);
+                              setAssignmentDetailTab('questions');
+                              setShowAssignmentDetailModal(true);
+                            }}>
+                              {/* Avatar with Icon Badge */}
+                              <div className="relative flex-shrink-0">
+                                {item.authorAvatar ? (
+                                  <img 
+                                    src={item.authorAvatar} 
+                                    alt={item.author || 'Trainer'}
+                                    className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-gray-200"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                                    {(item.author || 'Trainer').split(' ').map(n => n[0]).join('').toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="absolute -bottom-0 -right-0 w-5 h-5 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 border-2 border-white shadow-sm">
+                                  <FileText className="w-3 h-3" />
+                                </div>
+                              </div>
+
+                              {/* Content */}
+                              <div className="flex-1 min-w-0">
+                                {/* Author & Action */}
+                                <div className="mb-1">
+                                  <span className="font-semibold text-gray-900">{item.author || 'Trainer'}</span>
+                                  <span className="text-gray-600 ml-1">posted an assignment</span>
+                                </div>
+
+                                {/* Title */}
+                                <p className="text-gray-900 font-medium mb-2 text-sm">
+                                  {item.title}
+                                </p>
+
+                                {/* Assignment Details */}
+                                <div className="flex items-center gap-3 text-xs mb-1">
+                                  <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded font-medium">
+                                    {item.preview}
+                                  </span>
+                                  {item.points && (
+                                    <span className="text-gray-600">
+                                      {item.points} points
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Timestamp & Due Date */}
+                                <div className="flex items-center gap-3 text-xs text-gray-500">
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    {getRelativeTime(item.createdAt)}
+                                  </span>
+                                  {item.dueDate && (
+                                    <span className="text-orange-600 font-medium">
+                                      Due: {new Date(item.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                    </span>
                                   )}
                                 </div>
                               </div>
-                            </>
-                          )}
-                        </div>
-                      );
+
+                              {/* View Button */}
+                              <div className="flex gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedAssignmentDetail(item);
+                                    setAssignmentDetailTab('questions');
+                                    setShowAssignmentDetailModal(true);
+                                  }}
+                                  className="p-2 hover:bg-purple-100 rounded-lg transition-colors text-purple-600"
+                                  title="View assignment"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
                     })
                   ) : (
                     <div className="p-8 text-center">
-                      <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <p className="text-gray-500">No activity yet</p>
-                      <p className="text-gray-400 text-sm mt-1">Post an announcement or create an assignment to get started</p>
+                      <Megaphone className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                      <p className="text-gray-500 text-sm">No activity yet</p>
                     </div>
                   )}
                 </div>
@@ -3253,7 +3405,6 @@ const ClassDetail = () => {
                               <tr key={index} className="hover:bg-gray-50 transition-colors">
                                 <td className="px-6 py-4 text-sm">
                                   <div className="font-semibold text-gray-900">{response.studentName || response.studentId}</div>
-                                  <div className="text-xs text-gray-500">{response.studentId}</div>
                                 </td>
                                 <td className="px-6 py-4 text-center">
                                   <span className="font-bold text-lg text-gray-900">
@@ -5033,35 +5184,22 @@ const ClassDetail = () => {
 
       {/* Post Detail Modal */}
       {showPostModal && selectedPost && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl animate-slide-up my-8 max-h-[90vh] flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-100 flex-shrink-0">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl animate-slide-up max-h-[80vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                  {selectedPost.author?.charAt(0).toUpperCase() || 'A'}
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm overflow-hidden">
+                  {selectedPost.authorAvatar ? (
+                    <img src={selectedPost.authorAvatar} alt={selectedPost.author} className="w-full h-full object-cover" />
+                  ) : (
+                    (selectedPost.author || 'T').split(' ').map(n => n[0]).join('').toUpperCase()
+                  )}
                 </div>
                 <div>
                   <p className="font-semibold text-gray-900">{selectedPost.author || 'Trainer'}</p>
                   <p className="text-xs text-gray-500">
-                    {selectedPost.createdAt instanceof Date 
-                      ? selectedPost.createdAt.toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric',
-                          year: selectedPost.createdAt.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })
-                      : typeof selectedPost.createdAt === 'string'
-                      ? new Date(selectedPost.createdAt).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: new Date(selectedPost.createdAt).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })
-                      : ''
-                    }
+                    {formatAbsoluteTime(selectedPost.createdAt)}
                   </p>
                 </div>
               </div>
@@ -5084,115 +5222,105 @@ const ClassDetail = () => {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Post Message */}
+              {/* Message Content */}
               <div>
-                <p className="text-gray-900 text-base leading-relaxed whitespace-pre-wrap">{selectedPost.message}</p>
+                <p className="text-gray-700 whitespace-pre-wrap leading-relaxed text-base">
+                  {selectedPost.message}
+                </p>
               </div>
 
               {/* Attachments */}
               {selectedPost.attachments && selectedPost.attachments.length > 0 && (
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <label className="text-sm font-semibold text-gray-700 mb-3 block">Attachments ({selectedPost.attachments.length})</label>
+                <div>
                   <div className="space-y-2">
                     {selectedPost.attachments.map((attachment, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 transition-colors group cursor-pointer">
-                        <div 
-                          onClick={() => handlePreviewAttachment(attachment)}
-                          className="flex items-center gap-2 min-w-0 flex-1"
-                        >
-                          <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0 group-hover:text-blue-600 transition-colors" />
-                          <span className="text-sm text-gray-900 truncate group-hover:text-blue-600 font-medium">{attachment.name}</span>
-                          <span className="text-xs text-gray-500 flex-shrink-0">({(attachment.size / 1024).toFixed(2)} KB)</span>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDownloadAttachment(attachment);
-                          }}
-                          className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600 ml-2 flex-shrink-0"
-                          title="Download file"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                      </div>
+                      <a
+                        key={idx}
+                        href={attachment.url || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-colors group"
+                      >
+                        <Paperclip className="w-4 h-4 text-gray-500 group-hover:text-blue-600" />
+                        <span className="text-sm text-gray-700 group-hover:text-blue-600 font-medium flex-1 truncate">
+                          {attachment.name || `Attachment ${idx + 1}`}
+                        </span>
+                        <Download className="w-4 h-4 text-gray-400 group-hover:text-blue-600" />
+                      </a>
                     ))}
                   </div>
                 </div>
               )}
 
               {/* Comments Section */}
-              <div>
-                <label className="text-sm font-semibold text-gray-700 mb-3 block">Comments ({postComments.length})</label>
+              <div className="border-t border-gray-100 pt-6">
+                <h4 className="font-semibold text-gray-900 mb-4">Comments ({postComments.length})</h4>
                 
-                {/* Comments List */}
-                <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
+                <div className="space-y-4 mb-6">
                   {loadingComments ? (
                     <div className="text-center py-8">
                       <div className="animate-spin inline-block w-6 h-6 border-3 border-gray-300 border-t-blue-600 rounded-full"></div>
                       <p className="text-gray-500 text-sm mt-2">Loading comments...</p>
                     </div>
                   ) : postComments.length > 0 ? (
-                    postComments.map((comment) => (
-                      <div key={comment.id} className="p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-start justify-between mb-1">
-                          <div>
-                            <p className="font-medium text-gray-900 text-sm">{comment.author}</p>
-                            <p className="text-xs text-gray-500">
-                              {comment.createdAt instanceof Date 
-                                ? comment.createdAt.toLocaleDateString('en-US', { 
-                                    month: 'short', 
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })
-                                : typeof comment.createdAt === 'string'
-                                ? new Date(comment.createdAt).toLocaleDateString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })
-                                : ''
-                              }
-                            </p>
-                          </div>
-                          {(user?.uid === comment.authorId || user?.role === 'trainer') && (
-                            <button
-                              onClick={() => handleDeleteComment(comment.id)}
-                              className="p-1 hover:bg-red-100 rounded transition-colors text-red-600"
-                              title="Delete comment"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                    postComments.map((comment, index) => (
+                      <div key={index} className="flex gap-3">
+                        <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 overflow-hidden">
+                          {comment.authorAvatar ? (
+                            <img src={comment.authorAvatar} alt={comment.author} className="w-full h-full object-cover" />
+                          ) : (
+                            (comment.author || 'U').split(' ').map(n => n[0]).join('').toUpperCase()
                           )}
                         </div>
-                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{comment.message}</p>
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between">
+                            <p className="font-semibold text-gray-900 text-sm">{comment.author}</p>
+                            {comment.authorId === user?.uid && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await handleDeleteComment(comment.id);
+                                  } catch (error) {
+                                    console.error('Error deleting comment:', error);
+                                  }
+                                }}
+                                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-600" />
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 mb-1">
+                            {formatAbsoluteTime(comment.createdAt)}
+                          </p>
+                          <p className="text-gray-700 text-sm">{comment.message || comment.text}</p>
+                        </div>
                       </div>
                     ))
                   ) : (
-                    <p className="text-center text-gray-500 text-sm py-4">No comments yet. Be the first to comment!</p>
+                    <p className="text-gray-500 text-sm text-center py-6">No comments yet. Be the first!</p>
                   )}
                 </div>
 
-                {/* Add Comment Form */}
+                {/* Comment Input */}
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Add a comment..."
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     onKeyPress={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
+                      if (e.key === 'Enter' && !e.shiftKey && newComment.trim()) {
                         e.preventDefault();
                         handleAddComment();
                       }
                     }}
-                    className="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+                    placeholder="Add a comment..."
+                    className="flex-1 px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm bg-gray-50"
                   />
                   <button
                     onClick={handleAddComment}
-                    disabled={!newComment.trim()}
-                    className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    disabled={submittingComment || !newComment.trim()}
+                    className="px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex-shrink-0 h-fit disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Send className="w-4 h-4" />
                   </button>

@@ -12,7 +12,7 @@ const MAX_GEMINI_RETRIES = 2;
 const BASE_RETRY_DELAY_MS = 1200;
 
 const GENERAL_SYSTEM_PROMPT =
-  'You are HYT BOT, a helpful general-purpose AI assistant. You can answer questions on any topic, not just HYTech LMS. When the user asks about HYTech LMS, provide practical app-specific guidance. Keep responses accurate, clear, and concise.';
+  'You are HYTrix, a helpful general-purpose AI assistant. You can answer questions on any topic, not just HYTech LMS. When the user asks about HYTech LMS, provide practical app-specific guidance. Keep responses accurate, clear, and concise.';
 
 const getGeminiReplyText = (responseJson) => {
   const parts = responseJson?.candidates?.[0]?.content?.parts;
@@ -124,7 +124,7 @@ const buildLocalFallbackReply = (userMessage, currentRole = 'guest') => {
 
 const HytBot = ({ embedded = false }) => {
   const [messages, setMessages] = useState([
-    { role: 'assistant', text: 'Hello! I am HYT BOT. How can I help you today?' },
+    { role: 'assistant', text: 'Hello! I am HYTrix. How can I help you today?' },
   ]);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -166,7 +166,7 @@ const HytBot = ({ embedded = false }) => {
           setRole(data.role || 'student');
         }
       } catch (err) {
-        console.warn('HYT BOT: could not load user role', err);
+        console.warn('HYTrix: could not load user role', err);
       }
     };
     fetchRole();
@@ -312,7 +312,7 @@ const HytBot = ({ embedded = false }) => {
           }
         } catch (e) {
           aiUnavailableReason = 'backend';
-          console.warn('HYT BOT backend error', e);
+          console.warn('HYTrix backend error', e);
         }
       }
 
@@ -323,10 +323,10 @@ const HytBot = ({ embedded = false }) => {
         } catch (e) {
           if (e?.status === 429) {
             aiUnavailableReason = 'quota';
-            addToast?.('HYT BOT is temporarily rate-limited. Please wait and try again.', 'warning');
+            addToast?.('HYTrix is temporarily rate-limited. Please wait and try again.', 'warning');
           } else {
             aiUnavailableReason = 'gemini';
-            console.warn('HYT BOT Gemini error', e);
+            console.warn('HYTrix Gemini error', e);
           }
         }
       }
@@ -334,7 +334,7 @@ const HytBot = ({ embedded = false }) => {
       if (!HYTBOT_API_URL && !GEMINI_API_KEY && !warnedMissingGeminiKeyRef.current) {
         warnedMissingGeminiKeyRef.current = true;
         aiUnavailableReason = 'missing-key';
-        addToast?.('Gemini API key not configured. HYT BOT can only show offline fallback responses.', 'info');
+        addToast?.('Gemini API key not configured. HYTrix can only show offline fallback responses.', 'info');
       }
 
       // Local intelligent fallback when live AI is unavailable.
@@ -349,8 +349,8 @@ const HytBot = ({ embedded = false }) => {
 
       setMessages((m) => [...m, { role: 'assistant', text: reply }]);
     } catch (err) {
-      console.warn('HYT BOT sendMessage failed', err);
-      addToast?.('HYT BOT encountered an error and could not reach the AI service.', 'warning');
+      console.warn('HYTrix sendMessage failed', err);
+      addToast?.('HYTrix encountered an error and could not reach the AI service.', 'warning');
       const localReply = buildLocalFallbackReply(userMessage, role);
       const reply = `${localReply}\n\n${offlineFallbackMessage}`;
       setMessages((m) => [...m, { role: 'assistant', text: reply }]);
@@ -374,7 +374,7 @@ const HytBot = ({ embedded = false }) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }}
-          placeholder="Ask HYT BOT something..."
+          placeholder="Ask HYTrix something..."
           className="flex-1 px-4 py-2 border rounded-xl focus:outline-none"
         />
         <button onClick={sendMessage} disabled={isSending} className="px-4 py-2 bg-[#0B005C] text-white rounded-xl disabled:opacity-60">
@@ -395,7 +395,7 @@ const HytBot = ({ embedded = false }) => {
               className={`inline-flex items-center gap-2 bg-[#0B005C] text-white rounded-full shadow-lg hover:bg-[#13007a] transition-colors ${isSidebarCollapsed ? 'lg:px-3 lg:py-3 px-4 py-3' : 'px-4 py-3'}`}
             >
               <MessageCircle className="w-5 h-5" />
-              <span className={`font-medium ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>HYT BOT</span>
+              <span className={`font-medium ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>HYTrix</span>
             </button>
           </div>
         )}
@@ -407,7 +407,7 @@ const HytBot = ({ embedded = false }) => {
                 <div className="flex items-center gap-3 min-w-0">
                   <MessageCircle className="w-5 h-5 text-indigo-600" />
                   <div className="min-w-0">
-                    <h3 className="font-semibold text-gray-900 truncate">HYT BOT</h3>
+                    <h3 className="font-semibold text-gray-900 truncate">HYTrix</h3>
                     <p className="text-xs text-gray-500 truncate">AI assistant</p>
                   </div>
                 </div>
@@ -415,7 +415,7 @@ const HytBot = ({ embedded = false }) => {
                   type="button"
                   onClick={() => setIsPanelOpen(false)}
                   className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-                  aria-label="Close HYT BOT"
+                  aria-label="Close HYTrix"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -435,7 +435,7 @@ const HytBot = ({ embedded = false }) => {
         <div className="flex items-center gap-3 px-6 py-4 border-b">
           <MessageCircle className="w-6 h-6 text-indigo-600" />
           <div>
-            <h3 className="font-semibold text-gray-900">HYT BOT</h3>
+            <h3 className="font-semibold text-gray-900">HYTrix</h3>
             <p className="text-sm text-gray-500">AI assistant with HYTech context</p>
           </div>
         </div>

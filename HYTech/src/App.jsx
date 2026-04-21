@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './components/landing/LandingPage';
 import SignUp from './components/auth/SignUp';
@@ -6,6 +6,7 @@ import SignIn from './components/auth/SignIn';
 import RoleProtectedRoute from './components/auth/RoleProtectedRoute';
 import PublicOnlyRoute from './components/auth/PublicOnlyRoute';
 import AuthenticatedRoute from './components/auth/AuthenticatedRoute';
+import { migrateClassesCoursTemplateIdToCourseId } from './utils/firestoreService';
 
 // Admin imports
 import AdminDashboardLayout from './components/layout/AdminDashboardLayout';
@@ -47,6 +48,18 @@ import StudentSettings from './components/student/StudentSettings';
 import StudentCalendar from './components/student/StudentCalendar';
 
 function App() {
+  // Run one-time data migration on app load
+  useEffect(() => {
+    const runMigration = async () => {
+      try {
+        await migrateClassesCoursTemplateIdToCourseId();
+      } catch (error) {
+        console.error('Migration error (non-blocking):', error);
+      }
+    };
+    runMigration();
+  }, []);
+
   return (
     <Router>
       <Routes>

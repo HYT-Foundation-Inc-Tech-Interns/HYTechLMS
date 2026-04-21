@@ -222,14 +222,6 @@ const StudentCertificates = () => {
         </div>
       )}
 
-      {/* No enrollments state */}
-      {earnedCertificates.length === 0 && inProgressCourses.length === 0 && (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-600">No courses enrolled yet. Browse courses to get started!</p>
-        </div>
-      )}
-
       {/* Certificate Modal */}
       {showCertificateModal && selectedCertificate && (
         <div className="fixed inset-0 z-[100] overflow-y-auto p-4 sm:p-6">

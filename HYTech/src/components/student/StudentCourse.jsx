@@ -30,7 +30,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, submitQuizAttempt, hasStudentAttempted, getCourseEnrollments, getUserProfile, subscribeToClassTopics } from '../../utils/firestoreService';
+import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, submitQuizAttempt, hasStudentAttempted, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments } from '../../utils/firestoreService';
 
 const StudentCourse = () => {
   const { classname } = useParams();
@@ -66,6 +66,7 @@ const StudentCourse = () => {
     { id: 3, quizId: 1, score: 84, passed: true, submittedAt: 'Mar 12' },
   ]);
   const quizContainerRef = useRef(null);
+  const commentUnsubscribeRef = useRef(null);
 
   // Firestore data state
   const [firestoreAnnouncements, setFirestoreAnnouncements] = useState([]);
@@ -99,6 +100,7 @@ const StudentCourse = () => {
   const [selectedAnnouncementForComments, setSelectedAnnouncementForComments] = useState(null);
   const [newComment, setNewComment] = useState('');
   const [loadingComments, setLoadingComments] = useState(false);
+  const [submittingComment, setSubmittingComment] = useState(false);
   
   // Meeting state - Real-time from Firestore
   const [activeMeeting, setActiveMeeting] = useState(null);
@@ -261,6 +263,9 @@ const StudentCourse = () => {
 
   // Load assessments from Firestore with real-time updates
   useEffect(() => {
+    // Only subscribe if courseId exists
+    if (!courseId) return;
+    
     // Subscribe to real-time updates
     const unsubscribe = subscribeToAssessments(courseId, (assessmentData) => {
       setFirestoreAssessments(assessmentData || []);
@@ -353,17 +358,17 @@ const StudentCourse = () => {
   const displayAnnouncements = firestoreAnnouncements.length > 0 
     ? firestoreAnnouncements.map(ann => ({
         id: ann.id,
-        title: ann.title || 'Announcement',
+        title: ann.title || null,  // Don't default to 'Announcement' - let message be the main content
         author: ann.author || 'Trainer',
-        authorId: ann.authorId, // IMPORTANT: Include authorId for permission checks
-        message: ann.message || '', // IMPORTANT: Include full message for edit functionality
+        authorId: ann.authorId,
+        message: ann.message || '',
         preview: ann.message?.substring(0, 100) || ann.message || 'No content',
         fullMessage: ann.message || 'No content',
         time: ann.createdAt ? new Date(ann.createdAt).toLocaleDateString() : 'Recently',
-        createdAt: ann.createdAt, // IMPORTANT: Include createdAt for timestamp formatting
+        createdAt: ann.createdAt,
         attachments: ann.attachments || [],
         type: 'announcement',
-        authorAvatar: ann.authorAvatar || null // Include avatar if available
+        authorAvatar: ann.authorAvatar || null
       }))
     : [];
 
@@ -438,6 +443,16 @@ const StudentCourse = () => {
     }
   }, [courseId]);
 
+  // Cleanup comment subscription when modal closes or component unmounts
+  useEffect(() => {
+    return () => {
+      if (commentUnsubscribeRef.current) {
+        commentUnsubscribeRef.current();
+        commentUnsubscribeRef.current = null;
+      }
+    };
+  }, []);
+
   const handleJoinMeeting = () => {
     if (activeMeeting) {
       window.open(activeMeeting.link, '_blank');
@@ -494,6 +509,21 @@ const StudentCourse = () => {
     return user?.uid === announcement.authorId;
   };
 
+  // Format absolute time
+  const formatAbsoluteTime = (timestamp) => {
+    if (!timestamp) return '';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+  };
+
   // Format date to relative time (e.g., "2 hours ago")
   const getRelativeTime = (date) => {
     if (!date) return 'unknown';
@@ -545,17 +575,95 @@ const StudentCourse = () => {
     if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
     if (diffWeeks < 4) return `${diffWeeks} week${diffWeeks > 1 ? 's' : ''} ago`;
     
-    return dateObj.toLocaleDateString('en-US', { 
+    return dateObj.toLocaleString('en-US', { 
       month: 'short', 
       day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
       year: dateObj.getFullYear() !== now.getFullYear() ? 'numeric' : undefined 
     });
   };
 
   // Handle opening announcement detail modal
-  const handleOpenAnnouncementDetail = (announcement) => {
-    setSelectedAnnouncementDetail(announcement);
+  const handleOpenAnnouncementDetail = async (announcement) => {
+    // Fetch author's profile picture
+    let announcementWithAvatar = { ...announcement };
+    if (announcement.authorId) {
+      try {
+        const authorProfile = await getUserProfile(announcement.authorId);
+        announcementWithAvatar.authorAvatar = authorProfile?.avatarBase64 || authorProfile?.avatarUrl || null;
+      } catch (error) {
+        console.error('Error loading author avatar:', error);
+      }
+    }
+    
+    setSelectedAnnouncementDetail(announcementWithAvatar);
     setShowAnnouncementDetailModal(true);
+    
+    // Load comments for this announcement
+    if (announcement.type === 'announcement') {
+      try {
+        // Load initial comments
+        const comments = await getAnnouncementComments(courseId, announcement.id);
+        // Fetch avatar for each comment author
+        const commentsWithAvatars = await Promise.all(
+          (comments || []).map(async (comment) => {
+            if (comment.authorId) {
+              try {
+                const authorProfile = await getUserProfile(comment.authorId);
+                return {
+                  ...comment,
+                  authorAvatar: authorProfile?.avatarBase64 || authorProfile?.avatarUrl || null
+                };
+              } catch (error) {
+                console.error('Error loading comment author avatar:', error);
+                return comment;
+              }
+            }
+            return comment;
+          })
+        );
+        
+        setAnnouncementComments(prev => ({
+          ...prev,
+          [announcement.id]: commentsWithAvatars || []
+        }));
+        
+        // Set up real-time subscription for live comment updates
+        commentUnsubscribeRef.current = subscribeToComments(
+          courseId,
+          announcement.id,
+          async (liveComments) => {
+            // Enrich live comments with avatars
+            const enrichedComments = await Promise.all(
+              (liveComments || []).map(async (comment) => {
+                if (comment.authorId && !comment.authorAvatar) {
+                  try {
+                    const authorProfile = await getUserProfile(comment.authorId);
+                    return {
+                      ...comment,
+                      authorAvatar: authorProfile?.avatarBase64 || authorProfile?.avatarUrl || null
+                    };
+                  } catch (error) {
+                    console.error('Error loading comment author avatar:', error);
+                    return comment;
+                  }
+                }
+                return comment;
+              })
+            );
+            
+            setAnnouncementComments(prev => ({
+              ...prev,
+              [announcement.id]: enrichedComments || []
+            }));
+          }
+        );
+      } catch (error) {
+        console.error('Error loading comments:', error);
+      }
+    }
   };
 
   // Handle opening comments modal
@@ -1278,7 +1386,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
   const quizCompletionRate = firestoreAssessments.length ? Math.round((attemptedQuizCount / firestoreAssessments.length) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 md:px-6 lg:px-8 space-y-6">
+    <div className="min-h-screen bg-gray-50 px-4 md:px-6 lg:px-8">
       {/* Download Toast - fixed to bottom-right corner */}
       {showDownloadToast && (
         <div className="fixed bottom-6 right-6 z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 p-4 flex items-center gap-4 min-w-[300px]">
@@ -1344,6 +1452,8 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
           </button>
         </div>
       </div>
+
+      <div className='pb-6'></div>
 
       {activeTab === 'overview' && (
         <>
@@ -1583,10 +1693,10 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                             {/* Author & Action */}
                             <div className="mb-1">
                               <span className="font-semibold text-gray-900">{item.author || 'Trainer'}</span>
-                              <span className="text-gray-600 ml-1">made an announcement</span>
+                              <span className="text-gray-600 ml-1">made an announcement:</span>
                             </div>
 
-                            {/* Title/Message */}
+                            {/* Title/Message - Show as the announcement content */}
                             <p className="text-gray-900 font-medium mb-2 text-sm line-clamp-2">
                               {item.title || (item.message?.length > 100 
                                 ? item.message.substring(0, 100) + '...' 
@@ -2897,12 +3007,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                       <div>
                         <p className="font-semibold text-gray-900">{comment.author}</p>
                         <p className="text-xs text-gray-500">
-                          {comment.createdAt instanceof Date 
-                            ? comment.createdAt.toLocaleDateString()
-                            : typeof comment.createdAt === 'string'
-                            ? new Date(comment.createdAt).toLocaleDateString()
-                            : 'Recently'
-                          }
+                          {formatAbsoluteTime(comment.createdAt)}
                         </p>
                       </div>
                     </div>
@@ -2929,7 +3034,8 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                 />
                 <button
                   onClick={handleAddComment}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex-shrink-0 h-fit mt-3"
+                  disabled={!newComment.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex-shrink-0 h-fit mt-3"
                 >
                   Post
                 </button>
@@ -2942,19 +3048,29 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
       {/* Announcement Detail Modal */}
       {showAnnouncementDetailModal && selectedAnnouncementDetail && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl animate-slide-up max-h-[80vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl animate-slide-up max-h-[80vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">
-                  {selectedAnnouncementDetail.type === 'assignment' ? 'Assignment Details' : 'Announcement Details'}
-                </h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  {selectedAnnouncementDetail.author || 'Trainer'} • {getRelativeTime(selectedAnnouncementDetail.createdAt)}
-                </p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm overflow-hidden">
+                  {selectedAnnouncementDetail.authorAvatar ? (
+                    <img src={selectedAnnouncementDetail.authorAvatar} alt={selectedAnnouncementDetail.author} className="w-full h-full object-cover" />
+                  ) : (
+                    (selectedAnnouncementDetail.author || 'T').split(' ').map(n => n[0]).join('').toUpperCase()
+                  )}
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900">{selectedAnnouncementDetail.author || 'Trainer'}</p>
+                  <p className="text-xs text-gray-500">{formatAbsoluteTime(selectedAnnouncementDetail.createdAt)}</p>
+                </div>
               </div>
               <button 
                 onClick={() => {
+                  // Cleanup subscription when closing
+                  if (commentUnsubscribeRef.current) {
+                    commentUnsubscribeRef.current();
+                    commentUnsubscribeRef.current = null;
+                  }
                   setShowAnnouncementDetailModal(false);
                   setSelectedAnnouncementDetail(null);
                 }}
@@ -2965,37 +3081,17 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {/* Author Card */}
-              <div className={`flex items-center gap-3 p-4 bg-gradient-to-r ${selectedAnnouncementDetail.type === 'assignment' ? 'from-purple-50 to-pink-50 border-purple-100' : 'from-blue-50 to-purple-50 border-blue-100'} rounded-lg border`}>
-                <div className="relative">
-                  <div className={`w-10 h-10 ${selectedAnnouncementDetail.type === 'assignment' ? 'bg-gradient-to-br from-purple-500 to-pink-600' : 'bg-gradient-to-br from-blue-500 to-purple-600'} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                    {(selectedAnnouncementDetail.author || 'T').split(' ').map(n => n[0]).join('').toUpperCase()}
-                  </div>
-                  <div className={`absolute -bottom-0 -right-0 w-4 h-4 ${selectedAnnouncementDetail.type === 'assignment' ? 'bg-purple-100 text-purple-600' : 'bg-orange-100 text-orange-600'} rounded-full flex items-center justify-center border border-white shadow-sm`}>
-                    {selectedAnnouncementDetail.type === 'assignment' ? <FileText className="w-2 h-2" /> : <Megaphone className="w-2 h-2" />}
-                  </div>
-                </div>
-                <div>
-                  <p className="font-semibold text-gray-900 text-sm">{selectedAnnouncementDetail.author || 'Trainer'}</p>
-                  <p className="text-xs text-gray-600">Posted {getRelativeTime(selectedAnnouncementDetail.createdAt)}</p>
-                </div>
-              </div>
-
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* Message Content */}
               <div>
-                <h3 className="font-semibold text-lg text-gray-900 mb-2">
-                  {selectedAnnouncementDetail.title || (selectedAnnouncementDetail.type === 'assignment' ? 'Assignment' : 'Announcement')}
-                </h3>
-                <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                <p className="text-gray-700 whitespace-pre-wrap leading-relaxed text-base">
                   {selectedAnnouncementDetail.message || selectedAnnouncementDetail.preview}
                 </p>
               </div>
 
               {/* Attachments */}
               {selectedAnnouncementDetail.attachments && selectedAnnouncementDetail.attachments.length > 0 && (
-                <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                  <h4 className="font-semibold text-gray-900 mb-3 text-sm">Attachments</h4>
+                <div>
                   <div className="space-y-2">
                     {selectedAnnouncementDetail.attachments.map((attachment, index) => (
                       <a
@@ -3003,7 +3099,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                         href={attachment.url || '#'}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-colors group"
+                        className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-colors group"
                       >
                         <Paperclip className="w-4 h-4 text-gray-500 group-hover:text-blue-600" />
                         <span className="text-sm text-gray-700 group-hover:text-blue-600 font-medium flex-1 truncate">
@@ -3016,77 +3112,132 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                 </div>
               )}
 
-              {/* Discussion Section */}
-              <div className="pt-4 border-t border-gray-100">
+              {/* Comments Section */}
+              <div className="border-t border-gray-100 pt-6">
                 <h4 className="font-semibold text-gray-900 mb-4">Comments ({announcementComments[selectedAnnouncementDetail.id]?.length || 0})</h4>
-                <div className="space-y-4 max-h-48 overflow-y-auto mb-4">
+                
+                <div className="space-y-4 mb-6">
                   {announcementComments[selectedAnnouncementDetail.id]?.length > 0 ? (
                     announcementComments[selectedAnnouncementDetail.id].map((comment, index) => (
-                      <div key={index} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                        <div className="flex items-start justify-between mb-2">
-                          <p className="font-semibold text-gray-900 text-sm">{comment.author}</p>
-                          <p className="text-xs text-gray-500">
-                            {comment.createdAt instanceof Date 
-                              ? getRelativeTime(comment.createdAt)
-                              : getRelativeTime(new Date(comment.createdAt))}
-                          </p>
+                      <div key={index} className="flex gap-3">
+                        <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 overflow-hidden">
+                          {comment.authorAvatar ? (
+                            <img src={comment.authorAvatar} alt={comment.author} className="w-full h-full object-cover" />
+                          ) : (
+                            (comment.author || 'U').split(' ').map(n => n[0]).join('').toUpperCase()
+                          )}
                         </div>
-                        <p className="text-gray-700 text-sm">{comment.text}</p>
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between">
+                            <p className="font-semibold text-gray-900 text-sm">{comment.author}</p>
+                            {user?.uid === comment.authorId && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    // Delete comment logic would go here
+                                    console.log('Delete comment:', index);
+                                    addToast('Comment deleted', 'success');
+                                  } catch (error) {
+                                    console.error('Error deleting comment:', error);
+                                  }
+                                }}
+                                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                title="Delete your comment"
+                              >
+                                <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-600" />
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 mb-1">
+                            {formatAbsoluteTime(comment.createdAt)}
+                          </p>
+                          <p className="text-gray-700 text-sm">{comment.message || comment.text}</p>
+                        </div>
                       </div>
                     ))
                   ) : (
-                    <p className="text-gray-500 text-sm text-center py-4">No comments yet. Be the first!</p>
+                    <p className="text-gray-500 text-sm text-center py-6">No comments yet. Be the first!</p>
                   )}
                 </div>
 
                 {/* Comment Input */}
                 <div className="flex gap-2">
-                  <textarea
+                  <input
+                    type="text"
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey && newComment.trim()) {
+                        e.preventDefault();
+                        document.querySelector('[data-add-comment-btn]')?.click();
+                      }
+                    }}
                     placeholder="Add a comment..."
-                    rows="2"
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none text-sm"
+                    className="flex-1 px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm bg-gray-50"
                   />
                   <button
-                    onClick={() => {
-                      handleAddComment(selectedAnnouncementDetail.id);
-                      setNewComment('');
+                    data-add-comment-btn
+                    disabled={submittingComment || !newComment.trim()}
+                    onClick={async () => {
+                      if (!newComment.trim()) {
+                        addToast('Comment cannot be empty', 'error');
+                        return;
+                      }
+                      
+                      if (submittingComment) {
+                        return;
+                      }
+                      
+                      setSubmittingComment(true);
+                      
+                      try {
+                        await addCommentToAnnouncement(courseId, selectedAnnouncementDetail.id, {
+                          author: user?.displayName || 'You',
+                          authorId: user?.uid,
+                          message: newComment.trim()
+                        });
+                        
+                        // Reload comments with avatars
+                        const updatedComments = await getAnnouncementComments(courseId, selectedAnnouncementDetail.id);
+                        const commentsWithAvatars = await Promise.all(
+                          (updatedComments || []).map(async (comment) => {
+                            if (comment.authorId) {
+                              try {
+                                const authorProfile = await getUserProfile(comment.authorId);
+                                return {
+                                  ...comment,
+                                  authorAvatar: authorProfile?.avatarBase64 || authorProfile?.avatarUrl || null
+                                };
+                              } catch (error) {
+                                console.error('Error loading comment author avatar:', error);
+                                return comment;
+                              }
+                            }
+                            return comment;
+                          })
+                        );
+                        
+                        setAnnouncementComments(prev => ({
+                          ...prev,
+                          [selectedAnnouncementDetail.id]: commentsWithAvatars || []
+                        }));
+                        
+                        setNewComment('');
+                        addToast('Comment added successfully!', 'success');
+                      } catch (error) {
+                        console.error('Error adding comment:', error);
+                        addToast('Failed to add comment', 'error');
+                      } finally {
+                        setSubmittingComment(false);
+                      }
                     }}
-                    className="px-3 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex-shrink-0 h-fit"
+                    className="px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex-shrink-0 h-fit disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Send className="w-4 h-4" />
                   </button>
                 </div>
               </div>
             </div>
-
-            {/* Modal Footer - Edit/Delete Actions */}
-            {isAuthor(selectedAnnouncementDetail) && (
-              <div className="border-t border-gray-100 p-4 bg-gray-50 flex justify-end gap-2">
-                <button
-                  onClick={() => {
-                    setEditingAnnouncementId(selectedAnnouncementDetail.id);
-                    setEditingAnnouncementText(selectedAnnouncementDetail.message || selectedAnnouncementDetail.preview);
-                    setShowAnnouncementDetailModal(false);
-                  }}
-                  className="px-4 py-2 flex items-center gap-2 bg-blue-100 text-blue-600 rounded-lg font-medium hover:bg-blue-200 transition-colors"
-                >
-                  <Edit2 className="w-4 h-4" />
-                  Edit
-                </button>
-                <button
-                  onClick={() => {
-                    handleDeleteAnnouncement(selectedAnnouncementDetail.id);
-                    setShowAnnouncementDetailModal(false);
-                  }}
-                  className="px-4 py-2 flex items-center gap-2 bg-red-100 text-red-600 rounded-lg font-medium hover:bg-red-200 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}

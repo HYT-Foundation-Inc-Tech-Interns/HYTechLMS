@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import {
   getCourses,
+  getCoursesTemplates,
   getSectors,
   queryActiveEnrollment,
   getStudentEnrollments,
@@ -34,15 +35,33 @@ const COLOR_PALETTE = [
 // Generate consistent color based on course ID
 const getPlaceholderColor = (courseId) => {
   if (!courseId) return COLOR_PALETTE[0];
-  // Convert course id to a number to get consistent index
   let hash = 0;
   for (let i = 0; i < courseId.length; i++) {
     const char = courseId.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
+    hash = hash & hash;
   }
   const index = Math.abs(hash) % COLOR_PALETTE.length;
   return COLOR_PALETTE[index];
+};
+
+
+
+// Convert Tailwind color names to actual CSS colors
+const getGradientStyle = (color) => {
+  const colorMap = {
+    'from-blue-500 to-blue-700': 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+    'from-purple-500 to-purple-700': 'linear-gradient(135deg, #a855f7 0%, #6d28d9 100%)',
+    'from-pink-500 to-pink-700': 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)',
+    'from-red-500 to-red-700': 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
+    'from-orange-500 to-orange-700': 'linear-gradient(135deg, #f97316 0%, #c2410c 100%)',
+    'from-yellow-500 to-yellow-700': 'linear-gradient(135deg, #eab308 0%, #a16207 100%)',
+    'from-green-500 to-green-700': 'linear-gradient(135deg, #22c55e 0%, #15803d 100%)',
+    'from-teal-500 to-teal-700': 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)',
+    'from-cyan-500 to-cyan-700': 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+    'from-indigo-500 to-indigo-700': 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
+  };
+  return colorMap[color] || 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)';
 };
 
 const StudentHome = () => {
@@ -53,6 +72,8 @@ const StudentHome = () => {
   // State Management
   const [sectors, setSectors] = useState([]);
   const [courses, setCourses] = useState([]);
+  const [courseTemplates, setCourseTemplates] = useState([]);
+  const [classes, setClasses] = useState([]);
   const [activeEnrollment, setActiveEnrollment] = useState(null);
   const [enrollments, setEnrollments] = useState([]);
   
@@ -98,6 +119,10 @@ const StudentHome = () => {
         setCourses(coursesData || []);
         setErrorCourses(null);
 
+        // Load course templates with bgImage for image lookup via courseId
+        const templateData = await getCoursesTemplates({ status: 'Active' });
+        setCourseTemplates(templateData || []);
+
         // Load student's enrollments
         setLoadingEnrollment(true);
         const enrollmentsData = await getStudentEnrollments(user.uid);
@@ -134,6 +159,13 @@ const StudentHome = () => {
             : { status: 'Active' }
         );
         
+        console.table(coursesData?.map(c => ({ 
+          id: c.id, 
+          name: c.name, 
+          sector: c.sectorName, 
+          courseId: c.courseId || '(none)',
+          bgImage: c.bgImage ? '✓' : '✗'
+        })) || []);
         setCourses(coursesData || []);
       } catch (error) {
         console.error('Error loading courses:', error);
@@ -404,6 +436,17 @@ const StudentHome = () => {
 
   // Render: Popular Courses
   const PopularCoursesSection = () => {
+    // Log courses being displayed
+    if (courses && courses.length > 0) {
+      console.table(courses.map(c => ({ 
+        id: c.id, 
+        name: c.name, 
+        sector: c.sectorName, 
+        courseId: c.courseId || '(none)',
+        bgImage: c.bgImage ? '✓' : '✗'
+      })));
+    }
+    
     if (loadingCourses) {
       return (
         <div className="flex items-center justify-center h-32">
@@ -441,23 +484,32 @@ const StudentHome = () => {
               onClick={() => handleCourseClick(course)}
             >
               {/* Course Image/Header */}
-              <div className="relative">
-                {course.image || course.imageUrl || course.photo ? (
-                  <div className="h-48 bg-gray-200 overflow-hidden">
-                    <img
-                      src={course.image || course.imageUrl || course.photo}
-                      alt={course.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div className={`h-48 bg-gradient-to-br ${getPlaceholderColor(course.id).bg} flex items-center justify-center`}>
+              <div 
+                className="relative h-48 overflow-hidden"
+                style={
+                  course.bgImage
+                    ? { 
+                        backgroundImage: `url(${course.bgImage})`, 
+                        backgroundSize: 'cover', 
+                        backgroundPosition: 'center' 
+                      }
+                    : { background: getGradientStyle(getPlaceholderColor(course.id).bg) }
+                }
+              >
+                {/* Gradient Overlay for better text contrast if using image */}
+                {course.bgImage && (
+                  <div className="absolute inset-0 bg-black/20"></div>
+                )}
+                
+                {/* Icon for when no image */}
+                {!course.bgImage && (
+                  <div className="absolute inset-0 flex items-center justify-center">
                     <BookOpen className="w-16 h-16 text-white opacity-80" />
                   </div>
                 )}
                 
                 {/* Status Badge */}
-                <div className="absolute top-4 right-4">
+                <div className="absolute top-4 right-4 z-10">
                   <span className="px-3 py-1 bg-green-400 text-gray-900 text-xs font-bold rounded-full">
                     {course.status === 'active' ? 'Active' : course.status}
                   </span>
@@ -521,9 +573,8 @@ const StudentHome = () => {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {enrollments.map((enrollment) => {
-          // Try to find course by ID first, then by className (name)
-          const enrollCourse = courses.find(c => c.id === enrollment.courseId) || 
-                               courses.find(c => c.name === enrollment.className);
+          // Look up course template via courseId to get bgImage
+          const courseTemplate = courseTemplates.find(t => t.id === enrollment.courseId);
           
           return (
             <div
@@ -533,13 +584,39 @@ const StudentHome = () => {
                 enrollment.className ? '' : 'opacity-75'
               }`}
             >
+              {/* Course Image/Header from bgImage via courseId */}
+              <div 
+                className="relative h-48 overflow-hidden"
+                style={
+                  courseTemplate?.bgImage
+                    ? { 
+                        backgroundImage: `url(${courseTemplate.bgImage})`, 
+                        backgroundSize: 'cover', 
+                        backgroundPosition: 'center' 
+                      }
+                    : { background: getGradientStyle(getPlaceholderColor(enrollment.courseId).bg) }
+                }
+              >
+                {/* Gradient Overlay for better text contrast if using image */}
+                {courseTemplate?.bgImage && (
+                  <div className="absolute inset-0 bg-black/20"></div>
+                )}
+                
+                {/* Icon for when no image */}
+                {!courseTemplate?.bgImage && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <BookOpen className="w-16 h-16 text-white opacity-80" />
+                  </div>
+                )}
+              </div>
+
               {/* Class Info */}
               <div className="p-6 space-y-4">
                 {/* Title */}
                 <div>
-                  <h3 className="font-bold text-navy-900 text-lg line-clamp-2">{enrollment.className || enrollCourse?.name || 'Class'}</h3>
-                  {enrollCourse?.name && (
-                    <p className="text-sm text-gray-600 mt-1 line-clamp-1">{enrollCourse.name}</p>
+                  <h3 className="font-bold text-navy-900 text-lg line-clamp-2">{enrollment.className}</h3>
+                  {courseTemplate?.name && (
+                    <p className="text-sm text-gray-600 mt-1 line-clamp-1">{courseTemplate.name}</p>
                   )}
                 </div>
 
@@ -567,7 +644,7 @@ const StudentHome = () => {
                   </div>
                   <div className="bg-gray-50 rounded-lg p-2">
                     <p className="text-xs text-gray-500 font-medium">Level</p>
-                    <p className="text-lg font-bold text-blue-600">{enrollCourse?.level || enrollment.level || 'N/A'}</p>
+                    <p className="text-lg font-bold text-blue-600">{courseTemplate?.level || enrollment.level || 'N/A'}</p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-2">
                     <p className="text-xs text-gray-500 font-medium">Progress</p>

@@ -1,11 +1,49 @@
-import React from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Outlet, useLocation, useParams } from 'react-router-dom';
 import StudentSidebar from './StudentSidebar';
 import StudentNavbar from './StudentNavbar';
 import HytBot from '../hytbot/HytBot';
+import { getCourseByName, getCourseTemplateById } from '../../utils/firestoreService';
 
 const StudentDashboardLayout = () => {
   const location = useLocation();
+  const { classname } = useParams();
+  const [courseInfo, setCourseInfo] = useState(null);
+
+  // Fetch course information when classname changes
+  useEffect(() => {
+    if (!classname) {
+      setCourseInfo(null);
+      return;
+    }
+
+    const fetchCourseInfo = async () => {
+      try {
+        const decodedClassname = decodeURIComponent(classname);
+        
+        const classData = await getCourseByName(decodedClassname);
+        
+        if (classData && classData.courseId) {
+          
+          // Fetch the course template using the courseId from the class
+          const courseTemplate = await getCourseTemplateById(classData.courseId);
+          
+          setCourseInfo({
+            class: classData,
+            courseTemplate: courseTemplate
+          });
+        } else {
+          console.warn('⚠️ StudentDashboardLayout - No courseId found in classData');
+          setCourseInfo({ class: classData, courseTemplate: null });
+        }
+      } catch (error) {
+        console.error('❌ Error fetching course info:', error);
+        setCourseInfo(null);
+      }
+    };
+
+    fetchCourseInfo();
+  }, [classname]);
 
   // Get page title and subtitle based on current route
   const getPageInfo = () => {
@@ -17,8 +55,18 @@ const StudentDashboardLayout = () => {
     if (path === '/student/calendar') {
       return { title: 'Calendar', subtitle: 'View your schedule and upcoming events.' };
     }
-    if (path.includes('/student/courses/')) {
-      return { title: 'Barista NCII', subtitle: 'Your enrolled course progress and materials.' };
+    if (path.includes('/student/') && classname) {
+      const decodedClassname = decodeURIComponent(classname);
+      const formattedTitle = decodedClassname;
+      let subtitle = '';
+      
+      if (courseInfo?.courseTemplate) {
+        const courseName = courseInfo.courseTemplate.name || 'Course';
+        const level = courseInfo.courseTemplate.level || 'N/A';
+        subtitle = `${courseName.toUpperCase()} ${level}`;
+      }
+      
+      return { title: formattedTitle, subtitle };
     }
     if (path === '/student/tasks') {
       return { title: 'Tasks', subtitle: 'Track your assignments, quizzes, and submissions.' };

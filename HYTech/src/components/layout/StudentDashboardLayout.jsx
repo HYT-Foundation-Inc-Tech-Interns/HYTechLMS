@@ -6,6 +6,7 @@ import HytBot from '../hytbot/HytBot';
 
 const StudentDashboardLayout = () => {
   const location = useLocation();
+  const { classname } = useParams();
 
   // Get page title based on route
   const getPageInfo = () => {
@@ -14,9 +15,12 @@ const StudentDashboardLayout = () => {
     if (path === '/student') {
       return { title: '', subtitle: '' };
     }
-    if (path.includes('/student/courses/')) {
-      return { title: 'Course Details', subtitle: 'View your course materials and progress.' };
+    
+    // If classname parameter exists, show the class name
+    if (classname) {
+      return { title: classname, subtitle: 'Class materials, assignments, and discussions' };
     }
+    
     if (path === '/student/tasks') {
       return { title: 'Tasks', subtitle: 'Your assigned tasks and submissions.' };
     }

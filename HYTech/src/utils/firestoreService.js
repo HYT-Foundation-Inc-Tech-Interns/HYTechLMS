@@ -19,6 +19,7 @@ import {
   Timestamp,
   onSnapshot,
   arrayUnion,
+  deleteField,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -1319,6 +1320,13 @@ export const getAnnouncements = async (classId) => {
  */
 export const subscribeToAnnouncements = (classId, callback) => {
   try {
+    // Safety check for null/undefined classId
+    if (!classId) {
+      console.warn('⚠️ subscribeToAnnouncements called with null/undefined classId');
+      callback([]);
+      return () => {}; // Return no-op unsubscribe
+    }
+    
     const announcementsRef = collection(db, 'classes', classId, 'announcements');
     const q = query(announcementsRef, orderBy('createdAt', 'desc'));
     
@@ -1815,6 +1823,13 @@ export const getClassMaterials = async (classId) => {
  */
 export const subscribeToClassMaterials = (classId, callback) => {
   try {
+    // Safety check for null/undefined classId
+    if (!classId) {
+      console.warn('⚠️ subscribeToClassMaterials called with null/undefined classId');
+      callback([]);
+      return () => {}; // Return no-op unsubscribe
+    }
+    
     const materialsRef = collection(db, 'classes', classId, 'materials');
     const q = query(materialsRef, orderBy('createdAt', 'desc'));
     
@@ -1959,6 +1974,13 @@ export const getClassTopics = async (classId) => {
  */
 export const subscribeToClassTopics = (classId, callback) => {
   try {
+    // Safety check for null/undefined classId
+    if (!classId) {
+      console.warn('⚠️ subscribeToClassTopics called with null/undefined classId');
+      callback([]);
+      return () => {}; // Return no-op unsubscribe
+    }
+    
     const topicsRef = collection(db, 'classes', classId, 'topics');
     const q = query(topicsRef, orderBy('createdAt', 'asc'));
     
@@ -2323,6 +2345,13 @@ export const getAssessmentsFromAttempts = async (classId) => {
  */
 export const subscribeToAssessments = (classId, callback) => {
   try {
+    // Safety check for null/undefined classId
+    if (!classId) {
+      console.warn('⚠️ subscribeToAssessments called with null/undefined classId');
+      callback([]);
+      return () => {}; // Return no-op unsubscribe
+    }
+    
     const assessmentsRef = collection(db, 'classes', classId, 'assessments');
     // Query without orderBy first to avoid issues with missing fields
     const q = query(assessmentsRef);
@@ -2382,6 +2411,13 @@ export const subscribeToAssessments = (classId, callback) => {
  */
 export const subscribeToAssignments = (classId, callback) => {
   try {
+    // Safety check for null/undefined classId
+    if (!classId) {
+      console.warn('⚠️ subscribeToAssignments called with null/undefined classId');
+      callback([]);
+      return () => {}; // Return no-op unsubscribe
+    }
+    
     const assignmentsRef = collection(db, 'classes', classId, 'assignments');
     const q = query(assignmentsRef, orderBy('createdAt', 'desc'));
     
@@ -2506,14 +2542,43 @@ export const getAssessmentAttempts = async (classId, assessmentId) => {
     const q = query(attemptsRef, orderBy('submittedAt', 'desc'));
     const snapshot = await getDocs(q);
     
-    return snapshot.docs.map((doc) => {
+    // Fetch attempts and enrich with student names
+    const attempts = await Promise.all(snapshot.docs.map(async (doc) => {
       const data = doc.data();
+      let studentName = null;
+      
+      
+      // Try to fetch student profile
+      if (data.studentId) {
+        try {
+          const profile = await getUserProfile(data.studentId);
+          
+          if (profile) {
+            // Try multiple possible name field locations
+            const firstName = profile.firstName || profile.profileForm?.firstName || '';
+            const lastName = profile.lastName || profile.profileForm?.lastName || '';
+            const displayName = profile.displayName || profile.profileForm?.displayName;
+            
+            if (displayName) {
+              studentName = displayName;
+            } else if (firstName || lastName) {
+              studentName = `${firstName} ${lastName}`.trim();
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Could not fetch profile for student ${data.studentId}:`, error);
+        }
+      }
+      
       return {
         id: doc.id,
         ...data,
+        studentName: studentName || null,
         submittedAt: data.submittedAt?.toDate?.() || new Date(data.submittedAt),
       };
-    });
+    }));
+    
+    return attempts;
   } catch (error) {
     console.error('Error fetching assessment attempts:', error);
     throw error;
@@ -2586,6 +2651,44 @@ export const getQuizStatistics = async (studentId, classId, assessmentId) => {
     };
   } catch (error) {
     console.error('Error fetching quiz statistics:', error);
+    throw error;
+  }
+};
+
+/**
+ * One-time migration: Rename courseTemplateId to courseId in all class documents
+ */
+export const migrateClassesCoursTemplateIdToCourseId = async () => {
+  try {
+    const classesRef = collection(db, 'classes');
+    const snapshot = await getDocs(classesRef);
+    
+    let migratedCount = 0;
+    let skippedCount = 0;
+    
+    for (const classDoc of snapshot.docs) {
+      const data = classDoc.data();
+      
+      // If has courseTemplateId but not courseId, migrate it
+      if (data.courseTemplateId && !data.courseId) {
+        await updateDoc(doc(db, 'classes', classDoc.id), {
+          courseId: data.courseTemplateId,
+          courseTemplateId: deleteField()  // Delete the old field
+        });
+        
+        migratedCount++;
+      } else if (data.courseId && !data.courseTemplateId) {
+        skippedCount++;
+      } else if (data.courseTemplateId && data.courseId) {
+        await updateDoc(doc(db, 'classes', classDoc.id), {
+          courseTemplateId: deleteField()
+        });
+        migratedCount++;
+      }
+    }
+    return { migratedCount, skippedCount };
+  } catch (error) {
+    console.error('❌ Error during migration:', error);
     throw error;
   }
 };
@@ -2701,4 +2804,7 @@ export default {
   // Helpers
   batchUpdateDocs,
   toDate,
+  
+  // Migrations
+  migrateClassesCoursTemplateIdToCourseId,
 };

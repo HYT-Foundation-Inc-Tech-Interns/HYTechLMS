@@ -295,7 +295,7 @@ const TrainerHome = () => {
         level: selectedClassDetails.level || 'NC I',
         status: 'Active',
         classCode: classCode,
-        courseTemplateId: selectedClassDetails.id,
+        courseId: selectedClassDetails.id,
         bgImage: selectedClassDetails.bgImage || '',
       }, { sectorId: selectedSector.id, trainerId: user.uid });
       
