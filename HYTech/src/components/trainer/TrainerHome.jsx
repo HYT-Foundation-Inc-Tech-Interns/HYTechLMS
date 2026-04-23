@@ -76,7 +76,7 @@ const TrainerHome = () => {
   const [showCreateClassModal, setShowCreateClassModal] = useState(false);
   const [sectors, setSectors] = useState([]);
   const [availableCourses, setAvailableCourses] = useState([]);
-  const [selectedFilterSector, setSelectedFilterSector] = useState(null);
+  const [selectedFilterSector, setSelectedFilterSector] = useState('');
   const [loadingSectors, setLoadingSectors] = useState(false);
   const [selectedSector, setSelectedSector] = useState(null);
   const [sectorClasses, setSectorClasses] = useState([]);
@@ -553,13 +553,13 @@ const TrainerHome = () => {
                   <div
                     key={course.id}
                     onClick={() => navigate(`/trainer/${encodeURIComponent(course.name)}`)}
-                    className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer border border-gray-200"
+                    className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer border border-gray-200 flex flex-col h-full"
                   >
                     {/* Class Info */}
-                    <div className="p-6 space-y-4">
+                    <div className="p-6 space-y-4 flex flex-col flex-1">
                       {/* Title */}
-                      <div>
-                        <h3 className="font-bold text-navy-900 text-lg line-clamp-2">{course.name}</h3>
+                      <div className="min-h-14">
+                        <h3 className="font-bold text-navy-900 text-lg line-clamp-2 leading-snug">{course.name}</h3>
                         {course.courseName && (
                           <p className="text-sm text-gray-600 mt-1 line-clamp-1">{course.courseName}</p>
                         )}
@@ -572,18 +572,18 @@ const TrainerHome = () => {
                       </div>
 
                       {/* Quick Stats */}
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="bg-gray-50 rounded-lg p-2">
+                      <div className="grid grid-cols-3 gap-2 text-center mt-auto">
+                        <div className="bg-gray-50 rounded-lg p-3">
                           <p className="text-xs text-gray-500 font-medium">Enrolled</p>
-                          <p className="text-lg font-bold text-navy-900">{courseEnrolls.length}</p>
+                          <p className="text-lg font-bold text-navy-900 mt-1">{courseEnrolls.length}</p>
                         </div>
-                        <div className="bg-gray-50 rounded-lg p-2">
+                        <div className="bg-gray-50 rounded-lg p-3">
                           <p className="text-xs text-gray-500 font-medium">Level</p>
-                          <p className="text-lg font-bold text-blue-600">{course.level || 'NC I'}</p>
+                          <p className="text-lg font-bold text-blue-600 mt-1">{course.level || 'NC I'}</p>
                         </div>
-                        <div className="bg-gray-50 rounded-lg p-2">
+                        <div className="bg-gray-50 rounded-lg p-3">
                           <p className="text-xs text-gray-500 font-medium">Status</p>
-                          <span className="inline-block text-xs font-bold px-2 py-1 rounded bg-green-100 text-green-700">
+                          <span className="inline-block text-xs font-bold px-2 py-1 rounded mt-1 bg-green-100 text-green-700">
                             Active
                           </span>
                         </div>
@@ -608,12 +608,12 @@ const TrainerHome = () => {
           <div className="mb-6">
             <select
               value={selectedFilterSector || ''}
-              onChange={(e) => setSelectedFilterSector(e.target.value || null)}
+              onChange={(e) => setSelectedFilterSector(e.target.value)}
               className="px-4 py-2 rounded-lg font-medium border border-gray-300 bg-white text-gray-900 hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
             >
               <option value="">All Courses</option>
               {sectors.map((sector) => (
-                <option key={sector.id} value={sector.id}>
+                <option key={sector.id} value={String(sector.id)}>
                   {sector.name}
                 </option>
               ))}
@@ -623,7 +623,7 @@ const TrainerHome = () => {
           {/* Available Courses Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {availableCourses
-              .filter((course) => !selectedFilterSector || course.sectorId === selectedFilterSector)
+              .filter((course) => selectedFilterSector === '' || String(course.sectorId) === selectedFilterSector)
               .map((course) => (
                 <div
                   key={course.id}

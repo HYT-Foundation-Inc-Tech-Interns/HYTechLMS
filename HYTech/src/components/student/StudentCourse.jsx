@@ -30,7 +30,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, submitQuizAttempt, hasStudentAttempted, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments } from '../../utils/firestoreService';
+import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, submitQuizAttempt, hasStudentAttempted, getStudentQuizAttempts, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments } from '../../utils/firestoreService';
 
 const StudentCourse = () => {
   const { classname } = useParams();
@@ -60,11 +60,7 @@ const StudentCourse = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [studentHasAttempted, setStudentHasAttempted] = useState(false);
-  const [quizAttemptHistory, setQuizAttemptHistory] = useState([
-    { id: 1, quizId: 1, score: 78, passed: true, submittedAt: 'Mar 05' },
-    { id: 2, quizId: 2, score: 64, passed: true, submittedAt: 'Mar 08' },
-    { id: 3, quizId: 1, score: 84, passed: true, submittedAt: 'Mar 12' },
-  ]);
+  const [quizAttemptHistory, setQuizAttemptHistory] = useState([]);
   const quizContainerRef = useRef(null);
   const commentUnsubscribeRef = useRef(null);
 
@@ -330,29 +326,63 @@ const StudentCourse = () => {
     loadClassStudents();
   }, [courseId]);
 
-  // Check which assessments the student has already attempted
+  // Check attempted assessments and load full attempt history from Firestore
   useEffect(() => {
-    const checkAttemptedAssessments = async () => {
-      if (!courseId || !user?.uid || !firestoreAssessments.length) return;
+    const loadAssessmentAttempts = async () => {
+      const assessableItems = [
+        ...(firestoreAssessments || []),
+        ...(firestoreAssignments || []),
+      ];
+
+      if (!courseId || !user?.uid || !assessableItems.length) return;
       
       try {
         const attemptedIds = new Set();
+        const allAttempts = [];
         
-        for (const assessment of firestoreAssessments) {
-          const hasAttempted = await hasStudentAttempted(courseId, assessment.id, user.uid);
-          if (hasAttempted) {
-            attemptedIds.add(assessment.id);
+        for (const item of assessableItems) {
+          const itemId = String(item.id);
+          const attempts = await getStudentQuizAttempts(courseId, itemId, user.uid);
+          if (attempts && attempts.length > 0) {
+            attemptedIds.add(itemId);
+
+            attempts.forEach((attempt) => {
+              const submittedDate = attempt.submittedAt?.toDate
+                ? attempt.submittedAt.toDate()
+                : attempt.submittedAt instanceof Date
+                ? attempt.submittedAt
+                : new Date(attempt.submittedAt);
+
+              allAttempts.push({
+                id: attempt.id,
+                quizId: itemId,
+                score: Number(attempt.score || 0),
+                passed: attempt.passed ?? Number(attempt.score || 0) >= 60,
+                submittedAt: submittedDate,
+                submittedAtLabel: !isNaN(submittedDate?.getTime?.())
+                  ? submittedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  : 'Unknown',
+              });
+            });
           }
         }
         
         setAttemptedAssessmentIds(attemptedIds);
+
+        allAttempts.sort((a, b) => {
+          const dateA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+          const dateB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+          return dateB - dateA;
+        });
+
+        setQuizAttemptHistory(allAttempts);
       } catch (error) {
-        console.error('Error checking attempted assessments:', error);
+        console.error('Error loading assessment attempts:', error);
       }
     };
     
-    checkAttemptedAssessments();
-  }, [courseId, user?.uid, firestoreAssessments]);
+    loadAssessmentAttempts();
+  }, [courseId, user?.uid, firestoreAssessments, firestoreAssignments]);
 
   // Use Firestore data if available, otherwise fall back to mock data
   const displayAnnouncements = firestoreAnnouncements.length > 0 
@@ -1216,16 +1246,24 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
       passed: percentage >= 60
     });
 
+    const submittedAtDate = new Date();
     setQuizAttemptHistory((prev) => [
       {
-        id: Date.now(),
+        id: `local-${Date.now()}`,
         quizId: selectedQuiz.id,
         score: percentage,
         passed: percentage >= 60,
-        submittedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        submittedAt: submittedAtDate,
+        submittedAtLabel: submittedAtDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       },
       ...prev,
     ]);
+
+    setAttemptedAssessmentIds((prev) => {
+      const updated = new Set(prev);
+      updated.add(String(selectedQuiz.id));
+      return updated;
+    });
     
     setQuizSubmitted(true);
     
@@ -1240,6 +1278,38 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
           correctCount,
           totalQuestions: selectedQuiz.questions.length,
           timeTaken: 0 // Could track time if needed
+        });
+
+        // Refresh latest attempts for this assessment from Firestore
+        const refreshedAttempts = await getStudentQuizAttempts(courseId, selectedQuiz.id, user.uid);
+        const normalizedRefreshed = (refreshedAttempts || []).map((attempt) => {
+          const submittedDate = attempt.submittedAt?.toDate
+            ? attempt.submittedAt.toDate()
+            : attempt.submittedAt instanceof Date
+            ? attempt.submittedAt
+            : new Date(attempt.submittedAt);
+
+          return {
+            id: attempt.id,
+            quizId: selectedQuiz.id,
+            score: Number(attempt.score || 0),
+            passed: attempt.passed ?? Number(attempt.score || 0) >= 60,
+            submittedAt: submittedDate,
+            submittedAtLabel: !isNaN(submittedDate?.getTime?.())
+              ? submittedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              : 'Unknown',
+          };
+        });
+
+        setQuizAttemptHistory((prev) => {
+          const withoutCurrentQuiz = prev.filter((a) => String(a.quizId) !== String(selectedQuiz.id));
+          const merged = [...normalizedRefreshed, ...withoutCurrentQuiz];
+          merged.sort((a, b) => {
+            const dateA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+            const dateB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+            return dateB - dateA;
+          });
+          return merged;
         });
       }
     } catch (error) {
@@ -1372,6 +1442,15 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
   const openQuizDetails = (quiz) => {
     setSelectedQuizInfo(quiz);
     setShowQuizInfoModal(true);
+  };
+
+  const isQuizTaken = (quizId) => {
+    const normalizedQuizId = String(quizId);
+    return attemptedAssessmentIds.has(quizId)
+      || attemptedAssessmentIds.has(normalizedQuizId)
+      || quizAttemptHistory.some(
+        (attempt) => String(attempt.quizId) === normalizedQuizId || String(attempt.id) === normalizedQuizId
+      );
   };
 
   // Calculate stats from real or mock data
@@ -1870,7 +1949,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                   className="p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors relative"
                 >
                   {/* "Already Answered" Badge */}
-                  {attemptedAssessmentIds.has(quiz.id) && (
+                  {isQuizTaken(quiz.id) && (
                     <div className="absolute top-3 right-3 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">
                       ✓ Answered
                     </div>
@@ -1911,19 +1990,24 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                     <button
                       onClick={() => openQuizDetails(quiz)}
                       className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={attemptedAssessmentIds.has(quiz.id)}
                     >
                       <Eye className="w-4 h-4" />
                       View Details
                     </button>
-                    <button 
-                      onClick={() => handleStartQuiz(quiz)}
-                      disabled={attemptedAssessmentIds.has(quiz.id)}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
-                    >
-                      <Play className="w-4 h-4" />
-                      {attemptedAssessmentIds.has(quiz.id) ? 'Already Answered' : 'Start Quiz'}
-                    </button>
+                    {isQuizTaken(quiz.id) ? (
+                      <div className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-100 text-green-700 rounded-lg font-medium">
+                        <CheckCircle className="w-4 h-4" />
+                        Taken
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => handleStartQuiz(quiz)}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
+                      >
+                        <Play className="w-4 h-4" />
+                        Start Quiz
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -2157,8 +2241,8 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {quizzes.map((quiz) => {
-                        const isCompleted = attemptedAssessmentIds.has(quiz.id);
-                        const attempt = quizAttemptHistory.find(a => a.quizId === quiz.id || a.id === quiz.id);
+                        const isCompleted = isQuizTaken(quiz.id);
+                        const attempt = quizAttemptHistory.find((a) => String(a.quizId) === String(quiz.id) || String(a.id) === String(quiz.id));
                         const statusColor = isCompleted 
                           ? (attempt?.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')
                           : 'bg-orange-100 text-orange-700';
@@ -2216,26 +2300,20 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                               )}
                             </td>
                             <td className="px-6 py-4 text-center">
-                              <button
-                                onClick={() => handleStartQuiz(quiz)}
-                                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 justify-center ${
-                                  isCompleted
-                                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                                    : 'bg-orange-600 text-white hover:bg-orange-700'
-                                }`}
-                              >
-                                {isCompleted ? (
-                                  <>
-                                    <Eye className="w-4 h-4" />
-                                    Review
-                                  </>
-                                ) : (
-                                  <>
-                                    <Play className="w-4 h-4" />
-                                    Start
-                                  </>
-                                )}
-                              </button>
+                              {isCompleted ? (
+                                <span className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium bg-green-100 text-green-700">
+                                  <CheckCircle className="w-4 h-4" />
+                                  Taken
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleStartQuiz(quiz)}
+                                  className="px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 justify-center bg-orange-600 text-white hover:bg-orange-700"
+                                >
+                                  <Play className="w-4 h-4" />
+                                  Start
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );
@@ -2599,7 +2677,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                       .slice(0, 3)
                       .map((attempt) => (
                         <div key={attempt.id} className="flex items-center justify-between text-sm bg-gray-50 rounded-lg px-3 py-2">
-                          <span className="text-gray-600">Attempt on {attempt.submittedAt}</span>
+                          <span className="text-gray-600">Attempt on {attempt.submittedAtLabel || (attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Unknown')}</span>
                           <span className={`font-semibold ${attempt.passed ? 'text-green-600' : 'text-red-600'}`}>
                             {attempt.score}%
                           </span>
@@ -2621,13 +2699,15 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
               </button>
               <button
                 onClick={() => {
+                  if (isQuizTaken(selectedQuizInfo?.id)) return;
                   setShowQuizInfoModal(false);
                   handleStartQuiz(selectedQuizInfo);
                 }}
-                className="px-5 py-2.5 bg-orange-500 text-white rounded-xl font-medium hover:bg-orange-600 transition-colors flex items-center gap-2"
+                disabled={isQuizTaken(selectedQuizInfo?.id)}
+                className="px-5 py-2.5 bg-orange-500 text-white rounded-xl font-medium hover:bg-orange-600 transition-colors flex items-center gap-2 disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-gray-300"
               >
-                <Play className="w-4 h-4" />
-                Start Quiz
+                {isQuizTaken(selectedQuizInfo?.id) ? <CheckCircle className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                {isQuizTaken(selectedQuizInfo?.id) ? 'Taken' : 'Start Quiz'}
               </button>
             </div>
           </div>

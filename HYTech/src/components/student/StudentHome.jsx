@@ -288,10 +288,8 @@ const StudentHome = () => {
   const JoinClassSection = () => {
     // Don't show until enrollment data has loaded
     if (loadingEnrollment) return null;
-    // Don't show if student has enrollments
-    if (enrollments && enrollments.length > 0) return null;
-    // Don't show if there's an active enrollment
-    if (activeEnrollment) return null;
+    // Don't show join when student is currently taking an active/ongoing class
+    if (activeEnrollment || (enrollments || []).some((e) => e.status === 'active' || e.status === 'ongoing')) return null;
 
     return (
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg p-8 mb-8 text-white">
@@ -554,6 +552,9 @@ const StudentHome = () => {
 
   // Render: Enrollments List (My Classes)
   const EnrollmentsSection = () => {
+    // Filter to show only active enrollments
+    const activeEnrollments = (enrollments || []).filter(e => e.status !== 'completed');
+
     if (loadingEnrollment) {
       return (
         <div className="flex items-center justify-center h-20">
@@ -562,17 +563,17 @@ const StudentHome = () => {
       );
     }
 
-    if (!enrollments || enrollments.length === 0) {
+    if (!activeEnrollments || activeEnrollments.length === 0) {
       return (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
-          <p className="text-gray-600">No enrollments yet. Apply to a course to get started!</p>
+          <p className="text-gray-600">No active enrollments yet. Apply to a course to get started!</p>
         </div>
       );
     }
 
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {enrollments.map((enrollment) => {
+        {activeEnrollments.map((enrollment) => {
           // Look up course template via courseId to get bgImage
           const courseTemplate = courseTemplates.find(t => t.id === enrollment.courseId);
           
@@ -679,7 +680,7 @@ const StudentHome = () => {
         <ActiveEnrollmentAlert />
 
         {/* My Classes Section */}
-        {enrollments && enrollments.length > 0 && (
+        {enrollments && enrollments.filter(e => e.status !== 'completed').length > 0 && (
           <div className="mb-12">
             <div className="flex items-center justify-between mb-6">
               <div>

@@ -4,7 +4,7 @@ import { BookOpen, Check, Users, Save, ExternalLink, Calendar, Send, FileText, V
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
-import { getCourseByName, getCourseTemplateById, getCourseEnrollmentsWithAvatars, getSectorById, getAnnouncements, subscribeToAnnouncements, createAnnouncement, getModules, createModule, getAssessments, createAssessment, updateAnnouncement, deleteAnnouncement, updateAssessment, deleteAssessment, getClassActivityFeed, storeAnnouncementAttachment, uploadMaterial, compressAndStoreFile, addCommentToAnnouncement, getAnnouncementComments, deleteComment, subscribeToComments, downloadAttachment, createAssignment, getAssignments, removeEnrollment, getUserProfile, subscribeToEnrollments, getAssessmentAttempts, createMaterial, getClassMaterials, publishMaterial, unpublishMaterial, updateMaterial, deleteMaterial, createTopic, getClassTopics, subscribeToClassTopics, updateTopic, deleteTopic, publishTopic, unpublishTopic } from '../../utils/firestoreService';
+import { getCourseByName, getCourseTemplateById, getCourseEnrollmentsWithAvatars, getSectorById, getAnnouncements, subscribeToAnnouncements, createAnnouncement, getModules, createModule, getAssessments, createAssessment, updateAnnouncement, deleteAnnouncement, updateAssessment, deleteAssessment, getClassActivityFeed, storeAnnouncementAttachment, uploadMaterial, compressAndStoreFile, addCommentToAnnouncement, getAnnouncementComments, deleteComment, subscribeToComments, downloadAttachment, createAssignment, updateAssignment, getAssignments, removeEnrollment, getUserProfile, subscribeToEnrollments, getAssessmentAttempts, createMaterial, getClassMaterials, publishMaterial, unpublishMaterial, updateMaterial, deleteMaterial, createTopic, getClassTopics, subscribeToClassTopics, updateTopic, deleteTopic, publishTopic, unpublishTopic, updateEnrollmentStatus } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
 
 const ClassDetail = () => {
@@ -69,6 +69,8 @@ const ClassDetail = () => {
   const [isFormBuilderEditMode, setIsFormBuilderEditMode] = useState(false);
   const [editingAssignmentId, setEditingAssignmentId] = useState(null);
   const [isSubmittingItem, setIsSubmittingItem] = useState(false);
+  const [isPublishingItem, setIsPublishingItem] = useState(false);
+  const [currentAssignmentDraftId, setCurrentAssignmentDraftId] = useState(null);
   const [showQuizModal, setShowQuizModal] = useState(false);
   const [assessmentType, setAssessmentType] = useState('quiz'); // quiz, survey, form
   const [quizTitle, setQuizTitle] = useState('');
@@ -76,6 +78,8 @@ const ClassDetail = () => {
   const [quizTimeLimit, setQuizTimeLimit] = useState('');
   const [quizPoints, setQuizPoints] = useState('100');
   const [isSubmittingQuiz, setIsSubmittingQuiz] = useState(false);
+  const [isPublishingQuiz, setIsPublishingQuiz] = useState(false);
+  const [currentQuizDraftId, setCurrentQuizDraftId] = useState(null);
   const [quizQuestions, setQuizQuestions] = useState([]);
   const [currentQuestionType, setCurrentQuestionType] = useState('multiple-choice');
   // Material Upload States
@@ -507,42 +511,35 @@ const ClassDetail = () => {
   // No need for separate loading
 
   // Handle save new item (Assignment/Material/Quiz with form builder)
-  const handleSaveItem = async (e) => {
-    e.preventDefault();
-    
-    // Prevent duplicate submissions
-    if (isSubmittingItem) return;
-    
+  const handleSaveItem = async (e, mode = 'publish') => {
+    e?.preventDefault?.();
+
+    if (isSubmittingItem || isPublishingItem) return;
+
     if (!formBuilderTitle.trim()) {
       addToast('Title is required', 'error');
       return;
     }
 
-    // Validate based on create type
-    if (createType === 'Quiz Assignment') {
-      if (formBuilderQuestions.length === 0) {
-        addToast('Please add at least one question to the quiz', 'error');
-        return;
-      }
-    } else {
-      // For regular assignments, require either description or questions
-      if (!formBuilderDescription.trim() && formBuilderQuestions.length === 0) {
-        addToast('Please add a description or at least one question', 'error');
-        return;
-      }
+    if (mode === 'publish' && !hasPublishableAssignmentQuestion) {
+      addToast('Cannot publish with empty questions. Add at least one question text.', 'error');
+      return;
     }
 
-    setIsSubmittingItem(true);
+    if (mode === 'publish') {
+      setIsPublishingItem(true);
+    } else {
+      setIsSubmittingItem(true);
+    }
+
     try {
-      // Format due date with time (default 11:59 PM if not set)
       let formattedDueDate = null;
       if (formBuilderDueDate) {
         const dueDate = new Date(formBuilderDueDate);
-        dueDate.setHours(23, 59, 0, 0); // Set to 11:59 PM
+        dueDate.setHours(23, 59, 0, 0);
         formattedDueDate = dueDate.toISOString();
       }
 
-      // EDIT MODE - Update existing assignment
       if (isFormBuilderEditMode && editingAssignmentId) {
         const updatedAssignmentData = {
           title: formBuilderTitle.trim(),
@@ -553,32 +550,34 @@ const ClassDetail = () => {
           lastModified: new Date().toISOString()
         };
 
-        // Update in activity feed
-        setActivityFeed(prev =>
-          prev.map(item =>
-            item.id === editingAssignmentId
-              ? { ...item, ...updatedAssignmentData }
-              : item
+        setActivityFeed((prev) =>
+          prev.map((item) =>
+            item.id === editingAssignmentId ? { ...item, ...updatedAssignmentData } : item
           )
         );
 
-        // Update in assignments array
-        setAssignments(prev =>
-          prev.map(a =>
-            a.id === editingAssignmentId
-              ? { ...a, ...updatedAssignmentData }
-              : a
+        setAssignments((prev) =>
+          prev.map((a) =>
+            a.id === editingAssignmentId ? { ...a, ...updatedAssignmentData } : a
           )
         );
 
-        // Update selected assignment in detail modal (if still open after closing)
         if (selectedAssignmentDetail && selectedAssignmentDetail.id === editingAssignmentId) {
-          setSelectedAssignmentDetail(prev => ({ ...prev, ...updatedAssignmentData }));
+          setSelectedAssignmentDetail((prev) => ({ ...prev, ...updatedAssignmentData }));
         }
 
         addToast('Assignment updated successfully!', 'success');
+
+        setFormBuilderTitle('');
+        setFormBuilderDescription('');
+        setFormBuilderQuestions([]);
+        setFormBuilderDueDate('');
+        setFormBuilderPoints('100');
+        setShowCreateModal(false);
+        setCreateType('');
+        setIsFormBuilderEditMode(false);
+        setEditingAssignmentId(null);
       } else {
-        // CREATE MODE - Create new assignment
         const itemData = {
           title: formBuilderTitle.trim(),
           description: formBuilderDescription.trim(),
@@ -588,102 +587,79 @@ const ClassDetail = () => {
           points: parseInt(formBuilderPoints) || 100,
           createdBy: user?.displayName || user?.email || 'Trainer',
           createdById: user?.uid,
-          createdAt: new Date().toISOString(),
-          status: 'active'
+          status: mode === 'draft' ? 'draft' : 'active'
         };
 
-        // Save based on type
-        if (createType === 'Quiz Assignment') {
-          // Create assessment for quiz assignments
-          const newAssessment = await createAssessment(classData.id, {
-            title: itemData.title,
-            description: itemData.description,
-            type: 'quiz',
-            questions: itemData.questions,
-            dueDate: formattedDueDate,
-            totalPoints: parseInt(formBuilderPoints) || 100,
-            author: itemData.createdBy,
-            authorId: itemData.createdById,
-            createdByAvatar: currentUserAvatar || null
-          });
-
-          // Fetch updated assessments to reflect in activity feed
-          const updatedAssessments = await getAssessments(classData.id);
-          
-          // Add to activity feed for real-time update
-          const newAssessmentItem = {
-            id: newAssessment?.id || `assess_${Date.now()}`,
-            type: 'assignment',
-            title: itemData.title,
-            author: itemData.createdBy,
-            authorId: itemData.createdById,
-            preview: itemData.description?.substring(0, 50) + '...' || 'Quiz Assignment',
-            fullMessage: itemData.description,
-            createdAt: new Date().toISOString(),
-            dueDate: formattedDueDate,
-            points: parseInt(formBuilderPoints) || 100,
-            authorAvatar: currentUserAvatar || null
-          };
-
-          setActivityFeed(prev => [newAssessmentItem, ...prev]);
-        } else {
-          // Create assignment for assignments/materials (shows in activity with proper formatting)
-          const newAssignment = await createAssignment(classData.id, {
-            title: itemData.title,
-            description: itemData.description,
-            type: createType,
-            author: itemData.createdBy,
-            authorId: itemData.createdById,
-            createdByAvatar: currentUserAvatar || null,
-            dueDate: formattedDueDate,
-            points: itemData.points,
-            questions: itemData.questions
-          });
-
-          // Reload assignments to show in activity feed
-          const updatedAssignments = await getAssignments(classData.id);
-          setAssignments(updatedAssignments);
-
-          // Immediately add to activity feed for real-time update (no refresh needed)
-          const newAssignmentItem = {
-            id: newAssignment?.id || `assign_${Date.now()}`,
-            type: 'assignment',
-            itemType: createType,
-            title: itemData.title,
-            message: itemData.description,
-            author: itemData.createdBy,
-            authorId: itemData.createdById,
-            dueDate: formattedDueDate,
-            points: itemData.points,
-            questions: itemData.questions || [],
-            timestamp: new Date(),
-            preview: itemData.description?.substring(0, 50) + '...' || createType,
-            createdAt: new Date().toISOString()
-          };
-
-          setActivityFeed(prev => [newAssignmentItem, ...prev]);
+        if (mode === 'publish' && !currentAssignmentDraftId) {
+          addToast('Please save draft first before publishing', 'warning');
+          return;
         }
 
-        addToast(`${createType} created successfully!`, 'success');
-      }
+        if (mode === 'draft') {
+          if (currentAssignmentDraftId) {
+            await updateAssignment(classData.id, currentAssignmentDraftId, {
+              title: itemData.title,
+              description: itemData.description,
+              type: itemData.type,
+              dueDate: itemData.dueDate,
+              points: itemData.points,
+              questions: itemData.questions,
+              status: 'draft'
+            });
+          } else {
+            const newAssignment = await createAssignment(classData.id, {
+              title: itemData.title,
+              description: itemData.description,
+              type: itemData.type,
+              author: itemData.createdBy,
+              authorId: itemData.createdById,
+              createdByAvatar: currentUserAvatar || null,
+              dueDate: itemData.dueDate,
+              points: itemData.points,
+              questions: itemData.questions,
+              status: 'draft'
+            });
 
-      // Reset form
-      setFormBuilderTitle('');
-      setFormBuilderDescription('');
-      setFormBuilderQuestions([]);
-      setFormBuilderDueDate('');
-      setFormBuilderPoints('100');
-      setShowCreateModal(false);
-      setCreateType('');
-      setIsFormBuilderEditMode(false);
-      setEditingAssignmentId(null);
+            setCurrentAssignmentDraftId(newAssignment.id);
+          }
+
+          addToast('Assignment draft saved. Add questions, then publish.', 'success');
+          return;
+        }
+
+        await updateAssignment(classData.id, currentAssignmentDraftId, {
+          title: itemData.title,
+          description: itemData.description,
+          type: itemData.type,
+          dueDate: itemData.dueDate,
+          points: itemData.points,
+          questions: itemData.questions,
+          status: 'active'
+        });
+
+        const updatedAssignments = await getAssignments(classData.id);
+        setAssignments(updatedAssignments);
+
+        addToast(`${createType} created successfully!`, 'success');
+
+        setCurrentAssignmentDraftId(null);
+        setFormBuilderTitle('');
+        setFormBuilderDescription('');
+        setFormBuilderQuestions([]);
+        setFormBuilderDueDate('');
+        setFormBuilderPoints('100');
+        setShowCreateModal(false);
+        setCreateType('');
+        setIsFormBuilderEditMode(false);
+        setEditingAssignmentId(null);
+      }
     } catch (error) {
       console.error('Error saving item:', error);
-      const action = isFormBuilderEditMode ? 'update' : 'create';
+      const action = isFormBuilderEditMode ? 'update' : mode === 'draft' ? 'save draft for' : 'publish';
       addToast(`Failed to ${action} ${createType}: ${error.message}`, 'error');
     } finally {
-      // Reset submission flag to allow future submissions
       setIsSubmittingItem(false);
+      setIsPublishingItem(false);
     }
   };
 
@@ -997,6 +973,10 @@ const ClassDetail = () => {
       )
     );
   };
+
+  const hasPublishableAssignmentQuestion = formBuilderQuestions.some(
+    (q) => (q?.question || '').trim().length > 0
+  );
 
   // Add option to a question
   const addOptionToQuestion = (questionId) => {
@@ -1480,6 +1460,25 @@ const ClassDetail = () => {
     }
   };
 
+  // Handle mark student as graduated
+  const handleGraduateStudent = async (enrollmentId, studentName) => {
+    if (window.confirm(`Are you sure you want to mark ${studentName} as graduated? They will complete the course and receive a certificate.`)) {
+      try {
+        await updateEnrollmentStatus(enrollmentId, 'completed');
+        
+        // Update the enrollment in state with new status
+        setEnrollments(enrollments.map(e => 
+          e.id === enrollmentId ? { ...e, status: 'completed' } : e
+        ));
+        
+        addToast(`${studentName} has been marked as graduated and will receive a certificate!`, 'success');
+      } catch (err) {
+        console.error('Error graduating student:', err);
+        addToast('Failed to mark student as graduated', 'error');
+      }
+    }
+  };
+
   // Handle preview attachment
   const handlePreviewAttachment = (attachment) => {
     // Check if file is an image
@@ -1557,6 +1556,7 @@ const ClassDetail = () => {
       setShowQuizModal(true);
       setAssessmentType('quiz');
       setQuizQuestions([]);
+      setCurrentQuizDraftId(null);
       setQuizTitle('');
       setQuizDescription('');
       setQuizTimeLimit('');
@@ -1584,6 +1584,7 @@ const ClassDetail = () => {
       setFormBuilderTitle('');
       setFormBuilderDescription('');
       setFormBuilderQuestions([]);
+      setCurrentAssignmentDraftId(null);
       setFormBuilderDueDate('');
       setFormBuilderPoints('100');
       setIsFormBuilderEditMode(false);
@@ -1668,40 +1669,85 @@ const ClassDetail = () => {
     ));
   };
 
-  const handleSaveQuiz = async () => {
+  const handleSaveQuizDraft = async () => {
     // Prevent duplicate submissions
-    if (isSubmittingQuiz) return;
+    if (isSubmittingQuiz || isPublishingQuiz) return;
     
     if (!quizTitle.trim()) {
       addToast('Please enter a quiz title', 'error');
-      return;
-    }
-    if (quizQuestions.length === 0) {
-      addToast('Please add at least one question', 'error');
       return;
     }
 
     setIsSubmittingQuiz(true);
     try {
       const quizData = {
-        title: quizTitle,
-        description: quizDescription,
+        title: quizTitle.trim(),
+        description: quizDescription.trim(),
         type: assessmentType,
         timeLimit: quizTimeLimit ? parseInt(quizTimeLimit) : null,
         totalPoints: parseInt(quizPoints) || 100,
         questions: quizQuestions,
         settings: assessmentSettings,
-        createdAt: new Date().toISOString(),
         author: user?.displayName || 'Trainer',
         authorId: user?.uid,
-        createdByAvatar: null
+        createdByAvatar: null,
+        status: 'draft'
       };
 
-      await createAssessment(classData.id, quizData);
-      addToast(`${assessmentType.charAt(0).toUpperCase() + assessmentType.slice(1)} created successfully!`, 'success');
-      
-      // Reset form
+      if (currentQuizDraftId) {
+        await updateAssessment(classData.id, currentQuizDraftId, quizData);
+        addToast('Assessment draft updated', 'success');
+      } else {
+        const newDraft = await createAssessment(classData.id, quizData);
+        setCurrentQuizDraftId(newDraft.id);
+        addToast('Assessment draft saved. Add questions, then publish.', 'success');
+      }
+    } catch (error) {
+      console.error('Error saving assessment draft:', error);
+      addToast(`Failed to save draft: ${error.message || 'Unknown error'}`, 'error');
+    } finally {
+      setIsSubmittingQuiz(false);
+    }
+  };
+
+  const handlePublishQuiz = async () => {
+    if (isPublishingQuiz || isSubmittingQuiz) return;
+
+    if (!quizTitle.trim()) {
+      addToast('Please enter a quiz title', 'error');
+      return;
+    }
+
+    if (quizQuestions.length === 0) {
+      addToast('Cannot publish assessment without questions', 'error');
+      return;
+    }
+
+    if (!currentQuizDraftId) {
+      addToast('Please save draft first before publishing', 'warning');
+      return;
+    }
+
+    setIsPublishingQuiz(true);
+    try {
+      await updateAssessment(classData.id, currentQuizDraftId, {
+        title: quizTitle.trim(),
+        description: quizDescription.trim(),
+        type: assessmentType,
+        timeLimit: quizTimeLimit ? parseInt(quizTimeLimit) : null,
+        totalPoints: parseInt(quizPoints) || 100,
+        questions: quizQuestions,
+        settings: assessmentSettings,
+        status: 'active'
+      });
+
+      const updatedAssessments = await getAssessments(classData.id);
+      setAssessments(updatedAssessments || []);
+
+      addToast(`${assessmentType.charAt(0).toUpperCase() + assessmentType.slice(1)} published successfully!`, 'success');
+
       setShowQuizModal(false);
+      setCurrentQuizDraftId(null);
       setQuizTitle('');
       setQuizDescription('');
       setQuizTimeLimit('');
@@ -1710,11 +1756,10 @@ const ClassDetail = () => {
       setCurrentQuestionType('multiple-choice');
       setAssessmentType('quiz');
     } catch (error) {
-      console.error('Error creating assessment:', error);
-      addToast(`Failed to create ${assessmentType}`, 'error');
+      console.error('Error publishing assessment:', error);
+      addToast(`Failed to publish ${assessmentType}: ${error.message || 'Unknown error'}`, 'error');
     } finally {
-      // Reset submission flag to allow future submissions
-      setIsSubmittingQuiz(false);
+      setIsPublishingQuiz(false);
     }
   };
 
@@ -3024,26 +3069,19 @@ const ClassDetail = () => {
                 </div>
               </div>
               <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm">
-                <p className="text-gray-500 text-sm">Students</p>
-                <div className="mt-2 text-4xl font-bold text-gray-900">{enrollments.length}</div>
+                <p className="text-gray-500 text-sm">Active Students</p>
+                <div className="mt-2 text-4xl font-bold text-gray-900">{enrollments.filter(e => e.status !== 'completed').length}</div>
                 <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
                   <Users className="w-4 h-4" />
-                  Enrolled learners
+                  Currently enrolled
                 </div>
               </div>
               <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm">
-                <p className="text-gray-500 text-sm">Avg. Completion</p>
-                <div className="mt-2 text-4xl font-bold text-gray-900">
-                  {enrollments.length > 0
-                    ? `${Math.round(enrollments.reduce((sum, enrollment) => {
-                        const progressValue = enrollment?.progress?.overallProgress ?? enrollment?.progress?.completion ?? enrollment?.progress?.percentage ?? 0;
-                        return sum + Number(progressValue || 0);
-                      }, 0) / enrollments.length)}%`
-                    : '0%'}
-                </div>
-                <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-700">
+                <p className="text-gray-500 text-sm">Graduated</p>
+                <div className="mt-2 text-4xl font-bold text-gray-900">{enrollments.filter(e => e.status === 'completed').length}</div>
+                <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2 text-sm text-blue-700">
                   <Award className="w-4 h-4" />
-                  Active progress
+                  Certificates issued
                 </div>
               </div>
               <div className="rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white p-5 shadow-sm">
@@ -3064,7 +3102,7 @@ const ClassDetail = () => {
                 <div className="p-5 border-b border-gray-100 flex items-center justify-between">
                   <div>
                     <h3 className="font-bold text-gray-900 text-lg">Students ({enrollments.length})</h3>
-                    <p className="text-sm text-gray-500 mt-1">All enrolled students in this class</p>
+                    <p className="text-sm text-gray-500 mt-1">All students including graduated ones in this class</p>
                   </div>
                 </div>
 
@@ -3131,19 +3169,33 @@ const ClassDetail = () => {
                                 <p className="font-semibold text-gray-900 truncate">{displayName}</p>
                                 <p className="text-sm text-gray-500 truncate">{email}</p>
                                 <div className="mt-2 flex items-center gap-2 text-xs text-gray-500 flex-wrap">
-                                  <span className="rounded-full bg-green-100 px-2.5 py-1 text-green-700 font-medium">
-                                    {enrollment.status || 'Active'}
+                                  <span className={`rounded-full px-2.5 py-1 font-medium ${
+                                    enrollment.status === 'completed' 
+                                      ? 'bg-blue-100 text-blue-700' 
+                                      : 'bg-green-100 text-green-700'
+                                  }`}>
+                                    {enrollment.status === 'completed' ? 'Graduated' : enrollment.status || 'Active'}
                                   </span>
                                   <span>Joined {enrollment.joinedAt ? new Date(enrollment.joinedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}</span>
                                 </div>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-4 flex-shrink-0">
+                            <div className="flex items-center gap-3 flex-shrink-0">
                               <div className="hidden sm:block text-right">
                                 <p className="text-xs uppercase tracking-wide text-gray-400">Progress</p>
                                 <p className="text-lg font-bold text-gray-900">{Math.round(Number(progressValue) || 0)}%</p>
                               </div>
+                              {enrollment.status !== 'completed' && (
+                                <button
+                                  onClick={() => handleGraduateStudent(enrollment.id, displayName)}
+                                  className="rounded-xl px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-2"
+                                  title="Mark student as graduated and issue certificate"
+                                >
+                                  <Award className="w-4 h-4" />
+                                  Graduate
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleRemoveStudent(enrollment.id, displayName)}
                                 className="rounded-xl px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
@@ -3578,6 +3630,7 @@ const ClassDetail = () => {
                     setFormBuilderTitle('');
                     setFormBuilderDescription('');
                     setFormBuilderQuestions([]);
+                    setCurrentAssignmentDraftId(null);
                     setCreateType('');
                     setMaterialTitle('');
                     setMaterialDescription('');
@@ -4210,6 +4263,7 @@ const ClassDetail = () => {
                       setFormBuilderTitle('');
                       setFormBuilderDescription('');
                       setFormBuilderQuestions([]);
+                      setCurrentAssignmentDraftId(null);
                       setIsFormBuilderEditMode(false);
                       setEditingAssignmentId(null);
                     }}
@@ -4217,16 +4271,40 @@ const ClassDetail = () => {
                   >
                     Cancel
                   </button>
-                  <button 
-                    type="submit"
-                    form={undefined}
-                    onClick={handleSaveItem}
-                    className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                    disabled={!formBuilderTitle.trim() || isSubmittingItem}
-                  >
-                    <Save className="w-4 h-4" />
-                    {isSubmittingItem ? 'Creating...' : isFormBuilderEditMode ? 'Save Changes' : 'Publish'}
-                  </button>
+                  {isFormBuilderEditMode ? (
+                    <button 
+                      type="submit"
+                      form={undefined}
+                      onClick={(e) => handleSaveItem(e, 'publish')}
+                      className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      disabled={!formBuilderTitle.trim() || !hasPublishableAssignmentQuestion || isSubmittingItem || isPublishingItem}
+                    >
+                      <Save className="w-4 h-4" />
+                      {isSubmittingItem || isPublishingItem ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={(e) => handleSaveItem(e, 'draft')}
+                        className="px-6 py-2.5 bg-slate-600 text-white rounded-lg font-medium hover:bg-slate-700 transition-colors flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        disabled={!formBuilderTitle.trim() || isSubmittingItem || isPublishingItem}
+                      >
+                        <Save className="w-4 h-4" />
+                        {isSubmittingItem ? 'Saving...' : 'Save Draft'}
+                      </button>
+                      <button 
+                        type="submit"
+                        form={undefined}
+                        onClick={(e) => handleSaveItem(e, 'publish')}
+                        className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        disabled={!formBuilderTitle.trim() || !hasPublishableAssignmentQuestion || isSubmittingItem || isPublishingItem || !currentAssignmentDraftId}
+                      >
+                        <Send className="w-4 h-4" />
+                        {isPublishingItem ? 'Publishing...' : 'Publish'}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -5165,16 +5243,29 @@ const ClassDetail = () => {
                 </button>
                 <button 
                   type="button"
-                  onClick={handleSaveQuiz}
-                  disabled={quizQuestions.length === 0 || !quizTitle || isSubmittingQuiz}
+                  onClick={handleSaveQuizDraft}
+                  disabled={!quizTitle || isSubmittingQuiz || isPublishingQuiz}
                   className={`px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all ${
-                    quizQuestions.length === 0 || !quizTitle || isSubmittingQuiz
+                    !quizTitle || isSubmittingQuiz || isPublishingQuiz
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-slate-600 text-white hover:bg-slate-700'
+                  }`}
+                >
+                  <Save className="w-4 h-4" />
+                  {isSubmittingQuiz ? 'Saving...' : 'Save Draft'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePublishQuiz}
+                  disabled={!quizTitle || quizQuestions.length === 0 || isSubmittingQuiz || isPublishingQuiz || !currentQuizDraftId}
+                  className={`px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all ${
+                    !quizTitle || quizQuestions.length === 0 || isSubmittingQuiz || isPublishingQuiz || !currentQuizDraftId
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
                 >
-                  <Save className="w-4 h-4" />
-                  {isSubmittingQuiz ? 'Creating...' : `Create ${assessmentType === 'quiz' ? 'Quiz' : assessmentType === 'survey' ? 'Survey' : 'Form'}`}
+                  <Send className="w-4 h-4" />
+                  {isPublishingQuiz ? 'Publishing...' : 'Publish'}
                 </button>
               </div>
             </div>

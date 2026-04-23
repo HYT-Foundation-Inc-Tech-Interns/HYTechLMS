@@ -11,10 +11,12 @@ import {
   BookOpen,
   Award,
   FileText,
-  BarChart3
+  BarChart3,
+  Loader
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../firebase';
+import { getStudentEnrollments, getCoursesTemplates } from '../../utils/firestoreService';
 
 const DEFAULT_ARCHIVED_COURSES = [
   {
@@ -76,9 +78,9 @@ const StudentArchivedCourses = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
-  const [archivedCourses, setArchivedCourses] = useState(DEFAULT_ARCHIVED_COURSES);
-
-  const archivedStorageKey = `hyt:student:archived-courses:${uid}`;
+  const [archivedCourses, setArchivedCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [courseTemplates, setCourseTemplates] = useState([]);
 
   useEffect(() => {
     if (!auth) {
@@ -93,25 +95,67 @@ const StudentArchivedCourses = () => {
     return () => unsubscribe();
   }, []);
 
+  // Load archived/completed enrollments from database
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(archivedStorageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          setArchivedCourses(parsed);
-          return;
-        }
+    const loadArchivedClasses = async () => {
+      if (!uid || uid === 'guest') {
+        setLoading(false);
+        return;
       }
-      setArchivedCourses(DEFAULT_ARCHIVED_COURSES);
-    } catch {
-      setArchivedCourses(DEFAULT_ARCHIVED_COURSES);
-    }
-  }, [archivedStorageKey]);
 
-  useEffect(() => {
-    localStorage.setItem(archivedStorageKey, JSON.stringify(archivedCourses));
-  }, [archivedCourses, archivedStorageKey]);
+      try {
+        setLoading(true);
+
+        // Load course templates
+        const templates = await getCoursesTemplates();
+        setCourseTemplates(templates || []);
+
+        // Load all student enrollments
+        const enrollments = await getStudentEnrollments(uid);
+
+        // Filter only completed/graduated enrollments
+        const completedEnrollments = (enrollments || []).filter(e => e.status === 'completed');
+
+        // Map to archived course format
+        const archived = completedEnrollments.map((enrollment) => {
+          const courseTemplate = templates?.find(t => t.id === enrollment.courseId);
+          return {
+            id: enrollment.id,
+            name: enrollment.className || 'Graduated Class',
+            courseName: courseTemplate?.name || enrollment.courseName || 'Course',
+            instructor: courseTemplate?.trainerName || 'Trainer',
+            completedDate: enrollment.completedAt 
+              ? new Date(enrollment.completedAt.toDate?.() || enrollment.completedAt).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric'
+                })
+              : 'Recently completed',
+            rating: 5,
+            students: 0,
+            image: courseTemplate?.bgImage || null,
+            finalGrade: enrollment.finalGrade || 'Pass',
+            recipientName: uid,
+            credentialId: enrollment.certificateId || `CERT-${enrollment.id.substring(0, 8).toUpperCase()}`,
+            scores: {
+              quizzes: 0,
+              assignments: 0,
+              exams: 0,
+            },
+          };
+        });
+
+        setArchivedCourses(archived);
+      } catch (error) {
+        console.error('Error loading archived classes:', error);
+        setArchivedCourses([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadArchivedClasses();
+  }, [uid]);
 
   const getOverallProgress = (course) => {
     const values = [course?.scores?.quizzes, course?.scores?.assignments, course?.scores?.exams]
@@ -143,17 +187,35 @@ const StudentArchivedCourses = () => {
       {/* Header */}
       <div className="flex items-center gap-2 mb-6">
         <Archive className="w-5 h-5 text-gray-400" />
-        <h2 className="font-bold text-gray-900 uppercase text-sm">Archived Courses</h2>
+        <h2 className="font-bold text-gray-900 uppercase text-sm">Archived Classes</h2>
         <span className="text-sm text-gray-500 ml-2">({archivedCourses.length})</span>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader className="w-6 h-6 animate-spin text-blue-600" />
+          <span className="ml-3 text-gray-600">Loading archived classes...</span>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && archivedCourses.length === 0 && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
+          <Archive className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Archived Classes Yet</h3>
+          <p className="text-gray-600">When you complete a class, it will appear here as an archived class.</p>
+        </div>
+      )}
+
       {/* Courses Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {archivedCourses.map((course) => (
-          <div 
-            key={course.id}
-            className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all group"
-          >
+      {!loading && archivedCourses.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {archivedCourses.map((course) => (
+            <div 
+              key={course.id}
+              className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all group"
+            >
             {/* Course Image */}
             <div className="relative h-40 bg-gradient-to-br from-[#0D4291] to-[#0B005C]">
               <img 
@@ -212,15 +274,7 @@ const StudentArchivedCourses = () => {
               </div>
             </div>
           </div>
-        ))}
-      </div>
-
-      {/* Empty State (shown when no courses) */}
-      {archivedCourses.length === 0 && (
-        <div className="text-center py-12">
-          <Archive className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-700">No Archived Courses</h3>
-          <p className="text-gray-500">Completed courses will appear here</p>
+          ))}
         </div>
       )}
 

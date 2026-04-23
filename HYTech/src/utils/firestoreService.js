@@ -783,7 +783,7 @@ export const queryActiveEnrollment = async (studentId) => {
     const q = query(
       enrollmentsRef,
       where('studentId', '==', studentId),
-      where('status', '==', 'active')
+      where('status', 'in', ['active', 'ongoing'])
     );
     
     const snapshot = await getDocs(q);
@@ -868,8 +868,20 @@ export const joinClassByCode = async (studentId, classCode) => {
     const classData = classDoc.data();
     const classId = classDoc.id;
 
-    // Check if student is already enrolled in this class
+    // Prevent joining when student is currently taking another class
     const enrollmentsRef = collection(db, 'enrollments');
+    const activeEnrollmentQ = query(
+      enrollmentsRef,
+      where('studentId', '==', studentId),
+      where('status', 'in', ['active', 'ongoing'])
+    );
+    const activeEnrollmentSnapshot = await getDocs(activeEnrollmentQ);
+
+    if (!activeEnrollmentSnapshot.empty) {
+      throw new Error('You are currently enrolled in an active class. Complete it first before joining a new class.');
+    }
+
+    // Check if student is already enrolled in this class
     const existingQ = query(
       enrollmentsRef,
       where('studentId', '==', studentId),
@@ -878,6 +890,10 @@ export const joinClassByCode = async (studentId, classCode) => {
     const existingSnapshot = await getDocs(existingQ);
 
     if (!existingSnapshot.empty) {
+      const existingEnrollment = existingSnapshot.docs[0].data();
+      if (existingEnrollment.status === 'completed') {
+        throw new Error('You have already completed this class and cannot re-enroll.');
+      }
       throw new Error('You are already enrolled in this class.');
     }
 
@@ -2092,7 +2108,8 @@ export const createAssessment = async (classId, {
   shuffleQuestions = false,
   showScores = true,
   showCorrectAnswers = true,
-  questions = [] 
+  questions = [],
+  status = 'active'
 }) => {
   try {
     // Validate required fields
@@ -2100,7 +2117,7 @@ export const createAssessment = async (classId, {
       throw new Error('Assessment title is required');
     }
     
-    if (!questions || questions.length === 0) {
+    if (status !== 'draft' && (!questions || questions.length === 0)) {
       throw new Error('Assessment must have at least one question');
     }
 
@@ -2124,7 +2141,7 @@ export const createAssessment = async (classId, {
       questions,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      status: 'active',
+      status,
       dueDate: null
     };
     
@@ -2184,16 +2201,20 @@ export const createAssignment = async (classId, {
   createdByAvatar = null,
   dueDate = null,
   points = 100,
-  questions = []
+  questions = [],
+  status = 'active'
 }) => {
   try {
+    const hasPublishableQuestion = Array.isArray(questions)
+      && questions.some((q) => (q?.question || '').trim().length > 0);
+
     // Validate required fields
     if (!title || !title.trim()) {
       throw new Error('Assignment title is required');
     }
 
-    if (!description && (!questions || questions.length === 0)) {
-      throw new Error('Assignment must have either a description or at least one question');
+    if (status !== 'draft' && !hasPublishableQuestion) {
+      throw new Error('Assignment must have at least one non-empty question before publishing');
     }
 
     if (!author) {
@@ -2214,7 +2235,7 @@ export const createAssignment = async (classId, {
       questions,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      status: 'active'
+      status
     };
     
     const docRef = await addDoc(assignmentsRef, assignment);
@@ -2242,6 +2263,32 @@ export const getAssignments = async (classId) => {
     }));
   } catch (error) {
     console.error('Error getting assignments:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update an assignment
+ */
+export const updateAssignment = async (classId, assignmentId, updates) => {
+  try {
+    const hasPublishableQuestion = Array.isArray(updates?.questions)
+      && updates.questions.some((q) => (q?.question || '').trim().length > 0);
+
+    if (updates?.status === 'active' && !hasPublishableQuestion) {
+      throw new Error('Assignment must have at least one non-empty question before publishing');
+    }
+
+    const assignmentRef = doc(db, 'classes', classId, 'assignments', assignmentId);
+
+    await updateDoc(assignmentRef, {
+      ...updates,
+      updatedAt: serverTimestamp()
+    });
+
+    return { id: assignmentId, ...updates };
+  } catch (error) {
+    console.error('Error updating assignment:', error);
     throw error;
   }
 };
@@ -2381,14 +2428,15 @@ export const subscribeToAssessments = (classId, callback) => {
             questions: Array.isArray(data.questions) ? data.questions : [],
             totalPoints: data.totalPoints || data.points || 0,
             duration: data.duration || 0,
-            type: data.type || 'assessment'
+            type: data.type || 'assessment',
+            status: data.status || 'active'
           };
           return formatted;
         } catch (docError) {
           console.error('❌ Error processing assessment document:', docError);
           return null;
         }
-      }).filter(assessment => assessment !== null);
+      }).filter((assessment) => assessment !== null && assessment.status !== 'draft');
       
       callback(assessments);
     }, (error) => {
@@ -2430,7 +2478,7 @@ export const subscribeToAssignments = (classId, callback) => {
           createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
           dueDate: data.dueDate ? (typeof data.dueDate === 'string' ? new Date(data.dueDate) : data.dueDate?.toDate?.()) : null
         };
-      });
+      }).filter((assignment) => assignment.status !== 'draft');
       callback(assignments);
     });
     
