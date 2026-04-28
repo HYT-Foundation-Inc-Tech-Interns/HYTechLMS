@@ -140,7 +140,7 @@ const Sidebar = () => {
 
           {/* My Classes - Expandable */}
           {(!isCollapsed || isMobileOpen) && (
-            <div className="space-y-1">
+            <div classNa  me="space-y-1">
               <button
                 onClick={() => setIsCoursesExpanded(!isCoursesExpanded)}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-300
