@@ -5,9 +5,12 @@ import {
   Users, 
   Calendar, 
   AlertCircle,
-  Loader 
+  Loader,
+  Edit2,
+  X,
+  Check
 } from 'lucide-react';
-import { getCourses } from '../../utils/firestoreService';
+import { getCourses, updateCourse } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
 
 const Classes = () => {
@@ -16,6 +19,9 @@ const Classes = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedClassId, setExpandedClassId] = useState(null);
+  const [editingClassId, setEditingClassId] = useState(null);
+  const [editFormData, setEditFormData] = useState({});
+  const [savingClassId, setSavingClassId] = useState(null);
   const { addToast } = useToast();
 
   useEffect(() => {
@@ -45,8 +51,90 @@ const Classes = () => {
     (course.description || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const formatDate = (dateValue) => {
+    if (!dateValue) return 'Not available';
+    
+    try {
+      let date;
+      
+      // Handle Firestore Timestamp objects
+      if (dateValue && typeof dateValue.toDate === 'function') {
+        date = dateValue.toDate();
+      } else if (dateValue instanceof Date) {
+        date = dateValue;
+      } else if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+        date = new Date(dateValue);
+      } else {
+        return 'Invalid Date';
+      }
+
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return 'Invalid Date';
+      }
+
+      return date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (err) {
+      console.error('Date formatting error:', err);
+      return 'Invalid Date';
+    }
+  };
+
   const toggleExpanded = (classId) => {
     setExpandedClassId(expandedClassId === classId ? null : classId);
+  };
+
+  const startEditing = (course) => {
+    setEditingClassId(course.id);
+    setEditFormData({
+      name: course.name || '',
+      description: course.description || '',
+      level: course.level || '',
+      sector: course.sector || '',
+      status: course.status || 'Active'
+    });
+  };
+
+  const cancelEditing = () => {
+    setEditingClassId(null);
+    setEditFormData({});
+  };
+
+  const handleEditInputChange = (field, value) => {
+    setEditFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const saveClassData = async (classId) => {
+    try {
+      setSavingClassId(classId);
+      await updateCourse(classId, editFormData);
+      
+      // Update the local state
+      setClasses(prevClasses =>
+        prevClasses.map(cls =>
+          cls.id === classId ? { ...cls, ...editFormData } : cls
+        )
+      );
+      
+      addToast('Class updated successfully', 'success');
+      setEditingClassId(null);
+      setEditFormData({});
+    } catch (err) {
+      console.error('Error updating class:', err);
+      addToast(`Failed to update class: ${err.message}`, 'error');
+    } finally {
+      setSavingClassId(null);
+    }
   };
 
   if (loading) {
@@ -139,90 +227,171 @@ const Classes = () => {
               {/* Expanded Details */}
               {expandedClassId === course.id && (
                 <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 space-y-4">
-                  {/* Basic Info Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-gray-700 mb-1">Course Level</p>
-                      <p className="text-gray-900">{course.level || 'Not specified'}</p>
+                  {/* Edit Button */}
+                  {!editingClassId && (
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => startEditing(course)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Edit Class
+                      </button>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-700 mb-1">Status</p>
-                      <p className="text-gray-900">{course.status}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-700 mb-1">Course ID</p>
-                      <p className="text-gray-900 font-mono text-xs break-all">{course.id}</p>
-                    </div>
-                    {course.sector && (
-                      <div>
-                        <p className="text-sm font-medium text-gray-700 mb-1">Sector</p>
-                        <p className="text-gray-900">{course.sector}</p>
+                  )}
+
+                  {/* Edit Form or View Mode */}
+                  {editingClassId === course.id ? (
+                    <div className="space-y-4 p-4 bg-white rounded-lg border border-gray-200">
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Class Name
+                          </label>
+                          <input
+                            type="text"
+                            value={editFormData.name}
+                            onChange={(e) => handleEditInputChange('name', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Description
+                          </label>
+                          <textarea
+                            value={editFormData.description}
+                            onChange={(e) => handleEditInputChange('description', e.target.value)}
+                            rows="3"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Level
+                            </label>
+                            <input
+                              type="text"
+                              value={editFormData.level}
+                              onChange={(e) => handleEditInputChange('level', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Sector
+                            </label>
+                            <input
+                              type="text"
+                              value={editFormData.sector}
+                              onChange={(e) => handleEditInputChange('sector', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Status
+                          </label>
+                          <select
+                            value={editFormData.status}
+                            onChange={(e) => handleEditInputChange('status', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="Active">Active</option>
+                            <option value="Archived">Archived</option>
+                            <option value="Draft">Draft</option>
+                          </select>
+                        </div>
                       </div>
-                    )}
-                  </div>
 
-                  {/* Description */}
-                  {course.description && (
-                    <div>
-                      <p className="text-sm font-medium text-gray-700 mb-1">Description</p>
-                      <p className="text-gray-900">{course.description}</p>
+                      {/* Action Buttons */}
+                      <div className="flex gap-3 pt-4 border-t border-gray-200">
+                        <button
+                          onClick={() => saveClassData(course.id)}
+                          disabled={savingClassId === course.id}
+                          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {savingClassId === course.id ? (
+                            <>
+                              <Loader className="w-4 h-4 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-4 h-4" />
+                              Save Changes
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={cancelEditing}
+                          className="flex items-center gap-2 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors text-sm font-medium"
+                        >
+                          <X className="w-4 h-4" />
+                          Cancel
+                        </button>
+                      </div>
                     </div>
-                  )}
+                  ) : (
+                    <>
+                      {/* Basic Info Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 mb-1">Course Level</p>
+                          <p className="text-gray-900">{course.level || 'Not specified'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 mb-1">Status</p>
+                          <p className="text-gray-900">{course.status}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 mb-1">Course ID</p>
+                          <p className="text-gray-900 font-mono text-xs break-all">{course.classCode || 'N/A'}</p>
+                        </div>
+                        {course.sector && (
+                          <div>
+                            <p className="text-sm font-medium text-gray-700 mb-1">Sector</p>
+                            <p className="text-gray-900">{course.sector}</p>
+                          </div>
+                        )}
+                      </div>
 
-                  {/* Image Preview */}
-                  {course.bgImage && (
-                    <div>
-                      <p className="text-sm font-medium text-gray-700 mb-2">Course Image</p>
-                      <img 
-                        src={course.bgImage} 
-                        alt={course.name}
-                        className="w-full h-32 object-cover rounded-lg border border-gray-300"
-                      />
-                    </div>
-                  )}
-
-                  {/* Timestamps if available */}
-                  {(course.createdAt || course.updatedAt) && (
-                    <div className="pt-2 border-t border-gray-200 space-y-2">
-                      {course.createdAt && (
-                        <p className="text-xs text-gray-600">
-                          <span className="font-medium">Created:</span> {
-                            course.createdAt instanceof Date
-                              ? course.createdAt.toLocaleDateString('en-US', { 
-                                  month: 'short', 
-                                  day: 'numeric', 
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })
-                              : new Date(course.createdAt).toLocaleDateString('en-US', { 
-                                  month: 'short', 
-                                  day: 'numeric', 
-                                  year: 'numeric'
-                                })
-                          }
-                        </p>
+                      {/* Description */}
+                      {course.description && (
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 mb-1">Description</p>
+                          <p className="text-gray-900">{course.description}</p>
+                        </div>
                       )}
-                      {course.updatedAt && (
-                        <p className="text-xs text-gray-600">
-                          <span className="font-medium">Updated:</span> {
-                            course.updatedAt instanceof Date
-                              ? course.updatedAt.toLocaleDateString('en-US', { 
-                                  month: 'short', 
-                                  day: 'numeric', 
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })
-                              : new Date(course.updatedAt).toLocaleDateString('en-US', { 
-                                  month: 'short', 
-                                  day: 'numeric', 
-                                  year: 'numeric'
-                                })
-                          }
-                        </p>
+
+                      {/* Image Preview */}
+                      {course.bgImage && (
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 mb-2">Course Image</p>
+                          <img 
+                            src={course.bgImage} 
+                            alt={course.name}
+                            className="w-full h-32 object-cover rounded-lg border border-gray-300"
+                          />
+                        </div>
                       )}
-                    </div>
+
+                      {/* Timestamps if available */}
+                      <div className="pt-2 border-t border-gray-200 space-y-2">
+                        <p className="text-xs text-gray-600">
+                          <span className="font-medium">Created:</span> {formatDate(course.createdAt)}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          <span className="font-medium">Updated:</span> {formatDate(course.updatedAt)}
+                        </p>
+                      </div>
+                    </>
                   )}
                 </div>
               )}

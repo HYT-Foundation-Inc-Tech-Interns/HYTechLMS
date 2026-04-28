@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Search, 
   Filter, 
@@ -10,7 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  Mail
+  Mail,
+  User
 } from 'lucide-react';
 import { createUserWithEmailAndPassword, getAuth, sendPasswordResetEmail } from 'firebase/auth';
 import { deleteApp, initializeApp } from 'firebase/app';
@@ -46,6 +47,7 @@ const UserManagement = () => {
   const dropdownRef = useRef(null);
 
   const [users, setUsers] = useState([]);
+  const [userAvatars, setUserAvatars] = useState({});
 
   // Form state for adding new user
   const [newUser, setNewUser] = useState({
@@ -385,6 +387,52 @@ const UserManagement = () => {
     }
   };
 
+  const getInitials = (name) => {
+    if (!name) return '?';
+    const parts = name.trim().split(' ').filter(part => part);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  const fetchUserAvatar = useCallback(async (userId, userName) => {
+    try {
+      if (!db) return;
+      const settingsRef = doc(db, 'userSettings', userId);
+      const settingsSnap = await getDoc(settingsRef);
+      
+      if (settingsSnap.exists()) {
+        const data = settingsSnap.data();
+        // Try to find avatar in any of the role settings
+        const roles = ['admin', 'trainer', 'supervisor', 'student'];
+        for (const role of roles) {
+          const roleData = data[role];
+          if (roleData?.avatarUrl || roleData?.avatarPreview || roleData?.avatarBase64) {
+            const avatar = roleData.avatarUrl || roleData.avatarPreview || roleData.avatarBase64;
+            setUserAvatars(prev => ({ ...prev, [userId]: avatar }));
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      console.warn(`Error fetching avatar for user ${userId}:`, error);
+    }
+  }, [db]);
+
+  // Fetch avatars for paginated users
+  useEffect(() => {
+    // Calculate paginatedUsers here
+    const totalPages = Math.ceil(filteredUsers.length / rowsPerPage);
+    const startIndex = (currentPage - 1) * rowsPerPage;
+    const currentPaginatedUsers = filteredUsers.slice(startIndex, startIndex + rowsPerPage);
+    
+    currentPaginatedUsers.forEach(user => {
+      if (user.id && !userAvatars[user.id]) {
+        fetchUserAvatar(user.id, user.name);
+      }
+    });
+  }, [currentPage, rowsPerPage, filteredUsers, userAvatars, fetchUserAvatar]);
+
   return (
     <div className="space-y-4">
       {/* Top Bar */}
@@ -447,9 +495,24 @@ const UserManagement = () => {
                 >
                   <td className="table-cell text-gray-500">{startIndex + index + 1}</td>
                   <td className="table-cell">
-                    <div>
-                      <p className="font-medium text-gray-800">{user.name}</p>
-                      <p className="text-xs text-gray-400">{user.idNumber}</p>
+                    <div className="flex items-center gap-3">
+                      <div className="relative w-10 h-10 flex-shrink-0">
+                        {userAvatars[user.id] ? (
+                          <img 
+                            src={userAvatars[user.id]} 
+                            alt={user.name}
+                            className="w-10 h-10 rounded-full object-cover border border-gray-200"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold border border-gray-200">
+                            {getInitials(user.name)}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800">{user.name}</p>
+                        <p className="text-xs text-gray-400">{user.idNumber}</p>
+                      </div>
                     </div>
                   </td>
                   <td className="table-cell">
