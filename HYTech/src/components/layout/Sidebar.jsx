@@ -11,8 +11,7 @@ import {
   ChevronDown,
   ChevronUp,
   Menu,
-  X,
-  Loader
+  X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getCourses } from '../../utils/firestoreService';
@@ -145,10 +144,10 @@ const Sidebar = () => {
               <button
                 onClick={() => setIsCoursesExpanded(!isCoursesExpanded)}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-300
-                  ${isCoursePath
-                    ? 'text-white shadow-lg'
-                    : 'text-gray-600 hover:bg-blue-50 hover:text-blue-600'
-                  }`}
+                ${isCoursePath
+                  ? 'text-white shadow-lg'
+                  : 'text-gray-600 hover:bg-blue-50 hover:text-blue-600'
+                }`}
                 style={isCoursePath ? { backgroundColor: '#0D4291' } : {}}
               >
                 <div className="flex items-center gap-3">
@@ -164,32 +163,30 @@ const Sidebar = () => {
               
               {/* Course Submenu */}
               {isCoursesExpanded && (
-                <div className="ml-4 space-y-1 animate-slide-down">
+                <div className="space-y-1 animate-slide-down">
                   {loadingCourses ? (
-                    <div className="flex items-center justify-center py-2">
-                      <Loader className="w-4 h-4 animate-spin text-gray-400" />
-                    </div>
+                    <div className="px-8 py-2 text-xs text-gray-500">Loading classes...</div>
                   ) : enrolledCourses.length === 0 ? (
-                    <p className="text-xs text-gray-400 px-4 py-2">No active classes</p>
+                    <div className="px-8 py-2 text-xs text-gray-500">No active classes</div>
                   ) : (
                     enrolledCourses.map(course => (
                       <NavLink
                         key={course.id}
                         to={`/trainer/${encodeURIComponent(course.name)}`}
                         className={({ isActive }) =>
-                          `flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200
+                          `flex items-center gap-3 px-8 py-3 rounded-xl transition-all duration-300
                           ${isActive
-                            ? 'bg-gray-100 text-gray-900'
+                            ? 'bg-blue-50 text-blue-600'
                             : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
                           }`
                         }
                         onClick={() => setIsMobileOpen(false)}
                         title={course.name}
                       >
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${course.color}`}>
+                        <div className={`w-6 h-6 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-semibold ${course.color}`}>
                           {course.code}
                         </div>
-                        <span className="text-sm font-medium line-clamp-1">{course.name}</span>
+                        <span className="text-sm font-medium line-clamp-1 min-w-0">{course.name}</span>
                       </NavLink>
                     ))
                   )}
