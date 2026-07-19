@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }) => {
               email: firebaseUser.email,
               displayName: firebaseUser.displayName || firebaseUser.email.split('@')[0],
               role: 'student', // default role
-              status: 'active',
+              status: 'Active',
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             };

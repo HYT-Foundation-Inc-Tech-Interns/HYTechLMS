@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "hytech-ad360"
-  }
+    "default": "hytech-ad360",
+    "staging": "hyt-global-institute-lms"
+  },
+  "targets": {},
+  "etags": {}
 }

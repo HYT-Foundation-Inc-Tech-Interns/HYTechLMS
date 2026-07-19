@@ -44,7 +44,7 @@ export const createUserProfile = async (userId, userData) => {
       // Create new
       await setDoc(userRef, {
         ...userData,
-        status: 'active',
+        status: 'Active',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
