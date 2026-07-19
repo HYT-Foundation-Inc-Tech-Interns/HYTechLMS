@@ -50,9 +50,9 @@ const RoleProtectedRoute = ({ allowedRole, children }) => {
           async (userSnap) => {
             if (!isMounted) return;
 
-            const status = userSnap.exists() ? (userSnap.data()?.status || 'Active') : 'Active';
+            const status = String(userSnap.exists() ? (userSnap.data()?.status || 'Active') : 'Active').toLowerCase();
 
-            if (status !== 'Active') {
+            if (status !== 'active') {
               await signOut(auth);
               if (isMounted) {
                 setIsAuthenticated(false);

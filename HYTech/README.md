@@ -27,7 +27,8 @@ A comprehensive, production-ready Learning Management System built with React an
 - **Admin**: Full system management, user administration, sector creation, system monitoring
 - **Trainer**: Class management, content creation, assignment/assessment posting, student management
 - **Student**: Course enrollment, assignment submission, quiz participation, progress tracking
-- **Supervisor**: Course oversight, report generation, student performance monitoring
+
+New sign-ups are always Students. Trainer/Admin accounts are created by an Admin in User Management.
 
 ### 📚 Course & Content Management
 - Course creation and enrollment
@@ -258,14 +259,16 @@ The application will be available at `http://localhost:5174`
 
 ### Test Credentials
 
-Use these credentials to test different roles:
+Use these credentials to test different roles (seeded in the dev Firebase project):
 
 | Role | Email | Password |
 |------|-------|----------|
-| Admin | admin@hyt.com | admin123 |
-| Trainer | trainer@hyt.com | trainer123 |
-| Student | student@hyt.com | student123 |
-| Supervisor | supervisor@hyt.com | supervisor123 |
+| Admin | admin@hyt.com | admin1234 |
+| Trainer | trainer@hyt.com | trainer1234 |
+| Student | student1@hyt.com | student1234 |
+| Student | student2@hyt.com | student1234 |
+
+A sample class **"Barista Class - Batch 1"** (class code `HYT101`) is seeded and owned by the test trainer. Students with no enrollment land in a waiting room where they can notify a trainer or join with a class code.
 
 ### First Steps
 

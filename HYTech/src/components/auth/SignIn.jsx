@@ -4,8 +4,6 @@ import { Mail, Lock, Eye, EyeOff, X } from 'lucide-react';
 import {
   browserLocalPersistence,
   browserSessionPersistence,
-  createUserWithEmailAndPassword,
-  fetchSignInMethodsForEmail,
   sendPasswordResetEmail,
   setPersistence,
   signInWithEmailAndPassword,
@@ -19,58 +17,8 @@ import {
 } from 'firebase/firestore';
 import { auth, db, firebaseInitError } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
-import { getHomePathForRole, inferRoleFromEmail, resolveEffectiveRole } from '../../utils/authRole';
-
-const INITIAL_STAFF_ACCOUNTS = [
-  {
-    email: 'admin@hytech.com',
-    password: 'admin1234',
-    role: 'admin',
-    name: 'Initial Admin',
-  },
-  {
-    email: 'trainer@hytech.com',
-    password: 'trainer1234',
-    role: 'trainer',
-    name: 'Initial Trainer',
-  },
-  {
-    email: 'trainer@hyt.com',
-    password: 'trainer123',
-    role: 'trainer',
-    name: 'Initial Trainer',
-  },
-  {
-    email: 'supervisor@hytech.com',
-    password: 'supervisor1234',
-    role: 'supervisor',
-    name: 'Initial Supervisor',
-  },
-  {
-    email: 'student@hytech.com',
-    password: 'student1234',
-    role: 'student',
-    name: 'Initial Student',
-  },
-  {
-    email: 'admin@hyt.com',
-    password: 'admin123',
-    role: 'admin',
-    name: 'Initial Admin',
-  },
-  {
-    email: 'supervisor@hyt.com',
-    password: 'supervisor123',
-    role: 'supervisor',
-    name: 'Initial Supervisor',
-  },
-  {
-    email: 'student@hyt.com',
-    password: 'student123',
-    role: 'student',
-    name: 'Initial Student',
-  },
-];
+import { getHomePathForRole, resolveEffectiveRole } from '../../utils/authRole';
+import { logActivity } from '../../utils/firestoreService';
 
 const SignIn = () => {
   const SIGN_IN_DRAFT_KEY = 'hyt:signin:draft';
@@ -145,38 +93,6 @@ const SignIn = () => {
     }
   };
 
-  const findInitialStaffMatch = (email, password) =>
-    INITIAL_STAFF_ACCOUNTS.find(
-      (account) => account.email === email.toLowerCase() && account.password === password
-    );
-
-  const ensureInitialStaffAccount = async (email, password) => {
-    const initialAccount = findInitialStaffMatch(email, password);
-    if (!initialAccount) {
-      return null;
-    }
-
-    const signInMethods = await fetchSignInMethodsForEmail(auth, email);
-    if (signInMethods.length > 0) {
-      return null;
-    }
-
-    const credential = await createUserWithEmailAndPassword(auth, email, password);
-    await setDoc(doc(db, 'users', credential.user.uid), {
-      uid: credential.user.uid,
-      name: initialAccount.name,
-      email,
-      phone: '',
-      role: initialAccount.role,
-      status: 'Active',
-      isDefaultAccount: true,
-      createdAt: serverTimestamp(),
-    });
-
-    addToast(`${initialAccount.name} initialized.`, 'info');
-    return credential;
-  };
-
   const ensureUserProfileDocument = async (firebaseUser) => {
     const normalizedEmail = String(firebaseUser?.email || '').trim().toLowerCase();
     const profileRef = doc(db, 'users', firebaseUser.uid);
@@ -186,20 +102,15 @@ const SignIn = () => {
       return existingDoc;
     }
 
-    const initialAccount = INITIAL_STAFF_ACCOUNTS.find(
-      (account) => account.email === normalizedEmail
-    );
-
     await setDoc(
       profileRef,
       {
         uid: firebaseUser.uid,
-        name: initialAccount?.name || normalizedEmail.split('@')[0] || 'User',
+        name: normalizedEmail.split('@')[0] || 'User',
         email: normalizedEmail,
         phone: '',
-        role: initialAccount?.role || inferRoleFromEmail(normalizedEmail),
+        role: 'student',
         status: 'Active',
-        isDefaultAccount: Boolean(initialAccount),
         createdAt: serverTimestamp(),
         createdBy: 'system-backfill',
       },
@@ -225,34 +136,19 @@ const SignIn = () => {
         rememberMe ? browserLocalPersistence : browserSessionPersistence
       );
 
-      let credential;
-
-      try {
-        credential = await signInWithEmailAndPassword(
-          auth,
-          normalizedEmail,
-          formData.password
-        );
-      } catch (error) {
-        const createdCredential = await ensureInitialStaffAccount(
-          normalizedEmail,
-          formData.password
-        );
-
-        if (!createdCredential) {
-          throw error;
-        }
-
-        credential = createdCredential;
-      }
+      const credential = await signInWithEmailAndPassword(
+        auth,
+        normalizedEmail,
+        formData.password
+      );
 
       // Ensure profile exists so the account appears in User Management.
       const userSnap = await ensureUserProfileDocument(credential.user);
 
       // Prevent login if user is marked inactive in Firestore
       try {
-        const status = userSnap.exists() ? (userSnap.data()?.status || 'Active') : 'Active';
-        if (status !== 'Active') {
+        const status = String(userSnap.exists() ? (userSnap.data()?.status || 'Active') : 'Active').toLowerCase();
+        if (status !== 'active') {
           // Sign out immediately and show message
           await signOut(auth);
           addToast('This account is inactive. Contact your administrator.', 'error');
@@ -265,8 +161,11 @@ const SignIn = () => {
 
       const role = await resolveEffectiveRole({
         uid: credential.user.uid,
-        email: credential.user.email || normalizedEmail,
         database: db,
+      });
+      logActivity(credential.user.uid, 'user_login', 'users', credential.user.uid, {
+        email: normalizedEmail,
+        role,
       });
       navigate(getHomePathForRole(role));
     } catch (error) {

@@ -2,13 +2,34 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, useParams } from 'react-router-dom';
 import StudentSidebar from './StudentSidebar';
 import StudentNavbar from './StudentNavbar';
+import StudentWaitingRoom from './StudentWaitingRoom';
 import HytBot from '../hytbot/HytBot';
-import { getCourseByName, getCourseTemplateById } from '../../utils/firestoreService';
+import { useAuth } from '../../context/AuthContext';
+import {
+  getCourseByName,
+  getCourseTemplateById,
+  subscribeToStudentEnrollments,
+} from '../../utils/firestoreService';
 
 const StudentDashboardLayout = () => {
   const location = useLocation();
   const { classname } = useParams();
+  const { user } = useAuth();
   const [courseInfo, setCourseInfo] = useState(null);
+  const [enrollments, setEnrollments] = useState(null); // null = still loading
+
+  // Students with no enrollment at all are held in the waiting room
+  useEffect(() => {
+    if (!user?.uid) {
+      return undefined;
+    }
+
+    const unsubscribe = subscribeToStudentEnrollments(user.uid, (items) => {
+      setEnrollments(items || []);
+    });
+
+    return unsubscribe;
+  }, [user?.uid]);
 
   // Fetch course information when classname changes
   useEffect(() => {
@@ -87,6 +108,18 @@ const StudentDashboardLayout = () => {
   };
 
   const pageInfo = getPageInfo();
+
+  if (enrollments === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-10 h-10 rounded-full border-4 border-gray-300 border-t-[#0B005C] animate-spin" />
+      </div>
+    );
+  }
+
+  if (enrollments.length === 0) {
+    return <StudentWaitingRoom />;
+  }
 
   return (
     <div className="h-screen w-screen max-w-[1920px] max-h-[1080px] mx-auto bg-gray-50 flex flex-col transition-colors duration-200">

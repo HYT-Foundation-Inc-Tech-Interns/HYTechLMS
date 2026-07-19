@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { 
   BookOpen, 
@@ -384,7 +384,7 @@ const StudentCourse = () => {
     loadAssessmentAttempts();
   }, [courseId, user?.uid, firestoreAssessments, firestoreAssignments]);
 
-  // Use Firestore data if available, otherwise fall back to mock data
+  // Map Firestore announcements for display
   const displayAnnouncements = firestoreAnnouncements.length > 0 
     ? firestoreAnnouncements.map(ann => ({
         id: ann.id,
@@ -873,192 +873,6 @@ const StudentCourse = () => {
     day: 'numeric' 
   });
 
-  const announcements = [
-    {
-      id: 1,
-      title: 'New Assignment Released',
-      author: 'Ms. Garcia',
-      preview: 'Chapter 3 materials are now available. Please review before Friday\'s class.',
-      fullMessage: `Hello everyone!
-
-The materials for Chapter 3 are now available.
-Please make sure to review them before our class on Friday so you can come prepared for the discussion and activities.
-
-If you have any questions while going through the materials, feel free to note them down and bring them up during class.
-
-See you on Friday!`,
-      time: '2 hours ago',
-      attachments: [
-        { name: 'Chapter 1 Reading', type: 'PDF', size: '5mb' }
-      ]
-    },
-    {
-      id: 2,
-      title: 'Live Demo Session Reminder',
-      author: 'Ms. Garcia',
-      preview: 'Join our live espresso extraction demo tomorrow at 10:30 AM.',
-      fullMessage: `Good day class!
-
-This is a reminder that we have a live demo session tomorrow at 10:30 AM.
-We will focus on espresso extraction and proper grinder calibration.
-
-Please prepare your notebooks and previous activity outputs for review.`,
-      time: '1 day ago',
-      attachments: [
-        { name: 'Espresso Demo Guide', type: 'PDF', size: '3mb' }
-      ]
-    },
-    {
-      id: 3,
-      title: 'Module 2 Materials Uploaded',
-      author: 'Ms. Garcia',
-      preview: 'Module 2 slides and worksheets are now available in course materials.',
-      fullMessage: `Module 2 materials are now available.
-
-Please read the lesson slides and complete the worksheet before Friday.
-The worksheet will be discussed in class and checked for participation points.`,
-      time: '3 days ago',
-      attachments: [
-        { name: 'Module 2 Slides', type: 'PDF', size: '6mb' },
-        { name: 'Module 2 Worksheet', type: 'DOCX', size: '1mb' }
-      ]
-    },
-    {
-      id: 4,
-      title: 'Assessment Rubric Published',
-      author: 'Ms. Garcia',
-      preview: 'Practical assessment rubric is now posted for your reference.',
-      fullMessage: `The practical assessment rubric is now posted.
-
-Review the criteria so you understand how your performance will be graded.
-Focus on workflow, cleanliness, and consistency of output quality.`,
-      time: '5 days ago',
-      attachments: [
-        { name: 'Practical Assessment Rubric', type: 'PDF', size: '2mb' }
-      ]
-    }
-  ];
-
-  // Use real Firestore materials if available, otherwise use mock data
-  // Always use Firestore materials for real-time updates
-  const courseMaterials = firestoreMaterials && firestoreMaterials.length > 0 ? firestoreMaterials : [];
-
-  // Filter to only show published materials
-  const publishedCourseMaterials = courseMaterials.filter((material) => material.isPublished === true);
-
-  // Use real Firestore assessments if available, otherwise use mock data
-  const mockQuizzes = [
-    { 
-      id: 1, 
-      title: 'Coffee Beans Basics',
-      author: 'Trainer Name',
-      dueDate: 'March 15', 
-      progress: 0,
-      duration: 15, // minutes
-      totalPoints: 50,
-      questions: [
-        {
-          id: 1,
-          question: 'What are the two main species of coffee beans commercially grown?',
-          type: 'multiple-choice',
-          options: ['Arabica and Robusta', 'Liberica and Excelsa', 'Colombian and Brazilian', 'Espresso and Latte'],
-          correctAnswer: 0,
-          points: 10
-        },
-        {
-          id: 2,
-          question: 'Which coffee bean species is known for its smoother, sweeter taste?',
-          type: 'multiple-choice',
-          options: ['Robusta', 'Liberica', 'Arabica', 'Excelsa'],
-          correctAnswer: 2,
-          points: 10
-        },
-        {
-          id: 3,
-          question: 'Robusta coffee beans contain more caffeine than Arabica beans.',
-          type: 'true-false',
-          options: ['True', 'False'],
-          correctAnswer: 0,
-          points: 10
-        },
-        {
-          id: 4,
-          question: 'What is the ideal temperature range for brewing espresso?',
-          type: 'multiple-choice',
-          options: ['70-80°C', '90-96°C', '100-110°C', '60-70°C'],
-          correctAnswer: 1,
-          points: 10
-        },
-        {
-          id: 5,
-          question: 'Which factor does NOT affect the flavor of coffee beans?',
-          type: 'multiple-choice',
-          options: ['Altitude where grown', 'Roasting level', 'Color of the coffee cup', 'Processing method'],
-          correctAnswer: 2,
-          points: 10
-        }
-      ]
-    },
-    { 
-      id: 2, 
-      title: 'Espresso Fundamentals',
-      author: 'Trainer Name',
-      dueDate: 'March 20', 
-      progress: 0,
-      duration: 20,
-      totalPoints: 60,
-      questions: [
-        {
-          id: 1,
-          question: 'What is the standard brewing time for a single shot of espresso?',
-          type: 'multiple-choice',
-          options: ['10-15 seconds', '25-30 seconds', '45-60 seconds', '2-3 minutes'],
-          correctAnswer: 1,
-          points: 10
-        },
-        {
-          id: 2,
-          question: 'The crema on top of an espresso indicates a properly extracted shot.',
-          type: 'true-false',
-          options: ['True', 'False'],
-          correctAnswer: 0,
-          points: 10
-        },
-        {
-          id: 3,
-          question: 'What is the typical pressure used in espresso machines?',
-          type: 'multiple-choice',
-          options: ['3 bars', '9 bars', '15 bars', '25 bars'],
-          correctAnswer: 1,
-          points: 10
-        },
-        {
-          id: 4,
-          question: 'How many grams of coffee are typically used for a double shot?',
-          type: 'multiple-choice',
-          options: ['7-9 grams', '14-18 grams', '25-30 grams', '35-40 grams'],
-          correctAnswer: 1,
-          points: 10
-        },
-        {
-          id: 5,
-          question: 'A ristretto uses more water than a regular espresso shot.',
-          type: 'true-false',
-          options: ['True', 'False'],
-          correctAnswer: 1,
-          points: 10
-        },
-        {
-          id: 6,
-          question: 'What does "tamping" refer to in espresso preparation?',
-          type: 'multiple-choice',
-          options: ['Heating the cup', 'Compressing the coffee grounds', 'Frothing milk', 'Cleaning the portafilter'],
-          correctAnswer: 1,
-          points: 10
-        }
-      ]
-    }
-  ];
 
   // Use ONLY real Firestore data - combine assessments AND assignments
   const quizzes = [
@@ -1453,7 +1267,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
       );
   };
 
-  // Calculate stats from real or mock data
+  // Calculate stats from Firestore data
   const attemptedQuizCount = new Set(quizAttemptHistory.map((attempt) => attempt.quizId)).size;
   const passedAttemptCount = quizAttemptHistory.filter((attempt) => attempt.passed).length;
   const averageQuizScore = quizAttemptHistory.length
@@ -1552,7 +1366,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                       <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
                       Live Class in Progress
                     </p>
-                    <p className="text-sm text-white/80">Hosted by {activeMeeting.host} · Started at {activeMeeting.startTime}</p>
+                    <p className="text-sm text-white/80">Hosted by {activeMeeting.host} Â· Started at {activeMeeting.startTime}</p>
                     <div className="flex items-center gap-2 mt-1 text-sm text-white/70">
                       <Users className="w-4 h-4" />
                       <span>{activeMeeting.participants} participants</span>
@@ -1593,7 +1407,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                   </button>
                   <div className="flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-lg text-white/80 text-sm">
                     <Clock className="w-4 h-4" />
-                    <span>{displayCourseData.progress}% complete · Est. {displayCourseData.weeksLeft} weeks left</span>
+                    <span>{displayCourseData.progress}% complete Â· Est. {displayCourseData.weeksLeft} weeks left</span>
                   </div>
                 </div>
               </div>
@@ -1645,7 +1459,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
               {/* Class Info Badge */}
               <div className="flex items-center gap-2">
                 <div className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium flex items-center gap-2">
-                  <span>📚</span>
+                  <span>ðŸ“š</span>
                   <span>{displayCourseData.name}</span>
                 </div>
               </div>
@@ -1951,7 +1765,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                   {/* "Already Answered" Badge */}
                   {isQuizTaken(quiz.id) && (
                     <div className="absolute top-3 right-3 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">
-                      ✓ Answered
+                      âœ“ Answered
                     </div>
                   )}
                   
@@ -2044,7 +1858,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                     <div>
                       <span className="font-medium text-blue-600 block">{material.title}</span>
                       <span className="text-xs text-gray-500">
-                        {(Array.isArray(material.attachments) ? material.attachments.length : 1)} {(Array.isArray(material.attachments) ? material.attachments.length : 1) === 1 ? 'file' : 'files'} · Uploaded {material.uploadedOn || (material.createdAt ? getRelativeTime(material.createdAt) : 'recently')}
+                        {(Array.isArray(material.attachments) ? material.attachments.length : 1)} {(Array.isArray(material.attachments) ? material.attachments.length : 1) === 1 ? 'file' : 'files'} Â· Uploaded {material.uploadedOn || (material.createdAt ? getRelativeTime(material.createdAt) : 'recently')}
                       </span>
                     </div>
                   </button>
@@ -2107,7 +1921,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                             </span>
                           </div>
                           <div className="p-2 text-blue-600">
-                            {isExpanded ? '▼' : '▶'}
+                            {isExpanded ? 'â–¼' : 'â–¶'}
                           </div>
                         </button>
 
@@ -2138,7 +1952,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                                             <span>By {material.author}</span>
                                             {fileCount > 0 && (
                                               <>
-                                                <span>•</span>
+                                                <span>â€¢</span>
                                                 <span className="flex items-center gap-1">
                                                   <Paperclip className="w-3 h-3" />
                                                   {fileCount} file{fileCount !== 1 ? 's' : ''}
@@ -2177,7 +1991,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                             <p className="text-sm text-gray-700 mb-4 line-clamp-2">{material.description || 'No description provided'}</p>
                             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
                               <span>By {material.author || 'Trainer'}</span>
-                              <span>•</span>
+                              <span>â€¢</span>
                               <span className="inline-flex items-center gap-2">
                                 <Paperclip className="w-4 h-4" />
                                 {fileCount} {fileCount === 1 ? 'file' : 'files'}
@@ -2422,7 +2236,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-blue-600">
-                      {selectedAnnouncement.title} <span className="text-gray-900">• {selectedAnnouncement.author}</span>
+                      {selectedAnnouncement.title} <span className="text-gray-900">â€¢ {selectedAnnouncement.author}</span>
                     </h2>
                   </div>
                 </div>
@@ -2509,7 +2323,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                         </span>
                       </div>
                       <p className="text-sm text-gray-500 mt-1">{item.preview}</p>
-                      <p className="text-xs text-gray-400 mt-2">{item.author} · {item.time || getRelativeTime(item.createdAt)}</p>
+                      <p className="text-xs text-gray-400 mt-2">{item.author} Â· {item.time || getRelativeTime(item.createdAt)}</p>
                     </div>
                     <button
                       onClick={() => {
@@ -2581,7 +2395,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                               <p className="text-lg font-medium text-gray-900 truncate">{file.name}</p>
                               <p className="text-sm text-gray-500 mt-1">
                                 {file.size ? `${(file.size / 1024).toFixed(1)} KB` : 'Unknown size'}
-                                <span className="mx-2">•</span>
+                                <span className="mx-2">â€¢</span>
                                 Uploaded {uploadedDate}
                               </p>
                             </div>
@@ -2642,7 +2456,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{selectedQuizInfo.title}</h2>
-                <p className="text-sm text-gray-500 mt-1">Due {selectedQuizInfo.dueDate} · {selectedQuizInfo.questions.length} questions</p>
+                <p className="text-sm text-gray-500 mt-1">Due {selectedQuizInfo.dueDate} Â· {selectedQuizInfo.questions.length} questions</p>
               </div>
               <button
                 onClick={() => setShowQuizInfoModal(false)}
@@ -2734,7 +2548,7 @@ Focus on workflow, cleanliness, and consistency of output quality.`,
                 </button>
                 <div>
                   <h1 className="font-bold text-gray-900">{selectedQuiz.title}</h1>
-                  <p className="text-sm text-gray-500">{selectedQuiz.questions.length} questions · {selectedQuiz.totalPoints} points</p>
+                  <p className="text-sm text-gray-500">{selectedQuiz.questions.length} questions Â· {selectedQuiz.totalPoints} points</p>
                 </div>
               </div>
               

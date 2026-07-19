@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useRoleNotifications } from '../../context/useRoleNotifications';
 import { useToast } from '../../context/ToastContext';
 
-const NotificationDropdown = ({ role = 'student', notifications = [] }) => {
+const NotificationDropdown = ({ role = 'student' }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [isViewingAll, setIsViewingAll] = useState(false);
   const notificationRef = useRef(null);
@@ -16,10 +16,7 @@ const NotificationDropdown = ({ role = 'student', notifications = [] }) => {
     unreadCount,
     markAllAsRead,
     markAsRead,
-  } = useRoleNotifications(
-    role,
-    notifications.length > 0 ? notifications : [{ id: 1, text: 'Welcome to HYTech LMS!', time: 'Just now', unread: true }]
-  );
+  } = useRoleNotifications(role);
   const visibleNotifications = isViewingAll ? notificationList : notificationList.slice(0, 3);
 
   const handleMarkAllAsRead = () => {

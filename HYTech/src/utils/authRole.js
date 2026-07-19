@@ -1,29 +1,16 @@
 import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore';
 
+export const ROLES = ['admin', 'trainer', 'student'];
+
 export const ROLE_HOME = {
   admin: '/admin',
   trainer: '/trainer',
-  supervisor: '/supervisor',
   student: '/student',
 };
 
-export const normalizeRole = (value) => String(value || '').toLowerCase();
-
-export const inferRoleFromEmail = (email) => {
-  const normalizedEmail = String(email || '').trim().toLowerCase();
-  if (normalizedEmail === 'admin@hytech.com' || normalizedEmail === 'admin@hyt.com') {
-    return 'admin';
-  }
-  if (normalizedEmail === 'trainer@hytech.com' || normalizedEmail === 'trainer@hyt.com') {
-    return 'trainer';
-  }
-  if (normalizedEmail === 'supervisor@hytech.com' || normalizedEmail === 'supervisor@hyt.com') {
-    return 'supervisor';
-  }
-  if (normalizedEmail === 'student@hytech.com' || normalizedEmail === 'student@hyt.com') {
-    return 'student';
-  }
-  return 'student';
+export const normalizeRole = (value) => {
+  const role = String(value || '').toLowerCase();
+  return ROLES.includes(role) ? role : '';
 };
 
 export const resolveUserRole = async (uid, database) => {
@@ -54,12 +41,12 @@ export const resolveUserRole = async (uid, database) => {
   return null;
 };
 
-export const resolveEffectiveRole = async ({ uid, email, database }) => {
+export const resolveEffectiveRole = async ({ uid, database }) => {
   try {
     const resolvedRole = await resolveUserRole(uid, database);
-    return normalizeRole(resolvedRole) || inferRoleFromEmail(email);
+    return normalizeRole(resolvedRole) || 'student';
   } catch {
-    return inferRoleFromEmail(email);
+    return 'student';
   }
 };
 

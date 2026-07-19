@@ -45,14 +45,12 @@ const buildLocalFallbackReply = (userMessage, currentRole = 'guest') => {
   const homeByRole = {
     admin: '/admin',
     trainer: '/trainer',
-    supervisor: '/supervisor',
     student: '/student',
   };
 
   const roleLabelByRole = {
     admin: 'Admin',
     trainer: 'Trainer',
-    supervisor: 'Supervisor',
     student: 'Student',
     guest: 'User',
   };
@@ -107,15 +105,6 @@ const buildLocalFallbackReply = (userMessage, currentRole = 'guest') => {
     }
     if (includesAny(text, ['logs', 'system log', 'audit'])) {
       return 'Open Admin > System Logs to review activity and audit events.';
-    }
-  }
-
-  if (role === 'supervisor') {
-    if (includesAny(text, ['report', 'reports', 'analytics'])) {
-      return 'Supervisor reports are available in Supervisor > Reports for progress and performance monitoring.';
-    }
-    if (includesAny(text, ['trainer', 'trainers', 'student', 'students'])) {
-      return 'Use Supervisor sidebar sections (Trainers, Students, Courses) to monitor accounts and performance.';
     }
   }
 

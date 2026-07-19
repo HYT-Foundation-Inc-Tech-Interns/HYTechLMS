@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { 
+import React, { useEffect, useState } from 'react';
+import {
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -10,8 +10,26 @@ import {
   X,
   Calendar
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import {
+  getAssessments,
+  getAssignments,
+  getStudentEnrollments,
+} from '../../utils/firestoreService';
+
+const PERSONAL_EVENTS_KEY = 'hyt:student-calendar:personal-events';
+
+const loadPersonalEvents = (uid) => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(`${PERSONAL_EVENTS_KEY}:${uid}`) || '[]');
+    return stored.map((event) => ({ ...event, date: new Date(event.date) }));
+  } catch {
+    return [];
+  }
+};
 
 const StudentCalendar = () => {
+  const { user } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showEventModal, setShowEventModal] = useState(false);
@@ -23,48 +41,80 @@ const StudentCalendar = () => {
     type: 'personal',
     location: ''
   });
-  const [events, setEvents] = useState([
-    {
-      id: 1,
-      title: 'Barista NCII - Live Session',
-      date: new Date(2025, 0, 15, 10, 0),
-      endTime: '11:30 AM',
-      type: 'live',
-      location: 'Online via Zoom',
-      color: 'blue'
-    },
-    {
-      id: 2,
-      title: 'Quiz: Coffee Brewing Fundamentals',
-      date: new Date(2025, 0, 15, 14, 0),
-      endTime: '3:00 PM',
-      type: 'quiz',
-      location: 'Online',
-      color: 'orange'
-    },
-    {
-      id: 3,
-      title: 'Plumbing NCIII - Practical Assessment',
-      date: new Date(2025, 0, 18, 9, 0),
-      endTime: '12:00 PM',
-      type: 'assessment',
-      location: 'Training Center A',
-      color: 'green'
-    },
-    {
-      id: 4,
-      title: 'Assignment Deadline: Latte Art Portfolio',
-      date: new Date(2025, 0, 20, 23, 59),
-      type: 'deadline',
-      color: 'red'
+  const [personalEvents, setPersonalEvents] = useState([]);
+  const [taskEvents, setTaskEvents] = useState([]);
+
+  const events = [...taskEvents, ...personalEvents];
+
+  // Personal events persist per user in localStorage
+  useEffect(() => {
+    if (user?.uid) {
+      setPersonalEvents(loadPersonalEvents(user.uid));
     }
-  ]);
+  }, [user?.uid]);
+
+  // Deadline events come from real assignments/assessments in enrolled classes
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+
+    let isMounted = true;
+
+    const loadTaskEvents = async () => {
+      try {
+        const enrollments = await getStudentEnrollments(user.uid);
+        const activeEnrollments = enrollments.filter(
+          (e) => e.status === 'active' || e.status === 'ongoing'
+        );
+
+        const perClass = await Promise.all(
+          activeEnrollments.map(async (enrollment) => {
+            const [assessments, assignments] = await Promise.all([
+              getAssessments(enrollment.classId).catch(() => []),
+              getAssignments(enrollment.classId).catch(() => []),
+            ]);
+
+            const toEvent = (item, kind) => {
+              const dueDate = item.dueDate
+                ? (item.dueDate?.toDate?.() || new Date(item.dueDate))
+                : null;
+              if (!dueDate || Number.isNaN(dueDate.getTime())) return null;
+
+              return {
+                id: `task-${enrollment.classId}-${item.id}`,
+                title: `${kind === 'assessment' ? 'Quiz' : 'Assignment'}: ${item.title || 'Untitled'}`,
+                date: dueDate,
+                type: kind === 'assessment' ? 'quiz' : 'deadline',
+                location: enrollment.className || '',
+                color: kind === 'assessment' ? 'orange' : 'red',
+              };
+            };
+
+            return [
+              ...assessments.map((a) => toEvent(a, 'assessment')),
+              ...assignments.map((a) => toEvent(a, 'assignment')),
+            ].filter(Boolean);
+          })
+        );
+
+        if (isMounted) {
+          setTaskEvents(perClass.flat());
+        }
+      } catch (error) {
+        console.error('Error loading calendar events:', error);
+      }
+    };
+
+    loadTaskEvents();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.uid]);
 
   const handleAddEvent = () => {
     if (newEvent.title && newEvent.date && newEvent.startTime) {
       const [year, month, day] = newEvent.date.split('-').map(Number);
       const [hours, minutes] = newEvent.startTime.split(':').map(Number);
-      
+
       const eventColors = {
         personal: 'purple',
         meeting: 'blue',
@@ -73,7 +123,7 @@ const StudentCalendar = () => {
       };
 
       const newEventData = {
-        id: events.length + 1,
+        id: `personal-${Date.now()}`,
         title: newEvent.title,
         date: new Date(year, month - 1, day, hours, minutes),
         endTime: newEvent.endTime || '',
@@ -82,7 +132,14 @@ const StudentCalendar = () => {
         color: eventColors[newEvent.type] || 'blue'
       };
 
-      setEvents([...events, newEventData]);
+      const updated = [...personalEvents, newEventData];
+      setPersonalEvents(updated);
+      if (user?.uid) {
+        localStorage.setItem(
+          `${PERSONAL_EVENTS_KEY}:${user.uid}`,
+          JSON.stringify(updated.map((event) => ({ ...event, date: event.date.toISOString() })))
+        );
+      }
       setNewEvent({
         title: '',
         date: '',

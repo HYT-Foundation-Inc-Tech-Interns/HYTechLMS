@@ -18,60 +18,6 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { getStudentEnrollments, getCoursesTemplates } from '../../utils/firestoreService';
 
-const DEFAULT_ARCHIVED_COURSES = [
-  {
-    id: 1,
-    name: 'Barista NCII',
-    instructor: 'Anna Reyes',
-    completedDate: 'Dec 15, 2025',
-    rating: 4.5,
-    students: 30,
-    image: '/images/barista.png',
-    finalGrade: 'A',
-    recipientName: 'Gerald Andrei Lat',
-    credentialId: 'CERT-2025-001',
-    scores: {
-      quizzes: 92,
-      assignments: 94,
-      exams: 90,
-    },
-  },
-  {
-    id: 2,
-    name: 'Visual Graphics Design',
-    instructor: 'Mark Silva',
-    completedDate: 'Nov 20, 2025',
-    rating: 4.2,
-    students: 25,
-    image: '/images/graphics.png',
-    finalGrade: 'A-',
-    recipientName: 'Gerald Andrei Lat',
-    credentialId: 'CERT-2025-002',
-    scores: {
-      quizzes: 88,
-      assignments: 91,
-      exams: 87,
-    },
-  },
-  {
-    id: 3,
-    name: 'Food Safety Management',
-    instructor: 'Patricia Santos',
-    completedDate: 'Oct 5, 2025',
-    rating: 4.8,
-    students: 45,
-    image: '/images/food_safety.png',
-    finalGrade: 'B+',
-    recipientName: 'Gerald Andrei Lat',
-    credentialId: 'CERT-2025-003',
-    scores: {
-      quizzes: 84,
-      assignments: 86,
-      exams: 83,
-    },
-  },
-];
-
 const StudentArchivedCourses = () => {
   const [uid, setUid] = useState('guest');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
