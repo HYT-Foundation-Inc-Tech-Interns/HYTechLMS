@@ -100,27 +100,6 @@ const UserManagement = () => {
       }
 
       try {
-        // Ensure current user doc exists
-        const currentUserRef = doc(db, 'users', currentUser.uid);
-        const currentUserSnap = await getDoc(currentUserRef);
-        if (!currentUserSnap.exists()) {
-          const normalizedEmail = String(currentUser.email || '').trim().toLowerCase();
-          const fallbackName = normalizedEmail.split('@')[0] || 'User';
-          await setDoc(
-            currentUserRef,
-            {
-              uid: currentUser.uid,
-              name: fallbackName,
-              email: normalizedEmail,
-              role: 'admin',
-              status: 'Active',
-              createdAt: serverTimestamp(),
-              createdBy: 'system-backfill',
-            },
-            { merge: true }
-          );
-        }
-
         // Set up real-time listener for users
         if (isMounted) {
           try {

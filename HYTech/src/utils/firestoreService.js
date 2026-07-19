@@ -21,7 +21,7 @@ import {
   arrayUnion,
   deleteField,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 
 // ==================== USER OPERATIONS ====================
 
@@ -1221,12 +1221,15 @@ export const createNotification = async ({ toUid, type = 'general', text, fromUi
       throw new Error('Notification requires toUid and text');
     }
 
+    // Rules require fromUid == request.auth.uid; default to the caller.
+    const resolvedFromUid = fromUid || auth?.currentUser?.uid || '';
+
     const notificationsRef = collection(db, 'notifications');
     const docRef = await addDoc(notificationsRef, {
       toUid,
       type,
       text,
-      fromUid,
+      fromUid: resolvedFromUid,
       fromName,
       metadata,
       unread: true,
