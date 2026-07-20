@@ -30,7 +30,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, submitQuizAttempt, hasStudentAttempted, getStudentQuizAttempts, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments } from '../../utils/firestoreService';
+import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, submitQuizAttempt, hasStudentAttempted, getStudentQuizAttempts, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments, submitAssignment, getMySubmission } from '../../utils/firestoreService';
 
 const StudentCourse = () => {
   const { classname } = useParams();
@@ -47,6 +47,14 @@ const StudentCourse = () => {
   const [downloadFileName, setDownloadFileName] = useState('');
   const [showQuizInfoModal, setShowQuizInfoModal] = useState(false);
   const [selectedQuizInfo, setSelectedQuizInfo] = useState(null);
+
+  // Submission-type assignment states
+  const [showSubmissionModal, setShowSubmissionModal] = useState(false);
+  const [submissionItem, setSubmissionItem] = useState(null);
+  const [mySubmission, setMySubmission] = useState(null);
+  const [submissionText, setSubmissionText] = useState('');
+  const [submissionFiles, setSubmissionFiles] = useState([]);
+  const [submittingWork, setSubmittingWork] = useState(false);
   
   // Quiz states
   const [showQuizModal, setShowQuizModal] = useState(false);
@@ -1021,6 +1029,46 @@ const StudentCourse = () => {
     setQuizStarted(true);
     setTimeRemaining(selectedQuiz.duration * 60);
     enterFullscreen();
+  };
+
+  // ---- Submission-type assignments ----
+  const openSubmission = async (item) => {
+    setSubmissionItem(item);
+    setSubmissionText('');
+    setSubmissionFiles([]);
+    setMySubmission(null);
+    setShowSubmissionModal(true);
+    if (courseId && user?.uid) {
+      const existing = await getMySubmission(courseId, item.id, user.uid);
+      if (existing) {
+        setMySubmission(existing);
+        setSubmissionText(existing.text || '');
+      }
+    }
+  };
+
+  const handleSubmitWork = async () => {
+    if (!submissionItem || !courseId || !user?.uid) return;
+    if (!submissionText.trim() && submissionFiles.length === 0) {
+      addToast('Add some text or a file before submitting.', 'error');
+      return;
+    }
+    setSubmittingWork(true);
+    try {
+      const saved = await submitAssignment(courseId, submissionItem.id, {
+        studentId: user.uid,
+        studentName: user.displayName || user.name || user.email || 'Student',
+        text: submissionText.trim(),
+        files: submissionFiles,
+      });
+      setMySubmission(saved);
+      setSubmissionFiles([]);
+      addToast('Work submitted!', 'success');
+    } catch (error) {
+      addToast(error.message || 'Unable to submit work.', 'error');
+    } finally {
+      setSubmittingWork(false);
+    }
   };
 
   const handleAnswerSelect = (questionId, answerIndex) => {
@@ -2134,7 +2182,15 @@ const StudentCourse = () => {
                               )}
                             </td>
                             <td className="px-6 py-4 text-center">
-                              {isCompleted ? (
+                              {quiz.type === 'Submission' ? (
+                                <button
+                                  onClick={() => openSubmission(quiz)}
+                                  className="px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 justify-center bg-blue-600 text-white hover:bg-blue-700"
+                                >
+                                  <FileText className="w-4 h-4" />
+                                  Submit
+                                </button>
+                              ) : isCompleted ? (
                                 <span className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium bg-green-100 text-green-700">
                                   <CheckCircle className="w-4 h-4" />
                                   Taken
@@ -2545,6 +2601,115 @@ const StudentCourse = () => {
               </button>
             </div>
           </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submission Assignment Modal */}
+      {showSubmissionModal && submissionItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowSubmissionModal(false)}
+          />
+          <div className="relative bg-white rounded-2xl w-full max-w-lg max-h-[calc(100vh-2rem)] shadow-2xl animate-slide-up overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">{submissionItem.title}</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Submission {submissionItem.dueDate ? `· Due ${submissionItem.dueDate}` : ''}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowSubmissionModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto">
+              {submissionItem.description && (
+                <p className="text-sm text-gray-600">{submissionItem.description}</p>
+              )}
+
+              {/* Graded result */}
+              {mySubmission?.status === 'graded' && (
+                <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-green-800">Grade</span>
+                    <span className="text-2xl font-bold text-green-700">
+                      {mySubmission.grade ?? '—'}
+                    </span>
+                  </div>
+                  {mySubmission.feedback && (
+                    <div className="mt-2 text-sm text-green-900">
+                      <p className="font-medium">Feedback:</p>
+                      <p>{mySubmission.feedback}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Current submission status */}
+              {mySubmission && mySubmission.status !== 'graded' && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                  You submitted on{' '}
+                  {mySubmission.submittedAt
+                    ? new Date(mySubmission.submittedAt.toDate?.() || mySubmission.submittedAt).toLocaleString()
+                    : 'record'}
+                  . You can resubmit to replace it until it's graded.
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Your work</label>
+                <textarea
+                  rows={4}
+                  value={submissionText}
+                  onChange={(e) => setSubmissionText(e.target.value)}
+                  placeholder="Type your answer or notes here..."
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Attach files <span className="text-gray-400">(max ~300KB each)</span>
+                </label>
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => setSubmissionFiles(Array.from(e.target.files || []))}
+                  className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                {submissionFiles.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">{submissionFiles.length} file(s) selected</p>
+                )}
+                {mySubmission?.attachments?.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Previously submitted: {mySubmission.attachments.map((a) => a.name).join(', ')}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowSubmissionModal(false)}
+                className="px-5 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={handleSubmitWork}
+                disabled={submittingWork}
+                className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                <FileText className="w-4 h-4" />
+                {submittingWork ? 'Submitting...' : mySubmission ? 'Resubmit' : 'Submit'}
+              </button>
+            </div>
           </div>
         </div>
       )}

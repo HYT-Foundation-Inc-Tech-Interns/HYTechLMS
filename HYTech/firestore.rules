@@ -132,6 +132,24 @@ service cloud.firestore {
       match /assignments/{assignmentId} {
         allow read: if isSignedIn();
         allow write: if isAdmin() || classTrainer(classId);
+
+        // Student deliverable submissions. Doc id = studentId.
+        match /submissions/{studentId} {
+          allow read: if isAdmin() || classTrainer(classId) || isSelf(studentId);
+
+          // Student may submit only as themselves, and may never write grade fields.
+          allow create: if isSelf(studentId)
+            && request.resource.data.get('studentId', '') == request.auth.uid
+            && !request.resource.data.keys().hasAny(['grade', 'feedback', 'gradedBy', 'gradedAt']);
+
+          // Trainer/admin grade; student may update their own work but not grade fields.
+          allow update: if isAdmin()
+            || classTrainer(classId)
+            || (isSelf(studentId)
+                && !changedKeys().hasAny(['grade', 'feedback', 'gradedBy', 'gradedAt']));
+
+          allow delete: if isAdmin() || classTrainer(classId);
+        }
       }
 
       // Announcements: trainer/admin AND the author (students post to the

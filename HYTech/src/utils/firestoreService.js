@@ -2369,7 +2369,8 @@ export const createAssignment = async (classId, {
       throw new Error('Assignment title is required');
     }
 
-    if (status !== 'draft' && !hasPublishableQuestion) {
+    // Submission-type assignments collect uploaded work, not questions.
+    if (status !== 'draft' && type !== 'Submission' && !hasPublishableQuestion) {
       throw new Error('Assignment must have at least one non-empty question before publishing');
     }
 
@@ -2431,7 +2432,7 @@ export const updateAssignment = async (classId, assignmentId, updates) => {
     const hasPublishableQuestion = Array.isArray(updates?.questions)
       && updates.questions.some((q) => (q?.question || '').trim().length > 0);
 
-    if (updates?.status === 'active' && !hasPublishableQuestion) {
+    if (updates?.status === 'active' && updates?.type !== 'Submission' && !hasPublishableQuestion) {
       throw new Error('Assignment must have at least one non-empty question before publishing');
     }
 
@@ -2445,6 +2446,184 @@ export const updateAssignment = async (classId, assignmentId, updates) => {
     return { id: assignmentId, ...updates };
   } catch (error) {
     console.error('Error updating assignment:', error);
+    throw error;
+  }
+};
+
+// ==================== ASSIGNMENT SUBMISSIONS ====================
+// Submission-type assignments let students upload deliverable work.
+// Doc id = studentId → one submission per student, and lets security rules
+// look it up deterministically.
+
+/**
+ * Student creates/updates their submission for a submission-type assignment.
+ */
+export const submitAssignment = async (
+  classId,
+  assignmentId,
+  { studentId, studentName = '', text = '', files = [] }
+) => {
+  try {
+    if (!classId || !assignmentId || !studentId) {
+      throw new Error('Missing class, assignment, or student id');
+    }
+
+    const attachments = [];
+    const filesBase64 = [];
+    for (const file of files) {
+      // Reuse the same 300KB base64 pipeline used for class materials.
+      const compressed = await compressAndStoreFile(file);
+      filesBase64.push(compressed.base64);
+      attachments.push({ name: compressed.name, type: compressed.type, size: compressed.size });
+    }
+
+    const submissionRef = doc(
+      db,
+      'classes',
+      classId,
+      'assignments',
+      assignmentId,
+      'submissions',
+      studentId
+    );
+    const existing = await getDoc(submissionRef);
+
+    // Fields a student is allowed to write (never grade/feedback).
+    const payload = {
+      studentId,
+      studentName,
+      text,
+      attachments,
+      filesBase64,
+      status: 'submitted',
+      submittedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    if (existing.exists()) {
+      await updateDoc(submissionRef, payload);
+    } else {
+      await setDoc(submissionRef, { ...payload, createdAt: serverTimestamp() });
+    }
+
+    return { id: studentId, ...payload };
+  } catch (error) {
+    console.error('Error submitting assignment:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get the signed-in student's own submission (or null).
+ */
+export const getMySubmission = async (classId, assignmentId, studentId) => {
+  try {
+    const submissionRef = doc(
+      db,
+      'classes',
+      classId,
+      'assignments',
+      assignmentId,
+      'submissions',
+      studentId
+    );
+    const snap = await getDoc(submissionRef);
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  } catch (error) {
+    console.error('Error fetching submission:', error);
+    return null;
+  }
+};
+
+/**
+ * Live subscription to the student's own submission (status/grade updates).
+ */
+export const subscribeToMySubmission = (classId, assignmentId, studentId, callback) => {
+  const submissionRef = doc(
+    db,
+    'classes',
+    classId,
+    'assignments',
+    assignmentId,
+    'submissions',
+    studentId
+  );
+  return onSnapshot(
+    submissionRef,
+    (snap) => callback(snap.exists() ? { id: snap.id, ...snap.data() } : null),
+    (error) => {
+      console.error('Error subscribing to submission:', error);
+      callback(null);
+    }
+  );
+};
+
+/**
+ * Trainer view: all submissions for one assignment.
+ */
+export const getAssignmentSubmissions = async (classId, assignmentId) => {
+  try {
+    const submissionsRef = collection(
+      db,
+      'classes',
+      classId,
+      'assignments',
+      assignmentId,
+      'submissions'
+    );
+    const snapshot = await getDocs(submissionsRef);
+    return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  } catch (error) {
+    console.error('Error fetching assignment submissions:', error);
+    return [];
+  }
+};
+
+/**
+ * Trainer grades a submission and notifies the student.
+ */
+export const gradeSubmission = async (
+  classId,
+  assignmentId,
+  studentId,
+  { grade, feedback = '', gradedBy = '', assignmentTitle = '' }
+) => {
+  try {
+    const submissionRef = doc(
+      db,
+      'classes',
+      classId,
+      'assignments',
+      assignmentId,
+      'submissions',
+      studentId
+    );
+
+    const numericGrade =
+      grade === '' || grade === null || grade === undefined ? null : Number(grade);
+
+    await updateDoc(submissionRef, {
+      grade: numericGrade,
+      feedback,
+      gradedBy,
+      gradedAt: serverTimestamp(),
+      status: 'graded',
+      updatedAt: serverTimestamp(),
+    });
+
+    // Notify the student their work was graded (trainer→student is allowed).
+    createNotification({
+      toUid: studentId,
+      type: 'grade_posted',
+      text: `Your submission${assignmentTitle ? ` for "${assignmentTitle}"` : ''} has been graded${
+        numericGrade !== null ? `: ${numericGrade}` : ''
+      }.`,
+      fromUid: gradedBy,
+    }).catch(() => {});
+
+    return true;
+  } catch (error) {
+    console.error('Error grading submission:', error);
     throw error;
   }
 };
@@ -2785,6 +2964,114 @@ export const getAssessmentAttempts = async (classId, assessmentId) => {
     return attempts;
   } catch (error) {
     console.error('Error fetching assessment attempts:', error);
+    throw error;
+  }
+};
+
+// ==================== GRADEBOOK ====================
+
+/**
+ * Build a class gradebook: every enrolled student scored across all quizzes
+ * (best attempt) and submission-type assignments (graded value). Computed
+ * client-side from existing data — no new storage.
+ *
+ * Note: quiz scores are percentages and submission grades are raw points;
+ * the "average" column is a simple mean and is a rough indicator, not a
+ * weighted final grade.
+ */
+export const getClassGradebook = async (classId) => {
+  try {
+    const [enrollments, assessments, assignments] = await Promise.all([
+      getCourseEnrollments(classId),
+      getAssessments(classId),
+      getAssignments(classId),
+    ]);
+
+    const submissionAssignments = assignments.filter((a) => a.type === 'Submission');
+
+    // Best quiz score per student, per assessment.
+    const assessmentScores = {};
+    await Promise.all(
+      assessments.map(async (a) => {
+        const attempts = await getAssessmentAttempts(classId, a.id).catch(() => []);
+        const byStudent = {};
+        attempts.forEach((at) => {
+          const sid = at.studentId;
+          const score = Number(at.score) || 0;
+          if (byStudent[sid] === undefined || score > byStudent[sid]) {
+            byStudent[sid] = score;
+          }
+        });
+        assessmentScores[a.id] = byStudent;
+      })
+    );
+
+    // Graded value per student, per submission assignment.
+    const submissionGrades = {};
+    await Promise.all(
+      submissionAssignments.map(async (a) => {
+        const subs = await getAssignmentSubmissions(classId, a.id).catch(() => []);
+        const byStudent = {};
+        subs.forEach((s) => {
+          byStudent[s.studentId] =
+            s.grade === null || s.grade === undefined ? null : Number(s.grade);
+        });
+        submissionGrades[a.id] = byStudent;
+      })
+    );
+
+    // Resolve student display names (small class sizes).
+    const nameByStudent = {};
+    await Promise.all(
+      enrollments.map(async (e) => {
+        if (e.studentName) {
+          nameByStudent[e.studentId] = e.studentName;
+          return;
+        }
+        const profile = await getUserProfile(e.studentId).catch(() => null);
+        nameByStudent[e.studentId] =
+          profile?.name || profile?.displayName || profile?.email || e.studentId;
+      })
+    );
+
+    const columns = [
+      ...assessments.map((a) => ({
+        id: a.id,
+        title: a.title || 'Quiz',
+        kind: 'assessment',
+        points: a.totalPoints || a.points || 100,
+      })),
+      ...submissionAssignments.map((a) => ({
+        id: a.id,
+        title: a.title || 'Assignment',
+        kind: 'submission',
+        points: a.points || 100,
+      })),
+    ];
+
+    const rows = enrollments.map((e) => {
+      const cells = columns.map((col) => {
+        const raw =
+          col.kind === 'assessment'
+            ? assessmentScores[col.id]?.[e.studentId]
+            : submissionGrades[col.id]?.[e.studentId];
+        return { columnId: col.id, kind: col.kind, score: raw === undefined ? null : raw };
+      });
+      const graded = cells.filter((c) => c.score !== null && c.score !== undefined);
+      const average = graded.length
+        ? Math.round(graded.reduce((sum, c) => sum + c.score, 0) / graded.length)
+        : null;
+      return {
+        studentId: e.studentId,
+        studentName: nameByStudent[e.studentId] || e.studentId,
+        cells,
+        average,
+      };
+    });
+
+    return { columns, rows };
+  } catch (error) {
+    console.error('Error building gradebook:', error);
     throw error;
   }
 };

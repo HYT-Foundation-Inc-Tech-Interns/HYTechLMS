@@ -4,7 +4,7 @@ import { BookOpen, Check, Users, Save, ExternalLink, Calendar, Send, FileText, V
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
-import { getCourseByName, getCourseTemplateById, getCourseEnrollmentsWithAvatars, getSectorById, getAnnouncements, subscribeToAnnouncements, createAnnouncement, getModules, createModule, getAssessments, createAssessment, updateAnnouncement, deleteAnnouncement, updateAssessment, deleteAssessment, getClassActivityFeed, storeAnnouncementAttachment, uploadMaterial, compressAndStoreFile, addCommentToAnnouncement, getAnnouncementComments, deleteComment, subscribeToComments, downloadAttachment, createAssignment, updateAssignment, getAssignments, removeEnrollment, getUserProfile, subscribeToEnrollments, getAssessmentAttempts, createMaterial, getClassMaterials, publishMaterial, unpublishMaterial, updateMaterial, deleteMaterial, createTopic, getClassTopics, subscribeToClassTopics, updateTopic, deleteTopic, publishTopic, unpublishTopic, updateEnrollmentStatus } from '../../utils/firestoreService';
+import { getCourseByName, getCourseTemplateById, getCourseEnrollmentsWithAvatars, getSectorById, getAnnouncements, subscribeToAnnouncements, createAnnouncement, getModules, createModule, getAssessments, createAssessment, updateAnnouncement, deleteAnnouncement, updateAssessment, deleteAssessment, getClassActivityFeed, storeAnnouncementAttachment, uploadMaterial, compressAndStoreFile, addCommentToAnnouncement, getAnnouncementComments, deleteComment, subscribeToComments, downloadAttachment, createAssignment, updateAssignment, getAssignments, removeEnrollment, getUserProfile, subscribeToEnrollments, getAssessmentAttempts, createMaterial, getClassMaterials, publishMaterial, unpublishMaterial, updateMaterial, deleteMaterial, createTopic, getClassTopics, subscribeToClassTopics, updateTopic, deleteTopic, publishTopic, unpublishTopic, updateEnrollmentStatus, getAssignmentSubmissions, gradeSubmission, getClassGradebook } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
 
 const ClassDetail = () => {
@@ -119,6 +119,22 @@ const ClassDetail = () => {
   const [selectedAssessmentForResponses, setSelectedAssessmentForResponses] = useState(null);
   const [assessmentResponses, setAssessmentResponses] = useState([]);
   const [loadingResponses, setLoadingResponses] = useState(false);
+  // Submission-type assignment grading
+  const [itemSubmissions, setItemSubmissions] = useState([]);
+  const [gradingStudentId, setGradingStudentId] = useState(null);
+  const [gradeInput, setGradeInput] = useState('');
+  const [feedbackInput, setFeedbackInput] = useState('');
+  const [savingGrade, setSavingGrade] = useState(false);
+  // Create submission task
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDesc, setNewTaskDesc] = useState('');
+  const [newTaskDue, setNewTaskDue] = useState('');
+  const [newTaskPoints, setNewTaskPoints] = useState('100');
+  const [creatingTask, setCreatingTask] = useState(false);
+  // Gradebook
+  const [gradebook, setGradebook] = useState(null);
+  const [loadingGradebook, setLoadingGradebook] = useState(false);
   const [showResponsesModal, setShowResponsesModal] = useState(false);
   
   const [showMeetingModal, setShowMeetingModal] = useState(false);
@@ -1521,6 +1537,115 @@ const ClassDetail = () => {
     setShowInviteModal(false);
   };
 
+  // ---- Submission-type assignments (trainer) ----
+  const loadItemSubmissions = async (item) => {
+    if (!classData?.id || item?.type !== 'Submission') {
+      setItemSubmissions([]);
+      return;
+    }
+    try {
+      const subs = await getAssignmentSubmissions(classData.id, item.id);
+      setItemSubmissions(subs);
+    } catch (error) {
+      console.error('Error loading submissions:', error);
+      setItemSubmissions([]);
+    }
+  };
+
+  const startGrading = (submission) => {
+    setGradingStudentId(submission.studentId);
+    setGradeInput(submission.grade ?? '');
+    setFeedbackInput(submission.feedback || '');
+  };
+
+  const handleSaveGrade = async (submission) => {
+    if (!classData?.id || !selectedAssessmentForResponses) return;
+    setSavingGrade(true);
+    try {
+      await gradeSubmission(classData.id, selectedAssessmentForResponses.id, submission.studentId, {
+        grade: gradeInput,
+        feedback: feedbackInput,
+        gradedBy: user?.uid || '',
+        assignmentTitle: selectedAssessmentForResponses.title || '',
+      });
+      addToast('Grade saved.', 'success');
+      setGradingStudentId(null);
+      await loadItemSubmissions(selectedAssessmentForResponses);
+    } catch (error) {
+      addToast(error.message || 'Unable to save grade.', 'error');
+    } finally {
+      setSavingGrade(false);
+    }
+  };
+
+  const handleCreateSubmissionTask = async () => {
+    if (!classData?.id) return;
+    if (!newTaskTitle.trim()) {
+      addToast('Give the task a title.', 'error');
+      return;
+    }
+    setCreatingTask(true);
+    try {
+      await createAssignment(classData.id, {
+        title: newTaskTitle.trim(),
+        description: newTaskDesc.trim(),
+        type: 'Submission',
+        author: user?.displayName || user?.email || 'Trainer',
+        authorId: user?.uid,
+        dueDate: newTaskDue || null,
+        points: parseInt(newTaskPoints, 10) || 100,
+        questions: [],
+        status: 'active',
+      });
+      const updated = await getAssignments(classData.id);
+      setAssignments(updated);
+      setShowNewTaskModal(false);
+      setNewTaskTitle('');
+      setNewTaskDesc('');
+      setNewTaskDue('');
+      setNewTaskPoints('100');
+      addToast('Submission task created.', 'success');
+    } catch (error) {
+      addToast(error.message || 'Unable to create task.', 'error');
+    } finally {
+      setCreatingTask(false);
+    }
+  };
+
+  const loadGradebook = async () => {
+    if (!classData?.id) return;
+    setLoadingGradebook(true);
+    try {
+      const gb = await getClassGradebook(classData.id);
+      setGradebook(gb);
+    } catch (error) {
+      console.error('Error loading gradebook:', error);
+      addToast('Unable to load gradebook.', 'error');
+    } finally {
+      setLoadingGradebook(false);
+    }
+  };
+
+  const exportGradebookCsv = () => {
+    if (!gradebook) return;
+    const header = ['Student', ...gradebook.columns.map((c) => c.title), 'Average'];
+    const lines = [header.join(',')];
+    gradebook.rows.forEach((row) => {
+      const cells = row.cells.map((c) => (c.score === null || c.score === undefined ? '' : c.score));
+      const escapedName = `"${String(row.studentName).replace(/"/g, '""')}"`;
+      lines.push([escapedName, ...cells, row.average ?? ''].join(','));
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `gradebook-${classData?.name || 'class'}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
+
   // Handle Google Meet
   const handleStartMeeting = async () => {
     try {
@@ -1813,6 +1938,15 @@ const ClassDetail = () => {
     addToast('Meeting link copied!');
   };
 
+  // Load the gradebook when the Grades tab is opened.
+  // Must stay above the early returns below to keep hook order stable.
+  useEffect(() => {
+    if (activeTab === 'grades' && classData?.id) {
+      loadGradebook();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, classData?.id]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -1842,6 +1976,7 @@ const ClassDetail = () => {
     { id: 'modules', label: 'Modules', icon: FileText },
     { id: 'assessments', label: 'Assessments', icon: FileText },
     { id: 'responses', label: 'Responses', icon: FileText },
+    { id: 'grades', label: 'Grades', icon: Award },
     { id: 'students', label: 'Students', icon: Users },
   ];
 
@@ -3337,11 +3472,76 @@ const ClassDetail = () => {
         )}
 
         {/* Responses Tab */}
+        {activeTab === 'grades' && (
+          <div className="bg-white rounded-lg p-6 border border-gray-200">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-gray-900">Gradebook</h3>
+              <div className="flex gap-2">
+                <button onClick={loadGradebook} className="px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Refresh</button>
+                <button onClick={exportGradebookCsv} disabled={!gradebook} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1">
+                  <Download className="w-4 h-4" />
+                  Export CSV
+                </button>
+              </div>
+            </div>
+            {loadingGradebook ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : !gradebook || gradebook.rows.length === 0 ? (
+              <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-gray-500 text-lg font-medium">No grades yet</p>
+                <p className="text-gray-400 text-sm mt-2">Quiz scores and graded submissions appear here once students are enrolled and assessed</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b-2 border-gray-200 bg-gray-50">
+                      <th className="px-4 py-3 text-left font-semibold text-gray-900 sticky left-0 bg-gray-50">Student</th>
+                      {gradebook.columns.map((c) => (
+                        <th key={c.id} className="px-4 py-3 text-center font-semibold text-gray-700 whitespace-nowrap">
+                          {c.title}
+                          <span className="block text-xs font-normal text-gray-400">{c.kind === 'assessment' ? 'quiz' : 'task'}</span>
+                        </th>
+                      ))}
+                      <th className="px-4 py-3 text-center font-semibold text-gray-900">Average</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {gradebook.rows.map((row) => (
+                      <tr key={row.studentId} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-900 sticky left-0 bg-white">{row.studentName}</td>
+                        {row.cells.map((cell) => (
+                          <td key={cell.columnId} className="px-4 py-3 text-center text-gray-700">
+                            {cell.score === null || cell.score === undefined ? <span className="text-gray-300">—</span> : cell.score}
+                          </td>
+                        ))}
+                        <td className="px-4 py-3 text-center font-bold text-blue-600">{row.average === null ? '—' : row.average}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-xs text-gray-400 mt-3">Average is a simple mean of available scores (quiz % and task points) — a rough indicator, not a weighted final grade.</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'responses' && (
           <div className="bg-white rounded-lg p-8 border border-gray-200">
             <div className="mb-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-6">Assessment Responses</h3>
-              
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-gray-900">Assessment Responses</h3>
+                <button
+                  onClick={() => setShowNewTaskModal(true)}
+                  className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-1"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Submission Task
+                </button>
+              </div>
+
               {/* Assessment Selection */}
               {!selectedAssessmentForResponses ? (
                 <div className="space-y-6">
@@ -3356,10 +3556,17 @@ const ClassDetail = () => {
                             onClick={async () => {
                               setSelectedAssessmentForResponses(assessment);
                               setLoadingResponses(true);
+                              setItemSubmissions([]);
+                              setGradingStudentId(null);
                               try {
                                 if (classData?.id) {
-                                  const responses = await getAssessmentAttempts(classData.id, assessment.id);
-                                  setAssessmentResponses(responses || []);
+                                  if (assessment.type === 'Submission') {
+                                    await loadItemSubmissions(assessment);
+                                    setAssessmentResponses([]);
+                                  } else {
+                                    const responses = await getAssessmentAttempts(classData.id, assessment.id);
+                                    setAssessmentResponses(responses || []);
+                                  }
                                 }
                               } catch (error) {
                                 console.error('Error loading responses:', error);
@@ -3414,6 +3621,57 @@ const ClassDetail = () => {
                       <p className="text-2xl font-bold text-blue-600">{selectedAssessmentForResponses.totalPoints || selectedAssessmentForResponses.points || 0}</p>
                     </div>
                   </div>
+
+                  {/* Submission-type: grade student uploads */}
+                  {selectedAssessmentForResponses.type === 'Submission' && (
+                    <div className="space-y-3">
+                      {itemSubmissions.length === 0 ? (
+                        <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
+                          <p className="text-gray-500 text-lg font-medium">No submissions yet</p>
+                          <p className="text-gray-400 text-sm mt-2">Student submissions will appear here for grading</p>
+                        </div>
+                      ) : (
+                        itemSubmissions.map((sub) => (
+                          <div key={sub.studentId} className="border border-gray-200 rounded-xl p-4">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0">
+                                <p className="font-semibold text-gray-900">{sub.studentName || sub.studentId}</p>
+                                <p className="text-xs text-gray-500">
+                                  {sub.status === 'graded' ? `Graded: ${sub.grade ?? '—'}` : 'Submitted'}
+                                  {sub.submittedAt ? ` · ${new Date(sub.submittedAt.toDate?.() || sub.submittedAt).toLocaleString()}` : ''}
+                                </p>
+                                {sub.text && <p className="text-sm text-gray-700 mt-2 whitespace-pre-wrap">{sub.text}</p>}
+                                {sub.attachments?.length > 0 && (
+                                  <p className="text-xs text-gray-500 mt-2">Files: {sub.attachments.map((a) => a.name).join(', ')}</p>
+                                )}
+                              </div>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${sub.status === 'graded' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                {sub.status === 'graded' ? 'Graded' : 'Needs grading'}
+                              </span>
+                            </div>
+                            {gradingStudentId === sub.studentId ? (
+                              <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
+                                <div className="flex gap-2 items-center">
+                                  <label className="text-sm text-gray-600">Grade</label>
+                                  <input type="number" value={gradeInput} onChange={(e) => setGradeInput(e.target.value)} className="w-24 px-2 py-1 border border-gray-200 rounded-lg" />
+                                  <span className="text-sm text-gray-400">/ {selectedAssessmentForResponses.points || 100}</span>
+                                </div>
+                                <textarea rows={2} value={feedbackInput} onChange={(e) => setFeedbackInput(e.target.value)} placeholder="Feedback (optional)" className="w-full px-3 py-2 border border-gray-200 rounded-lg resize-none" />
+                                <div className="flex gap-2 justify-end">
+                                  <button onClick={() => setGradingStudentId(null)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">Cancel</button>
+                                  <button onClick={() => handleSaveGrade(sub)} disabled={savingGrade} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50">{savingGrade ? 'Saving...' : 'Save grade'}</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button onClick={() => startGrading(sub)} className="mt-3 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100">
+                                {sub.status === 'graded' ? 'Edit grade' : 'Grade'}
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
 
                   {/* Response Stats */}
                   {assessmentResponses && assessmentResponses.length > 0 && (
@@ -3515,12 +3773,12 @@ const ClassDetail = () => {
                         </tbody>
                       </table>
                     </div>
-                  ) : (
+                  ) : selectedAssessmentForResponses.type !== 'Submission' ? (
                     <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
                       <p className="text-gray-500 text-lg font-medium">No responses yet</p>
                       <p className="text-gray-400 text-sm mt-2">Students who complete this assessment will appear here</p>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
@@ -4522,6 +4780,62 @@ const ClassDetail = () => {
                 className="px-6 py-2.5 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Submission Task Modal */}
+      {showNewTaskModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-slide-up">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900">New Submission Task</h2>
+              <button onClick={() => setShowNewTaskModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-500">
+                Students upload their work (text and/or files) for this task, and you grade each submission.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Title <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={newTaskTitle}
+                  onChange={(e) => setNewTaskTitle(e.target.value)}
+                  placeholder="e.g. Practical Output: Espresso Extraction"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Instructions</label>
+                <textarea
+                  rows={3}
+                  value={newTaskDesc}
+                  onChange={(e) => setNewTaskDesc(e.target.value)}
+                  placeholder="What should students submit?"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Due date</label>
+                  <input type="date" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Points</label>
+                  <input type="number" value={newTaskPoints} onChange={(e) => setNewTaskPoints(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
+              <button onClick={() => setShowNewTaskModal(false)} className="px-5 py-2.5 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition-colors">Cancel</button>
+              <button onClick={handleCreateSubmissionTask} disabled={creatingTask} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50">
+                <Plus className="w-4 h-4" />
+                {creatingTask ? 'Creating...' : 'Create Task'}
               </button>
             </div>
           </div>

@@ -52,7 +52,7 @@ $student2 = Sign-In 'student2@hyt.com' 'student1234'
 $aTok = $admin.idToken;    $aUid = $admin.localId
 $tTok = $trainer.idToken;  $tUid = $trainer.localId
 $sTok = $student.idToken;  $sUid = $student.localId
-$s2Uid = $student2.localId
+$s2Tok = $student2.idToken; $s2Uid = $student2.localId
 Write-Host "admin=$aUid trainer=$tUid student=$sUid student2=$s2Uid"
 
 # Sanity: verify roles are what we assume (abort otherwise).
@@ -65,6 +65,7 @@ $null = Fs 'PATCH' "$base/classes/rulesTestClass" $aTok $classBody
 $otherClassBody = '{"fields":{"name":{"stringValue":"Other Trainer Class"},"trainerId":{"stringValue":"not-a-real-uid"},"status":{"stringValue":"Active"}}}'
 $null = Fs 'PATCH' "$base/classes/rulesOtherClass" $aTok $otherClassBody
 $null = Fs 'PATCH' "$base/classes/rulesTestClass/assessments/rulesTestAssessment" $aTok '{"fields":{"title":{"stringValue":"Rules Test Quiz"}}}'
+$null = Fs 'PATCH' "$base/classes/rulesTestClass/assignments/rulesTestAssignment" $aTok '{"fields":{"title":{"stringValue":"Rules Test Assignment"},"type":{"stringValue":"Submission"}}}'
 $notifBody = '{"fields":{"toUid":{"stringValue":"' + $tUid + '"},"fromUid":{"stringValue":"' + $aUid + '"},"text":{"stringValue":"rules test"},"unread":{"booleanValue":true}}}'
 $null = Fs 'PATCH' "$base/notifications/rulesTestNotif" $aTok $notifBody
 
@@ -136,6 +137,19 @@ if ($attemptDocName) {
   Test-Fs 'T24 trainer edits an attempt -> DENY (immutable)' 'PATCH' "${attemptUrl}?updateMask.fieldPaths=score" $tTok '{"fields":{"score":{"integerValue":"0"}}}' 403
   Test-Fs 'T25 admin deletes attempt (cleanup) -> ALLOW' 'DELETE' $attemptUrl $aTok $null 200
 }
+
+# assignment submissions
+$subBase = "$base/classes/rulesTestClass/assignments/rulesTestAssignment/submissions"
+$subSelf = '{"fields":{"studentId":{"stringValue":"' + $sUid + '"},"text":{"stringValue":"my work"},"status":{"stringValue":"submitted"}}}'
+Test-Fs 'T41 student submits own work -> ALLOW' 'PATCH' "$subBase/$sUid" $sTok $subSelf 200
+$subGrade = '{"fields":{"studentId":{"stringValue":"' + $sUid + '"},"grade":{"integerValue":"100"}}}'
+Test-Fs 'T42 student sets grade on own submission -> DENY' 'PATCH' "$subBase/${sUid}?updateMask.fieldPaths=grade" $sTok $subGrade 403
+$subAsOther = '{"fields":{"studentId":{"stringValue":"' + $sUid + '"},"text":{"stringValue":"forged"}}}'
+Test-Fs 'T43 student submits at ANOTHER student id -> DENY' 'PATCH' "$subBase/$s2Uid" $sTok $subAsOther 403
+Test-Fs 'T44 student updates own submission text -> ALLOW' 'PATCH' "$subBase/${sUid}?updateMask.fieldPaths=text" $sTok '{"fields":{"text":{"stringValue":"revised work"}}}' 200
+$trainerGrade = '{"fields":{"grade":{"integerValue":"88"},"feedback":{"stringValue":"good"},"status":{"stringValue":"graded"}}}'
+Test-Fs 'T45 trainer grades submission -> ALLOW' 'PATCH' "$subBase/${sUid}?updateMask.fieldPaths=grade&updateMask.fieldPaths=feedback&updateMask.fieldPaths=status" $tTok $trainerGrade 200
+Test-Fs 'T46 OTHER student reads a submission -> DENY' 'GET' "$subBase/$sUid" $s2Tok $null 403
 
 # notifications
 Test-Fs 'T26 student reads someone else notification -> DENY' 'GET' "$base/notifications/rulesTestNotif" $sTok $null 403
