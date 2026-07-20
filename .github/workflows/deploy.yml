@@ -1,0 +1,47 @@
+name: Deploy to Firebase Hosting
+
+# Any push to main (by anyone with push access) auto-builds and deploys.
+on:
+  push:
+    branches: [main]
+  # Lets you also trigger it manually from the Actions tab.
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: HYTech   # the app lives in the HYTech/ subfolder
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: HYTech/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        # These VITE_FIREBASE_* values are PUBLIC Firebase identifiers (they
+        # already ship inside the deployed JS bundle), so it is safe to keep
+        # them here. The only real secret is FIREBASE_TOKEN, set as a GitHub
+        # Actions secret. Vite bakes these into dist/ at build time.
+        env:
+          VITE_FIREBASE_API_KEY: AIzaSyANfQhkxPSlkoWT5s1IayCZrK5v8GTm6-M
+          VITE_FIREBASE_AUTH_DOMAIN: hyt-global-institute-lms.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: hyt-global-institute-lms
+          VITE_FIREBASE_STORAGE_BUCKET: hyt-global-institute-lms.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "671829419730"
+          VITE_FIREBASE_APP_ID: "1:671829419730:web:705e9bcc9e8c32df562f0b"
+        run: npm run build
+
+      - name: Deploy to Firebase Hosting
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: npx firebase-tools@latest deploy --only hosting --project hyt-global-institute-lms --non-interactive
