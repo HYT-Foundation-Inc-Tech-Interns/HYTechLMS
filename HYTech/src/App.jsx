@@ -17,6 +17,9 @@ import Classes from './components/admin/Classes';
 import SystemLogs from './components/logs/SystemLogs';
 import Settings from './components/settings/Settings';
 import NotificationsPage from './components/shared/NotificationsPage';
+import IdRequests from './components/shared/IdRequests';
+import IncidentForms from './components/shared/IncidentForms';
+import StudentRequestId from './components/student/StudentRequestId';
 
 // Trainer imports
 import DashboardLayout from './components/layout/DashboardLayout';
@@ -86,6 +89,8 @@ function App() {
           <Route path="sectors" element={<Sectors />} />
           <Route path="classes" element={<Classes />} />
           <Route path="logs" element={<SystemLogs />} />
+          <Route path="id-requests" element={<IdRequests />} />
+          <Route path="incident-forms" element={<IncidentForms scope="all" canManage />} />
           <Route path="settings" element={<Settings />} />
           <Route path="notifications" element={<NotificationsPage role="admin" />} />
         </Route>
@@ -100,6 +105,7 @@ function App() {
           )}
         >
           <Route index element={<TrainerHome />} />
+          <Route path="incident-forms" element={<IncidentForms scope="all" canManage />} />
           <Route path=":className" element={<ClassDetail />} />
           <Route path="tasks" element={<Tasks />} />
           <Route path="sectors/:sectorId" element={<SectorDetail />} />
@@ -119,6 +125,8 @@ function App() {
         >
           <Route index element={<StudentHome />} />
           <Route path="calendar" element={<StudentCalendar />} />
+          <Route path="request-id" element={<StudentRequestId />} />
+          <Route path="incident-form" element={<IncidentForms scope="own" />} />
           <Route path=":classname" element={<StudentCourse />} />
           <Route path="tasks" element={<StudentTasks />} />
           <Route path="certificates" element={<StudentCertificates />} />

@@ -11,7 +11,8 @@ import {
   ChevronDown,
   ChevronUp,
   Menu,
-  X
+  X,
+  AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getCourses } from '../../utils/firestoreService';
@@ -63,9 +64,9 @@ const Sidebar = () => {
   }, [user?.uid]);
 
   // Check if current path is a course page
-  const isCoursePath = location.pathname.includes('/trainer/courses') || 
-    (location.pathname.startsWith('/trainer/') && 
-     !location.pathname.match(/\/(tasks|archived|settings|$)$/) &&
+  const isCoursePath = location.pathname.includes('/trainer/courses') ||
+    (location.pathname.startsWith('/trainer/') &&
+     !location.pathname.match(/\/(tasks|archived|settings|incident-forms|$)$/) &&
      location.pathname !== '/trainer');
 
   const mainNavItems = [
@@ -74,6 +75,7 @@ const Sidebar = () => {
 
   const bottomNavItems = [
     { path: '/trainer/tasks', icon: ClipboardList, label: 'Tasks' },
+    { path: '/trainer/incident-forms', icon: AlertTriangle, label: 'Incident Forms' },
     { path: '/trainer/archived', icon: Archive, label: 'Archived Courses' },
     { path: '/trainer/settings', icon: Settings, label: 'Settings' },
   ];

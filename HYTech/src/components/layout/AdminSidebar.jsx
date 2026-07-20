@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
-  LayoutDashboard, 
-  Users, 
-  FolderOpen, 
-  FileText, 
+  LayoutDashboard,
+  Users,
+  FolderOpen,
+  FileText,
   Settings,
   BookOpen,
   ChevronRight,
   Menu,
-  X
+  X,
+  CreditCard,
+  AlertTriangle
 } from 'lucide-react';
 
 const AdminSidebar = () => {
@@ -31,6 +33,8 @@ const AdminSidebar = () => {
     { path: '/admin/users', icon: Users, label: 'User Management' },
     { path: '/admin/sectors', icon: FolderOpen, label: 'Sectors' },
     { path: '/admin/classes', icon: BookOpen, label: 'Classes' },
+    { path: '/admin/id-requests', icon: CreditCard, label: 'ID Requests' },
+    { path: '/admin/incident-forms', icon: AlertTriangle, label: 'Incident Forms' },
     { path: '/admin/logs', icon: FileText, label: 'System Logs' },
     { path: '/admin/settings', icon: Settings, label: 'Settings' },
   ];

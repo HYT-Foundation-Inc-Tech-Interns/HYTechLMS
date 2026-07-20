@@ -10,12 +10,46 @@ import {
   TrendingUp,
   Loader
 } from 'lucide-react';
-import { getCourses, getSectors, getCoursesTemplates } from '../../utils/firestoreService';
+import { useNavigate } from 'react-router-dom';
+import { getCourses, getSectors, getCoursesTemplates, subscribeToActivityLogs, getUserProfile, toDate } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
 import { db } from '../../firebase';
 import { collection, getDocs, where, query } from 'firebase/firestore';
 
+// Map raw activity actions to friendly labels for the dashboard feed.
+const ACTION_LABELS = {
+  user_login: 'Signed in',
+  user_signup: 'Signed up',
+  user_created: 'Account created',
+  user_updated: 'Profile updated',
+  user_role_updated: 'Role changed',
+  user_status_updated: 'Status changed',
+  apply_course: 'Applied to a course',
+  join_class: 'Joined a class',
+  notify_trainer: 'Notified a trainer',
+  create_class: 'Created a class',
+  grade_posted: 'Grade posted',
+};
+
+const formatAction = (action) =>
+  ACTION_LABELS[action] || String(action || 'Activity').replace(/_/g, ' ');
+
+const formatTimeAgo = (timestamp) => {
+  const date = toDate(timestamp);
+  if (!date) return 'Just now';
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return 'Just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString();
+};
+
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState([
     { label: 'Total Participants', value: '0', icon: Users, change: '+0%', changeType: 'positive', color: 'blue' },
     { label: 'Active Trainers', value: '0', icon: GraduationCap, change: '0%', changeType: 'neutral', color: 'purple' },
@@ -26,6 +60,9 @@ const Dashboard = () => {
   ]);
   
   const [loading, setLoading] = useState(true);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [trainingSectors, setTrainingSectors] = useState([]);
+  const [alerts, setAlerts] = useState([]);
   const { addToast } = useToast();
 
   // Fetch real data from Firestore
@@ -37,31 +74,46 @@ const Dashboard = () => {
         // Fetch total sectors
         const sectorsData = await getSectors();
         const totalSectors = (sectorsData || []).length;
-        
-        // Fetch active classes (courses with status Active)
-        const coursesData = await getCourses({ status: 'Active' });
-        const activeClasses = (coursesData || []).length;
-        
+
+        // Fetch all classes (used for stats + per-sector counts)
+        const allClasses = await getCourses({});
+        const activeClasses = (allClasses || []).filter(
+          (c) => String(c.status || '').toLowerCase() === 'active'
+        ).length;
+
         // Fetch total courses
         const allCoursesData = await getCoursesTemplates();
         const totalCourses = (allCoursesData || []).length;
-        
+
         // Count total users by role
         const usersCollection = collection(db, 'users');
         const allUsersSnapshot = await getDocs(usersCollection);
         const totalAccounts = allUsersSnapshot.size;
-        
-        // Count trainers
-        const trainersQuery = query(usersCollection, where('role', '==', 'trainer'));
-        const trainersSnapshot = await getDocs(trainersQuery);
-        const totalTrainers = trainersSnapshot.size;
-        
+        const allUsers = allUsersSnapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const totalTrainers = allUsers.filter((u) => u.role === 'trainer').length;
+        const studentCount = allUsers.filter((u) => u.role === 'student').length;
+        const inactiveCount = allUsers.filter(
+          (u) => String(u.status || 'Active').toLowerCase() !== 'active'
+        ).length;
+
         // Count enrolled students (all enrollments)
         const enrollmentsCollection = collection(db, 'enrollments');
         const enrollmentsSnapshot = await getDocs(enrollmentsCollection);
         const enrolledStudents = enrollmentsSnapshot.size;
-        
-        // Update stats with new order: Accounts, Active Trainers, Active Students (enrolled), Sectors, Courses, Classes
+        const allEnrollments = enrollmentsSnapshot.docs.map((d) => d.data());
+
+        // Pending course applications (single-field query, no index needed)
+        let pendingApps = 0;
+        try {
+          const appsSnap = await getDocs(
+            query(collection(db, 'courseApplications'), where('status', '==', 'pending'))
+          );
+          pendingApps = appsSnap.size;
+        } catch (appErr) {
+          console.warn('Could not load pending applications:', appErr?.message);
+        }
+
+        // Update stats
         setStats([
           { label: 'Accounts', value: totalAccounts.toString(), icon: Users, color: 'blue' },
           { label: 'Active Trainers', value: totalTrainers.toString(), icon: GraduationCap, color: 'purple' },
@@ -70,6 +122,71 @@ const Dashboard = () => {
           { label: 'Courses', value: totalCourses.toString(), icon: BookOpen, color: 'teal' },
           { label: 'Classes', value: activeClasses.toString(), icon: BookOpen, color: 'orange' },
         ]);
+
+        // ---- Training Sectors panel: real per-sector counts ----
+        const sectorRows = (sectorsData || []).map((sector) => {
+          const sectorClasses = (allClasses || []).filter((c) => c.sectorId === sector.id);
+          const classIds = new Set(sectorClasses.map((c) => c.id));
+          const sectorEnrollments = allEnrollments.filter((e) => classIds.has(e.classId));
+          const pcts = sectorEnrollments
+            .map((e) => (typeof e.progress?.percentage === 'number' ? e.progress.percentage : null))
+            .filter((v) => v !== null);
+          const avgProgress = pcts.length
+            ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length)
+            : 0;
+          return {
+            name: sector.name || 'Sector',
+            courses: sectorClasses.length,
+            students: sectorEnrollments.length,
+            progress: avgProgress,
+          };
+        });
+        // Show the busiest sectors first.
+        sectorRows.sort((a, b) => b.students - a.students);
+        setTrainingSectors(sectorRows);
+
+        // ---- Alerts panel: real actionable signals ----
+        const activeStudentIds = new Set(
+          allEnrollments
+            .filter((e) => e.status === 'active' || e.status === 'ongoing')
+            .map((e) => e.studentId)
+        );
+        const waitingStudents = Math.max(0, studentCount - activeStudentIds.size);
+
+        const newAlerts = [];
+        if (pendingApps > 0) {
+          newAlerts.push({
+            type: 'warning',
+            title: 'Applications pending',
+            message: `${pendingApps} course application${pendingApps > 1 ? 's' : ''} awaiting review.`,
+            icon: AlertTriangle,
+          });
+        }
+        if (waitingStudents > 0) {
+          newAlerts.push({
+            type: 'info',
+            title: 'Students waiting',
+            message: `${waitingStudents} student${waitingStudents > 1 ? 's are' : ' is'} not yet in a class.`,
+            icon: Bell,
+          });
+        }
+        if (inactiveCount > 0) {
+          newAlerts.push({
+            type: 'warning',
+            title: 'Inactive accounts',
+            message: `${inactiveCount} account${inactiveCount > 1 ? 's are' : ' is'} marked inactive.`,
+            icon: AlertTriangle,
+          });
+        }
+        if (newAlerts.length === 0) {
+          newAlerts.push({
+            type: 'info',
+            title: 'All clear',
+            message: 'No pending items right now.',
+            icon: Bell,
+          });
+        }
+        setAlerts(newAlerts);
       } catch (err) {
         console.error('Error loading dashboard data:', err);
         addToast('Failed to load dashboard data', 'error');
@@ -81,35 +198,28 @@ const Dashboard = () => {
     loadDashboardData();
   }, [addToast]);
 
-  // Alerts data
-  const alerts = [
-    {
-      type: 'warning',
-      title: 'Batch Assessment Pending',
-      message: '2 trainees pending for NC III Electrical Installation final assessment.',
-      icon: AlertTriangle,
-    },
-    {
-      type: 'info',
-      title: 'New Training Materials Available',
-      message: 'Updated NCII competency modules for Automotive Technology now available.',
-      icon: Bell,
-    },
-  ];
-
-  // Recent activity data
-  const recentActivity = [
-    { user: 'Hart Lawrence', action: 'New trainee registered in Construction Sector', time: '1m ago' },
-    { user: 'Hart Lawrence', action: 'Started NC II: Driving', time: '15m ago' },
-    { user: 'Hart Lawrence', action: 'Completed National Certificate (NC II): Barista', time: '1h ago' },
-  ];
-
-  // Training sectors data
-  const trainingSectors = [
-    { name: 'Electrical & Electromechanics', courses: 8, students: 50, progress: 65 },
-    { name: 'Automotive/Land Transport', courses: 8, students: 124, progress: 80 },
-    { name: 'Tourism Sector', courses: 8, students: 14, progress: 35 },
-  ];
+  // Live recent activity from the real activityLogs collection.
+  useEffect(() => {
+    const unsubscribe = subscribeToActivityLogs(async (logs) => {
+      const top = (logs || []).slice(0, 6);
+      const ids = [...new Set(top.map((l) => l.userId).filter(Boolean))];
+      const nameMap = {};
+      await Promise.all(
+        ids.map(async (id) => {
+          const profile = await getUserProfile(id).catch(() => null);
+          nameMap[id] = profile?.name || profile?.displayName || profile?.email || 'Unknown user';
+        })
+      );
+      setRecentActivity(
+        top.map((log) => ({
+          action: formatAction(log.action),
+          user: log.metadata?.email || nameMap[log.userId] || 'System',
+          time: formatTimeAgo(log.timestamp),
+        }))
+      );
+    }, 20);
+    return unsubscribe;
+  }, []);
 
   const getColorClasses = (color) => {
     const colors = {
@@ -207,27 +317,37 @@ const Dashboard = () => {
         <div className="lg:col-span-3 card p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-gray-800">Recent Activity</h3>
-            <button className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors">
+            <button
+              onClick={() => navigate('/admin/logs')}
+              className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
+            >
               View all
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
           <div className="space-y-4">
-            {recentActivity.map((activity, index) => (
-              <div 
-                key={index}
-                className="flex items-start gap-4 p-3 rounded-lg hover:bg-gray-50:bg-gray-700 transition-colors"
-              >
-                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Users className="w-5 h-5 text-gray-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-800">{activity.action}</p>
-                  <p className="text-sm text-gray-500">{activity.user}</p>
-                </div>
-                <span className="text-xs text-gray-400 flex-shrink-0">{activity.time}</span>
+            {recentActivity.length === 0 ? (
+              <div className="text-center py-8">
+                <Bell className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">No recent activity yet</p>
               </div>
-            ))}
+            ) : (
+              recentActivity.map((activity, index) => (
+                <div
+                  key={index}
+                  className="flex items-start gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Users className="w-5 h-5 text-gray-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-800">{activity.action}</p>
+                    <p className="text-sm text-gray-500">{activity.user}</p>
+                  </div>
+                  <span className="text-xs text-gray-400 flex-shrink-0">{activity.time}</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -241,6 +361,12 @@ const Dashboard = () => {
             </button>
           </div>
           <div className="space-y-5">
+            {trainingSectors.length === 0 && (
+              <div className="text-center py-8">
+                <FolderOpen className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">No sectors yet</p>
+              </div>
+            )}
             {trainingSectors.map((sector, index) => (
               <div key={index} className="space-y-2">
                 <div className="flex items-center justify-between">

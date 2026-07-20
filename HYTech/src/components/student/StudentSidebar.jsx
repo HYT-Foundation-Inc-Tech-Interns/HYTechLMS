@@ -12,7 +12,9 @@ import {
   Menu,
   X,
   Calendar,
-  Award
+  Award,
+  CreditCard,
+  AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { subscribeToStudentEnrollments, getCourseByName } from '../../utils/firestoreService';
@@ -119,7 +121,7 @@ const StudentSidebar = () => {
     return (words[0][0] + (words[1]?.[0] || '')).toUpperCase();
   };
 
-  const isCoursePath = location.pathname.includes('/student/') && location.pathname !== '/student' && location.pathname !== '/student/calendar' && !location.pathname.includes('/settings') && !location.pathname.includes('/certificates') && !location.pathname.includes('/archived') && !location.pathname.includes('/tasks');
+  const isCoursePath = location.pathname.includes('/student/') && location.pathname !== '/student' && location.pathname !== '/student/calendar' && !location.pathname.includes('/settings') && !location.pathname.includes('/certificates') && !location.pathname.includes('/archived') && !location.pathname.includes('/tasks') && !location.pathname.includes('/request-id') && !location.pathname.includes('/incident-form');
 
   const mainNavItems = [
     { path: '/student', icon: Home, label: 'Home', exact: true },
@@ -129,6 +131,8 @@ const StudentSidebar = () => {
   const bottomNavItems = [
     { path: '/student/tasks', icon: ClipboardList, label: 'Tasks' },
     { path: '/student/certificates', icon: Award, label: 'Certificates' },
+    { path: '/student/request-id', icon: CreditCard, label: 'Request ID' },
+    { path: '/student/incident-form', icon: AlertTriangle, label: 'Incident Report' },
     { path: '/student/archived', icon: Archive, label: 'Archived Courses' },
     { path: '/student/settings', icon: Settings, label: 'Settings' },
   ];

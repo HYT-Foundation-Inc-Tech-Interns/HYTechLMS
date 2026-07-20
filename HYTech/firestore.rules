@@ -241,6 +241,38 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ==================== ID CARD REQUESTS ====================
+    // Admin approves/rejects/completes directly (trainer is not involved).
+    match /idRequests/{id} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.get('studentId', '') == request.auth.uid);
+
+      // Student raises their own ticket, always starting 'pending'.
+      allow create: if isSignedIn()
+        && request.resource.data.get('studentId', '') == request.auth.uid
+        && request.resource.data.get('status', '') == 'pending';
+
+      // Only admin changes status. Student cannot update.
+      allow update: if isAdmin();
+
+      allow delete: if isAdmin();
+    }
+
+    // ==================== INCIDENT FORMS ====================
+    match /incidentForms/{id} {
+      // Staff (admin/trainer) see all; a filer sees their own.
+      allow read: if isAdmin() || isTrainer()
+        || (isSignedIn() && resource.data.get('filedBy', '') == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && request.resource.data.get('filedBy', '') == request.auth.uid;
+
+      // Status handling by staff only.
+      allow update: if isAdmin() || isTrainer();
+
+      allow delete: if isAdmin();
+    }
+
     // ==================== NOTIFICATIONS ====================
     match /notifications/{notificationId} {
       // Sender must identify themselves. Staff (admin/trainer) may notify

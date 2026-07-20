@@ -14,6 +14,10 @@ import {
   getStudentEnrollments,
   applyCourse,
   joinClassByCode,
+  getAssessments,
+  getAssignments,
+  hasStudentAttempted,
+  getMySubmission,
 } from '../../utils/firestoreService';
 
 import { useToast } from '../../context/ToastContext';
@@ -76,6 +80,7 @@ const StudentHome = () => {
   const [classes, setClasses] = useState([]);
   const [activeEnrollment, setActiveEnrollment] = useState(null);
   const [enrollments, setEnrollments] = useState([]);
+  const [pendingCount, setPendingCount] = useState(0);
   
   const [showSectorDropdown, setShowSectorDropdown] = useState(false);
   const [selectedSector, setSelectedSector] = useState(null);
@@ -145,6 +150,44 @@ const StudentHome = () => {
     initializeData();
   }, [user?.uid]);
 
+  // Count real pending requirements: published quizzes not yet attempted +
+  // submission tasks not yet submitted, across the student's active classes.
+  useEffect(() => {
+    if (!user?.uid || enrollments.length === 0) {
+      setPendingCount(0);
+      return;
+    }
+    let mounted = true;
+    (async () => {
+      try {
+        const active = enrollments.filter(
+          (e) => e.status === 'active' || e.status === 'ongoing'
+        );
+        let pending = 0;
+        for (const enr of active) {
+          const [assessments, assignments] = await Promise.all([
+            getAssessments(enr.classId).catch(() => []),
+            getAssignments(enr.classId).catch(() => []),
+          ]);
+          for (const a of assessments.filter((x) => x.status !== 'draft')) {
+            const done = await hasStudentAttempted(enr.classId, a.id, user.uid).catch(() => false);
+            if (!done) pending += 1;
+          }
+          for (const a of assignments.filter((x) => x.type === 'Submission' && x.status !== 'draft')) {
+            const sub = await getMySubmission(enr.classId, a.id, user.uid).catch(() => null);
+            if (!sub) pending += 1;
+          }
+        }
+        if (mounted) setPendingCount(pending);
+      } catch {
+        if (mounted) setPendingCount(0);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [user?.uid, enrollments]);
+
   // Load courses when sector changes (filter by sector)
   useEffect(() => {
     const loadCourses = async () => {
@@ -185,32 +228,20 @@ const StudentHome = () => {
   const stats = [
     {
       icon: BookOpen,
-      value: enrollments.length,
+      value: enrollments.filter((e) => e.status === 'completed').length,
       label: 'Courses Completed',
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
     },
     {
-      icon: Clock,
-      value: '100/200',
-      label: 'Training Hours',
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-    },
-    {
-      icon: CheckCircle,
-      value: '92%',
-      label: 'Attendance Rate',
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-    },
-    {
       icon: AlertCircle,
-      value: activeEnrollment ? '0' : '3',
+      value: pendingCount,
       label: 'Pending Requirements',
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
     },
+    // Training Hours and Attendance Rate are hidden until attendance/hours
+    // tracking exists (Phase 2). Showing them would be fake data.
   ];
 
   // Handle course modal
@@ -333,7 +364,7 @@ const StudentHome = () => {
 
   // Render: Stats Row
   const StatsRow = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
       {stats.map((stat, index) => {
         const Icon = stat.icon;
         return (

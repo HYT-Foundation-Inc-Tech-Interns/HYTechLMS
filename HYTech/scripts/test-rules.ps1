@@ -141,7 +141,7 @@ if ($attemptDocName) {
 # assignment submissions
 $subBase = "$base/classes/rulesTestClass/assignments/rulesTestAssignment/submissions"
 $subSelf = '{"fields":{"studentId":{"stringValue":"' + $sUid + '"},"text":{"stringValue":"my work"},"status":{"stringValue":"submitted"}}}'
-Test-Fs 'T41 student submits own work -> ALLOW' 'PATCH' "$subBase/$sUid" $sTok $subSelf 200
+Test-Fs 'T41 student submits own work -> ALLOW' 'PATCH' "$subBase/${sUid}?updateMask.fieldPaths=studentId&updateMask.fieldPaths=text&updateMask.fieldPaths=status" $sTok $subSelf 200
 $subGrade = '{"fields":{"studentId":{"stringValue":"' + $sUid + '"},"grade":{"integerValue":"100"}}}'
 Test-Fs 'T42 student sets grade on own submission -> DENY' 'PATCH' "$subBase/${sUid}?updateMask.fieldPaths=grade" $sTok $subGrade 403
 $subAsOther = '{"fields":{"studentId":{"stringValue":"' + $sUid + '"},"text":{"stringValue":"forged"}}}'
@@ -150,6 +150,42 @@ Test-Fs 'T44 student updates own submission text -> ALLOW' 'PATCH' "$subBase/${s
 $trainerGrade = '{"fields":{"grade":{"integerValue":"88"},"feedback":{"stringValue":"good"},"status":{"stringValue":"graded"}}}'
 Test-Fs 'T45 trainer grades submission -> ALLOW' 'PATCH' "$subBase/${sUid}?updateMask.fieldPaths=grade&updateMask.fieldPaths=feedback&updateMask.fieldPaths=status" $tTok $trainerGrade 200
 Test-Fs 'T46 OTHER student reads a submission -> DENY' 'GET' "$subBase/$sUid" $s2Tok $null 403
+
+# ID card requests
+$idReqBase = "$base/idRequests"
+$idReqSelf = '{"fields":{"studentId":{"stringValue":"' + $sUid + '"},"trainerId":{"stringValue":"' + $tUid + '"},"type":{"stringValue":"New"},"status":{"stringValue":"pending"}}}'
+$idReqDoc = ''
+try { $r = Fs 'POST' $idReqBase $sTok $idReqSelf; $idReqDoc = $r.name; $script:pass++; Write-Host 'PASS  T47 student creates own ID request -> ALLOW  (HTTP 200)' }
+catch { $script:fail++; Write-Host 'FAIL  T47 student creates own ID request -> ALLOW (denied)' -ForegroundColor Red }
+$idReqApproved = '{"fields":{"studentId":{"stringValue":"' + $sUid + '"},"trainerId":{"stringValue":"' + $tUid + '"},"type":{"stringValue":"New"},"status":{"stringValue":"approved"}}}'
+Test-Fs 'T48 student creates ID request pre-approved -> DENY' 'POST' $idReqBase $sTok $idReqApproved 403
+$idReqAsOther = '{"fields":{"studentId":{"stringValue":"' + $tUid + '"},"trainerId":{"stringValue":"' + $tUid + '"},"status":{"stringValue":"pending"}}}'
+Test-Fs 'T49 student creates ID request AS someone else -> DENY' 'POST' $idReqBase $sTok $idReqAsOther 403
+if ($idReqDoc) {
+  $idReqUrl = "https://firestore.googleapis.com/v1/$idReqDoc"
+  Test-Fs 'T50 student approves OWN ID request -> DENY' 'PATCH' "${idReqUrl}?updateMask.fieldPaths=status" $sTok '{"fields":{"status":{"stringValue":"approved"}}}' 403
+  Test-Fs 'T51 OTHER student reads an ID request -> DENY' 'GET' $idReqUrl $s2Tok $null 403
+  Test-Fs 'T52 trainer approves ID request -> DENY (admin-only now)' 'PATCH' "${idReqUrl}?updateMask.fieldPaths=status" $tTok '{"fields":{"status":{"stringValue":"approved"}}}' 403
+  Test-Fs 'T53 admin approves pending ID request -> ALLOW' 'PATCH' "${idReqUrl}?updateMask.fieldPaths=status" $aTok '{"fields":{"status":{"stringValue":"approved"}}}' 200
+  Test-Fs 'T54 admin marks ID request completed -> ALLOW' 'PATCH' "${idReqUrl}?updateMask.fieldPaths=status" $aTok '{"fields":{"status":{"stringValue":"completed"}}}' 200
+  Test-Fs 'T55 admin deletes ID request (cleanup) -> ALLOW' 'DELETE' $idReqUrl $aTok $null 200
+}
+
+# incident forms
+$incBase = "$base/incidentForms"
+$incSelf = '{"fields":{"filedBy":{"stringValue":"' + $sUid + '"},"filedByRole":{"stringValue":"student"},"type":{"stringValue":"Safety"},"description":{"stringValue":"test"},"status":{"stringValue":"open"}}}'
+$incDoc = ''
+try { $r = Fs 'POST' $incBase $sTok $incSelf; $incDoc = $r.name; $script:pass++; Write-Host 'PASS  T56 student files own incident -> ALLOW  (HTTP 200)' }
+catch { $script:fail++; Write-Host 'FAIL  T56 student files own incident -> ALLOW (denied)' -ForegroundColor Red }
+$incAsOther = '{"fields":{"filedBy":{"stringValue":"' + $tUid + '"},"description":{"stringValue":"forged"}}}'
+Test-Fs 'T57 student files incident AS someone else -> DENY' 'POST' $incBase $sTok $incAsOther 403
+if ($incDoc) {
+  $incUrl = "https://firestore.googleapis.com/v1/$incDoc"
+  Test-Fs 'T58 OTHER student reads an incident -> DENY' 'GET' $incUrl $s2Tok $null 403
+  Test-Fs 'T59 trainer reads any incident -> ALLOW' 'GET' $incUrl $tTok $null 200
+  Test-Fs 'T60 trainer updates incident status -> ALLOW' 'PATCH' "${incUrl}?updateMask.fieldPaths=status" $tTok '{"fields":{"status":{"stringValue":"reviewed"}}}' 200
+  Test-Fs 'T61 admin deletes incident (cleanup) -> ALLOW' 'DELETE' $incUrl $aTok $null 200
+}
 
 # notifications
 Test-Fs 'T26 student reads someone else notification -> DENY' 'GET' "$base/notifications/rulesTestNotif" $sTok $null 403

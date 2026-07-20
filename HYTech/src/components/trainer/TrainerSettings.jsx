@@ -4,6 +4,7 @@ import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
 import { compressAvatarImageToBase64 } from '../../utils/avatarStorage';
+import MyCoursesCard from '../shared/MyCoursesCard';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
@@ -27,13 +28,13 @@ const TrainerSettings = () => {
     allowAnalyticsTracking: true,
   });
   const [profileForm, setProfileForm] = useState({
-    firstName: 'Trainer',
+    firstName: '',
     middleName: '',
-    lastName: 'User',
+    lastName: '',
     nameExtension: '',
     birthDate: '',
-    email: 'trainer@hytglobal.com',
-    phone: '+63 912 345 6789',
+    email: '',
+    phone: '',
     bio: '',
   });
   const [trainerNotificationSettings, setTrainerNotificationSettings] = useState({
@@ -94,16 +95,17 @@ useEffect(() => {
       }
 
       const data = userDoc.data() || {};
+      const p = data.profile || {};
       const fallbackName = String(data.name || '').trim().split(/\s+/);
       setProfileForm((prev) => ({
         ...prev,
-        firstName: data.firstName || fallbackName[0] || prev.firstName,
-        middleName: data.middleName || prev.middleName,
-        lastName: data.lastName || fallbackName.slice(1).join(' ') || prev.lastName,
-        nameExtension: data.nameExtension || prev.nameExtension,
-        birthDate: data.birthDate || prev.birthDate,
+        firstName: data.firstName || p.firstName || fallbackName[0] || prev.firstName,
+        middleName: data.middleName || p.middleName || prev.middleName,
+        lastName: data.lastName || p.lastName || fallbackName.slice(1).join(' ') || prev.lastName,
+        nameExtension: data.nameExtension || p.nameExtension || prev.nameExtension,
+        birthDate: data.birthDate || p.dateOfBirth || prev.birthDate,
         email: auth?.currentUser?.email || data.email || prev.email,
-        phone: data.phone || prev.phone,
+        phone: data.phone || p.phoneNumber || prev.phone,
         bio: data.bio || prev.bio,
       }));
       profileHydratedRef.current = true;
@@ -541,7 +543,7 @@ const handleSave = async () => {
         <div className="mb-4 flex items-center gap-3">
           <User className="w-6 h-6 text-blue-600" />
           <span className="text-lg font-semibold text-gray-900">
-            {`${profileForm.firstName || ''} ${profileForm.middleName || ''} ${profileForm.lastName || ''}${profileForm.nameExtension ? ` ${profileForm.nameExtension}` : ''}`.replace(/\s+/g, ' ').trim() || 'Trainer User'}
+            {`${profileForm.firstName || ''} ${profileForm.middleName || ''} ${profileForm.lastName || ''}${profileForm.nameExtension ? ` ${profileForm.nameExtension}` : ''}`.replace(/\s+/g, ' ').trim() || (profileForm.email || 'Your name')}
           </span>
         </div>
 
@@ -568,6 +570,12 @@ const handleSave = async () => {
           {activeTab === 'appearance' && renderAppearanceSettings()}
           {activeTab === 'security' && renderSecuritySettings()}
         </div>
+
+        {activeTab === 'profile' && (
+          <div className="mt-6">
+            <MyCoursesCard role="trainer" />
+          </div>
+        )}
 
         <div className="flex justify-end mt-6">
           <button

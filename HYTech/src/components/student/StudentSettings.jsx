@@ -13,6 +13,7 @@ import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
 import { compressAvatarImageToBase64 } from '../../utils/avatarStorage';
+import MyCoursesCard from '../shared/MyCoursesCard';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
@@ -25,14 +26,14 @@ const StudentSettings = () => {
   const { uid, settingsData, saveSettings } = useUserSettings('student');
   const [activeTab, setActiveTab] = useState('profile');
   const [profileForm, setProfileForm] = useState({
-    firstName: 'Gerald Andrei',
+    firstName: '',
     middleName: '',
-    lastName: 'Lat',
+    lastName: '',
     nameExtension: '',
     birthDate: '',
-    email: 'gerald.lat@email.com',
-    phone: '+63 912 345 6789',
-    address: 'Makati City, Philippines',
+    email: '',
+    phone: '',
+    address: '',
   });
   const [notifications, setNotifications] = useState({
     emailNotifications: true,
@@ -84,15 +85,16 @@ const StudentSettings = () => {
         const userDoc = await getDoc(doc(db, 'users', uid));
         if (!userDoc.exists()) return;
         const data = userDoc.data() || {};
+        const p = data.profile || {};
         setProfileForm((prev) => ({
           ...prev,
-          firstName: data.firstName || prev.firstName,
-          middleName: data.middleName || prev.middleName,
-          lastName: data.lastName || prev.lastName,
-          nameExtension: data.nameExtension || prev.nameExtension,
-          birthDate: data.birthDate || prev.birthDate,
+          firstName: data.firstName || p.firstName || prev.firstName,
+          middleName: data.middleName || p.middleName || prev.middleName,
+          lastName: data.lastName || p.lastName || prev.lastName,
+          nameExtension: data.nameExtension || p.nameExtension || prev.nameExtension,
+          birthDate: data.birthDate || p.dateOfBirth || prev.birthDate,
           email: auth?.currentUser?.email || data.email || prev.email,
-          phone: data.phone || prev.phone,
+          phone: data.phone || p.phoneNumber || prev.phone,
           address: data.address || prev.address,
         }));
         profileHydratedRef.current = true;
@@ -505,6 +507,12 @@ const StudentSettings = () => {
         {activeTab === 'notifications' && renderNotificationSettings()}
         {activeTab === 'security' && renderSecuritySettings()}
       </div>
+
+      {activeTab === 'profile' && (
+        <div className="mt-6">
+          <MyCoursesCard role="student" />
+        </div>
+      )}
 
       {(activeTab === 'profile' || activeTab === 'notifications') && (
         <div className="flex justify-end mt-6">

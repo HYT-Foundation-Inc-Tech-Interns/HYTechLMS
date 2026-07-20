@@ -152,17 +152,18 @@ const Settings = () => {
         }
 
         const data = userDoc.data() || {};
+        const p = data.profile || {};
         const emailValue = auth?.currentUser?.email || data.email || '';
 
         setAccountForm((prev) => ({
           ...prev,
-          firstName: data.firstName || prev.firstName,
-          middleName: data.middleName || prev.middleName,
-          lastName: data.lastName || prev.lastName,
-          nameExtension: data.nameExtension || prev.nameExtension,
-          birthDate: data.birthDate || prev.birthDate,
+          firstName: data.firstName || p.firstName || prev.firstName,
+          middleName: data.middleName || p.middleName || prev.middleName,
+          lastName: data.lastName || p.lastName || prev.lastName,
+          nameExtension: data.nameExtension || p.nameExtension || prev.nameExtension,
+          birthDate: data.birthDate || p.dateOfBirth || prev.birthDate,
           fullAddress: data.address || prev.fullAddress,
-          contactNumber: data.phone || prev.contactNumber,
+          contactNumber: data.phone || p.phoneNumber || prev.contactNumber,
           email: emailValue,
           emailAddress: emailValue,
         }));

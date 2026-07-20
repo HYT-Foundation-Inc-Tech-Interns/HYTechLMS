@@ -785,6 +785,263 @@ export const rejectApplication = async (applicationId, reason = '') => {
   }
 };
 
+// ==================== ID CARD REQUESTS ====================
+// Student raises an ID ticket -> class trainer approves/rejects -> admin
+// (the "ID maker") sees the approved list and marks it completed.
+
+const sortByField = (items, field) =>
+  [...items].sort((a, b) => {
+    const da = a[field]?.toDate?.() || new Date(a[field] || 0);
+    const dbb = b[field]?.toDate?.() || new Date(b[field] || 0);
+    return dbb - da;
+  });
+
+/**
+ * Student creates an ID request (blocked if one is already pending/approved).
+ */
+export const createIdRequest = async (
+  studentId,
+  { studentName = '', studentEmail = '', classId = '', className = '', trainerId = '', type = 'New', notes = '' }
+) => {
+  try {
+    if (!studentId) throw new Error('Missing student id');
+    if (!trainerId) throw new Error('You must be in a class before requesting an ID.');
+
+    // Prevent duplicate open requests.
+    const existing = await getDocs(
+      query(
+        collection(db, 'idRequests'),
+        where('studentId', '==', studentId),
+        where('status', 'in', ['pending', 'approved'])
+      )
+    );
+    if (!existing.empty) {
+      throw new Error('You already have an ID request in progress.');
+    }
+
+    const docRef = await addDoc(collection(db, 'idRequests'), {
+      studentId,
+      studentName,
+      studentEmail,
+      classId,
+      className,
+      trainerId,
+      type,
+      notes,
+      status: 'pending',
+      requestedAt: serverTimestamp(),
+    });
+
+    logActivity(studentId, 'id_request', 'idRequests', docRef.id, { type });
+    // ID requests are approved by the admin directly (not the trainer).
+    notifyUsersByRole('admin', {
+      type: 'id_request',
+      text: `${studentName || 'A student'} requested an ID (${type}).`,
+      fromUid: studentId,
+    }).catch(() => {});
+
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating ID request:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get ID requests by role-scoped filters (in-memory sort, no composite index).
+ */
+export const getIdRequests = async (filters = {}) => {
+  try {
+    const constraints = [];
+    if (filters.studentId) constraints.push(where('studentId', '==', filters.studentId));
+    if (filters.trainerId) constraints.push(where('trainerId', '==', filters.trainerId));
+    if (filters.status) constraints.push(where('status', '==', filters.status));
+
+    const q = constraints.length ? query(collection(db, 'idRequests'), ...constraints) : query(collection(db, 'idRequests'));
+    const snapshot = await getDocs(q);
+    const items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return sortByField(items, 'requestedAt');
+  } catch (error) {
+    console.error('Error fetching ID requests:', error);
+    throw error;
+  }
+};
+
+/**
+ * Trainer approves -> notify student + notify admins (the ID maker queue).
+ */
+export const approveIdRequest = async (requestId, reviewerUid = '') => {
+  try {
+    const ref = doc(db, 'idRequests', requestId);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : {};
+
+    await updateDoc(ref, {
+      status: 'approved',
+      reviewedAt: serverTimestamp(),
+      reviewedBy: reviewerUid,
+    });
+
+    if (data.studentId) {
+      createNotification({
+        toUid: data.studentId,
+        type: 'id_request_approved',
+        text: 'Your ID request was approved and is being produced.',
+        fromUid: reviewerUid,
+      }).catch(() => {});
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error approving ID request:', error);
+    throw error;
+  }
+};
+
+/**
+ * Trainer rejects -> notify student.
+ */
+export const rejectIdRequest = async (requestId, reason = '', reviewerUid = '') => {
+  try {
+    const ref = doc(db, 'idRequests', requestId);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : {};
+
+    await updateDoc(ref, {
+      status: 'rejected',
+      rejectionReason: reason,
+      reviewedAt: serverTimestamp(),
+      reviewedBy: reviewerUid,
+    });
+
+    if (data.studentId) {
+      createNotification({
+        toUid: data.studentId,
+        type: 'id_request_rejected',
+        text: `Your ID request was rejected${reason ? `: ${reason}` : '.'}`,
+        fromUid: reviewerUid,
+      }).catch(() => {});
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error rejecting ID request:', error);
+    throw error;
+  }
+};
+
+/**
+ * Admin marks an approved request as completed (ID produced).
+ */
+export const completeIdRequest = async (requestId, adminUid = '') => {
+  try {
+    const ref = doc(db, 'idRequests', requestId);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : {};
+
+    await updateDoc(ref, {
+      status: 'completed',
+      completedAt: serverTimestamp(),
+      completedBy: adminUid,
+    });
+
+    if (data.studentId) {
+      createNotification({
+        toUid: data.studentId,
+        type: 'id_request_completed',
+        text: 'Your ID is ready.',
+        fromUid: adminUid,
+      }).catch(() => {});
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error completing ID request:', error);
+    throw error;
+  }
+};
+
+// ==================== INCIDENT FORMS ====================
+// Filed by students or trainers; visible to staff (trainer + admin).
+
+export const createIncidentForm = async ({
+  filedByName = '',
+  filedByRole = '',
+  involvedStudentId = '',
+  involvedStudentName = '',
+  classId = '',
+  className = '',
+  date = '',
+  type = 'Other',
+  severity = 'Low',
+  description = '',
+}) => {
+  try {
+    const filedBy = auth?.currentUser?.uid || '';
+    if (!filedBy) throw new Error('You must be signed in to file an incident.');
+    if (!description.trim()) throw new Error('Description is required.');
+
+    const docRef = await addDoc(collection(db, 'incidentForms'), {
+      filedBy,
+      filedByName,
+      filedByRole,
+      involvedStudentId,
+      involvedStudentName,
+      classId,
+      className,
+      date: date || new Date().toISOString().slice(0, 10),
+      type,
+      severity,
+      description: description.trim(),
+      status: 'open',
+      createdAt: serverTimestamp(),
+    });
+
+    logActivity(filedBy, 'incident_filed', 'incidentForms', docRef.id, { type, severity });
+    notifyUsersByRole('admin', {
+      type: 'incident_filed',
+      text: `${filedByRole || 'Someone'} filed a ${type} incident.`,
+      fromUid: filedBy,
+    }).catch(() => {});
+
+    return docRef.id;
+  } catch (error) {
+    console.error('Error filing incident form:', error);
+    throw error;
+  }
+};
+
+export const getIncidentForms = async (filters = {}) => {
+  try {
+    const constraints = [];
+    if (filters.filedBy) constraints.push(where('filedBy', '==', filters.filedBy));
+    if (filters.status) constraints.push(where('status', '==', filters.status));
+    if (filters.classId) constraints.push(where('classId', '==', filters.classId));
+
+    const q = constraints.length ? query(collection(db, 'incidentForms'), ...constraints) : query(collection(db, 'incidentForms'));
+    const snapshot = await getDocs(q);
+    const items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return sortByField(items, 'createdAt');
+  } catch (error) {
+    console.error('Error fetching incident forms:', error);
+    throw error;
+  }
+};
+
+export const updateIncidentStatus = async (incidentId, status, reviewerUid = '') => {
+  try {
+    await updateDoc(doc(db, 'incidentForms', incidentId), {
+      status,
+      reviewedBy: reviewerUid,
+      reviewedAt: serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating incident status:', error);
+    throw error;
+  }
+};
+
 // ==================== ENROLLMENTS ====================
 
 /**
