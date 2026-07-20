@@ -244,12 +244,9 @@ const StudentHome = () => {
     // tracking exists (Phase 2). Showing them would be fake data.
   ];
 
-  // Handle course modal
+  // Handle course modal. Students may enroll in multiple subjects, so opening
+  // a course is never blocked by an existing enrollment.
   const handleCourseClick = (course) => {
-    if (activeEnrollment) {
-      setShowEnrollWarning(true);
-      return;
-    }
     setSelectedCourse(course);
     setShowCourseModal(true);
   };
@@ -257,14 +254,6 @@ const StudentHome = () => {
   // Handle apply to course
   const handleApplyToCourse = async () => {
     if (!selectedCourse) return;
-
-    if (activeEnrollment) {
-      addToast(
-        'You have an active enrollment. Complete or terminate it before applying to another course.',
-        'error'
-      );
-      return;
-    }
 
     try {
       setLoadingApply(true);
@@ -295,8 +284,8 @@ const StudentHome = () => {
     try {
       setJoiningClass(true);
       const enrollment = await joinClassByCode(user.uid, classCode);
-      addToast(`Successfully joined class! Welcome to ${enrollment.className}`, 'success');
-      
+      addToast(`Request sent to join ${enrollment.className}. Awaiting trainer approval.`, 'success');
+
       // Clear code input
       setClassCode('');
       
@@ -315,12 +304,10 @@ const StudentHome = () => {
     }
   };
 
-  // Render: Join Class Section (only shows when no active enrollment and loading is complete)
+  // Render: Join Class Section (students can join additional classes anytime)
   const JoinClassSection = () => {
     // Don't show until enrollment data has loaded
     if (loadingEnrollment) return null;
-    // Don't show join when student is currently taking an active/ongoing class
-    if (activeEnrollment || (enrollments || []).some((e) => e.status === 'active' || e.status === 'ongoing')) return null;
 
     return (
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg p-8 mb-8 text-white">
@@ -583,8 +570,8 @@ const StudentHome = () => {
 
   // Render: Enrollments List (My Classes)
   const EnrollmentsSection = () => {
-    // Filter to show only active enrollments
-    const activeEnrollments = (enrollments || []).filter(e => e.status !== 'completed');
+    // Show current enrollments (exclude completed and not-yet-approved pending).
+    const activeEnrollments = (enrollments || []).filter(e => e.status !== 'completed' && e.status !== 'pending');
 
     if (loadingEnrollment) {
       return (
@@ -711,7 +698,7 @@ const StudentHome = () => {
         <ActiveEnrollmentAlert />
 
         {/* My Classes Section */}
-        {enrollments && enrollments.filter(e => e.status !== 'completed').length > 0 && (
+        {enrollments && enrollments.filter(e => e.status !== 'completed' && e.status !== 'pending').length > 0 && (
           <div className="mb-12">
             <div className="flex items-center justify-between mb-6">
               <div>

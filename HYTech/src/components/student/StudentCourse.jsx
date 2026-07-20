@@ -90,7 +90,10 @@ const StudentCourse = () => {
   const [announcementFile, setAnnouncementFile] = useState(null);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [studentAvatar, setStudentAvatar] = useState(null);
-  
+  // Live avatar lookup (authorId -> current avatar) so posts reflect an
+  // author's *current* photo instead of the snapshot stored when they posted.
+  const [authorAvatars, setAuthorAvatars] = useState({});
+
   // Enrollment and progress data
   const [enrollmentData, setEnrollmentData] = useState(null);
   const [studentProgress, setStudentProgress] = useState(null);
@@ -391,6 +394,38 @@ const StudentCourse = () => {
     
     loadAssessmentAttempts();
   }, [courseId, user?.uid, firestoreAssessments, firestoreAssignments]);
+
+  // Resolve each post author's *current* avatar so changing your photo updates
+  // the icon on existing posts (not just the profile spotlight).
+  useEffect(() => {
+    const ids = [
+      ...new Set([
+        ...(firestoreAnnouncements || []).map((a) => a.authorId),
+        ...(firestoreAssessments || []).map((a) => a.createdById),
+      ].filter(Boolean)),
+    ];
+    if (ids.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const profile = await getUserProfile(id);
+            return [id, profile?.avatarBase64 || profile?.avatarUrl || null];
+          } catch {
+            return [id, null];
+          }
+        })
+      );
+      if (cancelled) return;
+      setAuthorAvatars((prev) => {
+        const next = { ...prev };
+        entries.forEach(([id, avatar]) => { next[id] = avatar; });
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [firestoreAnnouncements, firestoreAssessments]);
 
   // Map Firestore announcements for display
   const displayAnnouncements = firestoreAnnouncements.length > 0 
@@ -1527,7 +1562,7 @@ const StudentCourse = () => {
               {/* Class Info Badge */}
               <div className="flex items-center gap-2">
                 <div className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium flex items-center gap-2">
-                  <span>ðŸ“š</span>
+                  <BookOpen className="w-3.5 h-3.5" />
                   <span>{displayCourseData.name}</span>
                 </div>
               </div>
@@ -1633,9 +1668,9 @@ const StudentCourse = () => {
                         >
                           {/* Avatar with Icon Badge - Make clickable */}
                           <div className="relative flex-shrink-0">
-                            {item.authorAvatar ? (
-                              <img 
-                                src={item.authorAvatar} 
+                            {(item.authorId && item.authorId in authorAvatars ? authorAvatars[item.authorId] : item.authorAvatar) ? (
+                              <img
+                                src={item.authorId && item.authorId in authorAvatars ? authorAvatars[item.authorId] : item.authorAvatar}
                                 alt={item.author || 'Trainer'}
                                 className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-gray-200"
                               />
@@ -1732,9 +1767,9 @@ const StudentCourse = () => {
                         <div className="flex gap-4 justify-between items-start">
                           {/* Avatar with Icon Badge */}
                           <div className="relative flex-shrink-0">
-                            {item.authorAvatar ? (
-                              <img 
-                                src={item.authorAvatar} 
+                            {(item.authorId && item.authorId in authorAvatars ? authorAvatars[item.authorId] : item.authorAvatar) ? (
+                              <img
+                                src={item.authorId && item.authorId in authorAvatars ? authorAvatars[item.authorId] : item.authorAvatar}
                                 alt={item.author || 'Trainer'}
                                 className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-gray-200"
                               />
@@ -1833,7 +1868,7 @@ const StudentCourse = () => {
                   {/* "Already Answered" Badge */}
                   {isQuizTaken(quiz.id) && (
                     <div className="absolute top-3 right-3 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">
-                      âœ“ Answered
+                      ✓ Answered
                     </div>
                   )}
                   
@@ -1989,7 +2024,7 @@ const StudentCourse = () => {
                             </span>
                           </div>
                           <div className="p-2 text-blue-600">
-                            {isExpanded ? 'â–¼' : 'â–¶'}
+                            {isExpanded ? '▼' : '▶'}
                           </div>
                         </button>
 
@@ -2020,7 +2055,7 @@ const StudentCourse = () => {
                                             <span>By {material.author}</span>
                                             {fileCount > 0 && (
                                               <>
-                                                <span>â€¢</span>
+                                                <span>•</span>
                                                 <span className="flex items-center gap-1">
                                                   <Paperclip className="w-3 h-3" />
                                                   {fileCount} file{fileCount !== 1 ? 's' : ''}
@@ -2059,7 +2094,7 @@ const StudentCourse = () => {
                             <p className="text-sm text-gray-700 mb-4 line-clamp-2">{material.description || 'No description provided'}</p>
                             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
                               <span>By {material.author || 'Trainer'}</span>
-                              <span>â€¢</span>
+                              <span>•</span>
                               <span className="inline-flex items-center gap-2">
                                 <Paperclip className="w-4 h-4" />
                                 {fileCount} {fileCount === 1 ? 'file' : 'files'}
@@ -2312,7 +2347,7 @@ const StudentCourse = () => {
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-blue-600">
-                      {selectedAnnouncement.title} <span className="text-gray-900">â€¢ {selectedAnnouncement.author}</span>
+                      {selectedAnnouncement.title} <span className="text-gray-900">• {selectedAnnouncement.author}</span>
                     </h2>
                   </div>
                 </div>
@@ -2471,7 +2506,7 @@ const StudentCourse = () => {
                               <p className="text-lg font-medium text-gray-900 truncate">{file.name}</p>
                               <p className="text-sm text-gray-500 mt-1">
                                 {file.size ? `${(file.size / 1024).toFixed(1)} KB` : 'Unknown size'}
-                                <span className="mx-2">â€¢</span>
+                                <span className="mx-2">•</span>
                                 Uploaded {uploadedDate}
                               </p>
                             </div>
@@ -2629,9 +2664,9 @@ const StudentCourse = () => {
             </div>
 
             <div className="p-6 space-y-4 overflow-y-auto">
-              {submissionItem.description && (
-                <p className="text-sm text-gray-600">{submissionItem.description}</p>
-              )}
+              <p className="text-sm text-gray-600">
+                {submissionItem.description || 'Submit your work for this task below.'}
+              </p>
 
               {/* Graded result */}
               {mySubmission?.status === 'graded' && (

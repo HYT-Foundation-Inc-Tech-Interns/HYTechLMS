@@ -49,9 +49,9 @@ const StudentSidebar = () => {
         try {
           setLoadingClasses(true);
           
-          // Fetch class details for each enrollment
+          // Pending join requests aren't accessible classes yet.
           const classesData = await Promise.all(
-            enrollments.map(async (enrollment) => {
+            enrollments.filter((e) => e.status !== 'pending').map(async (enrollment) => {
               try {
                 const classData = await getCourseByName(enrollment.className);
                 return {

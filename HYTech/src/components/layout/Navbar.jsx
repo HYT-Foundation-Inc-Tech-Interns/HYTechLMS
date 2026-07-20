@@ -6,6 +6,7 @@ import NotificationDropdown from '../shared/NotificationDropdown';
 import FlappyBirdGame from '../shared/FlappyBirdGame';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
+import { useAuth } from '../../context/AuthContext';
 import { auth } from '../../firebase';
 
 const Navbar = ({ title, subtitle }) => {
@@ -14,14 +15,22 @@ const Navbar = ({ title, subtitle }) => {
   const navigate = useNavigate();
   const { avatar } = useProfileAvatar('trainer');
   const { settingsData } = useUserSettings('trainer');
+  const { user } = useAuth();
 
-  const firstName = settingsData?.profileForm?.firstName?.trim() || '';
-  const middleName = settingsData?.profileForm?.middleName?.trim() || '';
-  const lastName = settingsData?.profileForm?.lastName?.trim() || '';
-  const nameExtension = settingsData?.profileForm?.nameExtension?.trim() || '';
-  const fullName = `${firstName} ${middleName} ${lastName}${nameExtension ? ` ${nameExtension}` : ''}`.replace(/\s+/g, ' ').trim() || 'Trainer';
-  const email = settingsData?.profileForm?.email || auth?.currentUser?.email || 'trainer@hytech.com';
-  const initials = `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || 'TR';
+  // Prefer the name saved in Settings, but fall back to the user doc profile
+  // (set at sign-up) so the navbar never shows the generic placeholder.
+  const firstName = settingsData?.profileForm?.firstName?.trim() || user?.firstName?.trim() || '';
+  const middleName = settingsData?.profileForm?.middleName?.trim() || user?.middleName?.trim() || '';
+  const lastName = settingsData?.profileForm?.lastName?.trim() || user?.lastName?.trim() || '';
+  const nameExtension = settingsData?.profileForm?.nameExtension?.trim() || user?.nameExtension?.trim() || '';
+  const composedName = `${firstName} ${middleName} ${lastName}${nameExtension ? ` ${nameExtension}` : ''}`.replace(/\s+/g, ' ').trim();
+  const fullName = composedName || user?.displayName?.trim() || user?.name?.trim() || 'Trainer';
+  const email = settingsData?.profileForm?.email || auth?.currentUser?.email || user?.email || 'trainer@hytech.com';
+  const computedInitials = `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
+  const initials = computedInitials
+    || (fullName !== 'Trainer'
+      ? fullName.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
+      : 'TR');
 
   // Easter egg: show Flappy Bird after 5 logo clicks
   const [showGame, setShowGame] = useState(false);

@@ -266,7 +266,7 @@ const handleSave = async () => {
     </div>
   ) : (
     <div className="w-24 h-24 rounded-full bg-gradient-to-br from-green-500 to-purple-500 flex items-center justify-center text-white text-2xl font-bold">
-      AU
+      {`${profileForm.firstName?.[0] || ''}${profileForm.lastName?.[0] || ''}`.toUpperCase() || 'TR'}
     </div>
   )}
           <button

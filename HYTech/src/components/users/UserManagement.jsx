@@ -46,6 +46,9 @@ const UserManagement = () => {
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const dropdownRef = useRef(null);
+  // Fixed-position coordinates for the row action menu so it escapes the
+  // table's overflow containers and overlays other rows correctly.
+  const [menuPos, setMenuPos] = useState(null);
 
   const [users, setUsers] = useState([]);
   const [userAvatars, setUserAvatars] = useState({});
@@ -535,14 +538,25 @@ const UserManagement = () => {
                   </td>
                   <td className="table-cell relative" ref={activeDropdown === user.id ? dropdownRef : null}>
                     <button
-                      onClick={() => setActiveDropdown(activeDropdown === user.id ? null : user.id)}
+                      onClick={(e) => {
+                        if (activeDropdown === user.id) {
+                          setActiveDropdown(null);
+                          return;
+                        }
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                        setActiveDropdown(user.id);
+                      }}
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                     >
                       <MoreVertical className="w-5 h-5 text-gray-400" />
                     </button>
-                    
+
                     {activeDropdown === user.id && (
-                      <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-10 min-w-[160px] animate-slide-down">
+                      <div
+                        style={{ position: 'fixed', top: menuPos?.top, right: menuPos?.right }}
+                        className="bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-50 min-w-[160px] animate-slide-down"
+                      >
                         <button 
                           onClick={() => handleViewUser(user)}
                           className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-700 hover:bg-gray-50 transition-colors text-sm whitespace-nowrap"

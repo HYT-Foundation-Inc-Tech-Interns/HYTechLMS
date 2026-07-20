@@ -117,8 +117,13 @@ const StudentDashboardLayout = () => {
     );
   }
 
-  if (enrollments.length === 0) {
-    return <StudentWaitingRoom />;
+  // A pending enrollment is a join request awaiting trainer approval — it does
+  // not unlock the dashboard. Only active/ongoing/completed seats do.
+  const approvedEnrollments = enrollments.filter((e) => e.status !== 'pending');
+  const pendingEnrollments = enrollments.filter((e) => e.status === 'pending');
+
+  if (approvedEnrollments.length === 0) {
+    return <StudentWaitingRoom pendingEnrollments={pendingEnrollments} />;
   }
 
   return (

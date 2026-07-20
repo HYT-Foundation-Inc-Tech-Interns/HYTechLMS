@@ -4,7 +4,7 @@ import { BookOpen, Check, Users, Save, ExternalLink, Calendar, Send, FileText, V
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
-import { getCourseByName, getCourseTemplateById, getCourseEnrollmentsWithAvatars, getSectorById, getAnnouncements, subscribeToAnnouncements, createAnnouncement, getModules, createModule, getAssessments, createAssessment, updateAnnouncement, deleteAnnouncement, updateAssessment, deleteAssessment, getClassActivityFeed, storeAnnouncementAttachment, uploadMaterial, compressAndStoreFile, addCommentToAnnouncement, getAnnouncementComments, deleteComment, subscribeToComments, downloadAttachment, createAssignment, updateAssignment, getAssignments, removeEnrollment, getUserProfile, subscribeToEnrollments, getAssessmentAttempts, createMaterial, getClassMaterials, publishMaterial, unpublishMaterial, updateMaterial, deleteMaterial, createTopic, getClassTopics, subscribeToClassTopics, updateTopic, deleteTopic, publishTopic, unpublishTopic, updateEnrollmentStatus, getAssignmentSubmissions, gradeSubmission, getClassGradebook } from '../../utils/firestoreService';
+import { getCourseByName, getCourseTemplateById, getCourseEnrollmentsWithAvatars, getSectorById, getAnnouncements, subscribeToAnnouncements, createAnnouncement, getModules, createModule, getAssessments, createAssessment, updateAnnouncement, deleteAnnouncement, updateAssessment, deleteAssessment, getClassActivityFeed, storeAnnouncementAttachment, uploadMaterial, compressAndStoreFile, addCommentToAnnouncement, getAnnouncementComments, deleteComment, subscribeToComments, downloadAttachment, createAssignment, updateAssignment, getAssignments, removeEnrollment, approveEnrollment, getUserProfile, subscribeToEnrollments, getAssessmentAttempts, createMaterial, getClassMaterials, publishMaterial, unpublishMaterial, updateMaterial, deleteMaterial, createTopic, getClassTopics, subscribeToClassTopics, updateTopic, deleteTopic, publishTopic, unpublishTopic, updateEnrollmentStatus, getAssignmentSubmissions, gradeSubmission, getClassGradebook } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
 
 const ClassDetail = () => {
@@ -119,6 +119,8 @@ const ClassDetail = () => {
   const [selectedAssessmentForResponses, setSelectedAssessmentForResponses] = useState(null);
   const [assessmentResponses, setAssessmentResponses] = useState([]);
   const [loadingResponses, setLoadingResponses] = useState(false);
+  // A single student's quiz response, shown in the "View Details" modal.
+  const [selectedResponseDetail, setSelectedResponseDetail] = useState(null);
   // Submission-type assignment grading
   const [itemSubmissions, setItemSubmissions] = useState([]);
   const [gradingStudentId, setGradingStudentId] = useState(null);
@@ -552,6 +554,12 @@ const ClassDetail = () => {
       let formattedDueDate = null;
       if (formBuilderDueDate) {
         const dueDate = new Date(formBuilderDueDate);
+        // Reject nonsensical years (e.g. a 6-digit year typed into the picker).
+        if (isNaN(dueDate.getTime()) || dueDate.getFullYear() > 2099) {
+          addToast('Please enter a valid due date (year 2099 or earlier).', 'error');
+          setIsSubmittingItem(false);
+          return;
+        }
         dueDate.setHours(23, 59, 0, 0);
         formattedDueDate = dueDate.toISOString();
       }
@@ -1495,6 +1503,36 @@ const ClassDetail = () => {
     }
   };
 
+  // Approve a pending class-join request (pending -> active).
+  const handleApproveJoin = async (enrollment) => {
+    try {
+      await approveEnrollment(enrollment.id, {
+        studentId: enrollment.studentId,
+        className: classData?.name,
+      });
+      setEnrollments((prev) =>
+        prev.map((e) => (e.id === enrollment.id ? { ...e, status: 'active', joinedAt: new Date().toISOString() } : e))
+      );
+      addToast(`${enrollment.studentName || 'Student'} approved and added to the class.`, 'success');
+    } catch (err) {
+      console.error('Error approving join request:', err);
+      addToast('Failed to approve request', 'error');
+    }
+  };
+
+  // Reject a pending class-join request (removes the enrollment).
+  const handleRejectJoin = async (enrollment) => {
+    if (!window.confirm(`Decline ${enrollment.studentName || 'this student'}'s request to join?`)) return;
+    try {
+      await removeEnrollment(enrollment.id);
+      setEnrollments((prev) => prev.filter((e) => e.id !== enrollment.id));
+      addToast('Join request declined.', 'info');
+    } catch (err) {
+      console.error('Error rejecting join request:', err);
+      addToast('Failed to decline request', 'error');
+    }
+  };
+
   // Handle preview attachment
   const handlePreviewAttachment = (attachment) => {
     // Check if file is an image
@@ -1583,6 +1621,18 @@ const ClassDetail = () => {
     if (!newTaskTitle.trim()) {
       addToast('Give the task a title.', 'error');
       return;
+    }
+    if (!newTaskDesc.trim()) {
+      // Submission tasks have no questions, so the instructions ARE the prompt.
+      addToast('Add instructions so students know what to submit.', 'error');
+      return;
+    }
+    if (newTaskDue) {
+      const parsedDue = new Date(newTaskDue);
+      if (isNaN(parsedDue.getTime()) || parsedDue.getFullYear() > 2099) {
+        addToast('Please enter a valid due date (year 2099 or earlier).', 'error');
+        return;
+      }
     }
     setCreatingTask(true);
     try {
@@ -3251,13 +3301,52 @@ const ClassDetail = () => {
               <div className="lg:col-span-3 bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
                 <div className="p-5 border-b border-gray-100 flex items-center justify-between">
                   <div>
-                    <h3 className="font-bold text-gray-900 text-lg">Students ({enrollments.length})</h3>
+                    <h3 className="font-bold text-gray-900 text-lg">Students ({enrollments.filter((e) => e.status !== 'pending').length})</h3>
                     <p className="text-sm text-gray-500 mt-1">All students including graduated ones in this class</p>
                   </div>
                 </div>
 
                 <div className="p-5">
-                  {enrollments.length === 0 ? (
+                  {/* Pending join requests awaiting approval */}
+                  {enrollments.filter((e) => e.status === 'pending').length > 0 && (
+                    <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                      <h4 className="font-semibold text-amber-800 mb-3 flex items-center gap-2">
+                        <Bell className="w-4 h-4" />
+                        Pending requests ({enrollments.filter((e) => e.status === 'pending').length})
+                      </h4>
+                      <div className="space-y-2">
+                        {enrollments.filter((e) => e.status === 'pending').map((enrollment) => {
+                          const displayName = enrollment.studentName || enrollment.name || 'Student';
+                          const email = enrollment.studentEmail || enrollment.email || 'N/A';
+                          return (
+                            <div key={enrollment.id} className="flex items-center justify-between gap-3 rounded-xl bg-white border border-amber-100 p-3">
+                              <div className="min-w-0">
+                                <p className="font-medium text-gray-900 truncate">{displayName}</p>
+                                <p className="text-xs text-gray-500 truncate">{email}</p>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <button
+                                  onClick={() => handleApproveJoin(enrollment)}
+                                  className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 transition-colors flex items-center gap-1.5"
+                                >
+                                  <Check className="w-4 h-4" />
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleRejectJoin(enrollment)}
+                                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                                >
+                                  Decline
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {enrollments.filter((e) => e.status !== 'pending').length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/70 p-10 text-center">
                       <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-blue-100 text-blue-600">
                         <Users className="w-10 h-10" />
@@ -3289,7 +3378,7 @@ const ClassDetail = () => {
                     </div>
                   ) : (
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
-                      {enrollments.map((enrollment) => {
+                      {enrollments.filter((e) => e.status !== 'pending').map((enrollment) => {
                         const displayName = enrollment.studentName || enrollment.name || 'Student';
                         const email = enrollment.studentEmail || enrollment.email || 'N/A';
                         const initials = displayName
@@ -3763,7 +3852,10 @@ const ClassDetail = () => {
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                  <button className="text-blue-600 hover:text-blue-700 font-medium text-sm">
+                                  <button
+                                    onClick={() => setSelectedResponseDetail(response)}
+                                    className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                  >
                                     View Details
                                   </button>
                                 </td>
@@ -4469,10 +4561,12 @@ const ClassDetail = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
                     <div className="relative">
                       <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                      <input 
+                      <input
                         type="date"
                         value={formBuilderDueDate}
                         onChange={(e) => setFormBuilderDueDate(e.target.value)}
+                        min={new Date().toISOString().split('T')[0]}
+                        max="2099-12-31"
                         className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                       />
                     </div>
@@ -4581,6 +4675,80 @@ const ClassDetail = () => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Student Response Detail Modal (quiz/assessment "View Details") */}
+      {selectedResponseDetail && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl animate-slide-up my-8 max-h-[90vh] flex flex-col">
+            <div className="px-8 py-6 border-b border-gray-200 flex-shrink-0 flex items-start justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {selectedResponseDetail.studentName || selectedResponseDetail.studentId}
+                </h2>
+                <p className="text-gray-600 text-sm mt-1">
+                  {selectedResponseDetail.earnedPoints || 0}/{selectedResponseDetail.totalPoints || 0} points
+                  {' · '}
+                  {Math.round(((selectedResponseDetail.earnedPoints || 0) / (selectedResponseDetail.totalPoints || 1)) * 100)}%
+                  {' · '}
+                  <span className={selectedResponseDetail.passed ? 'text-green-600' : 'text-red-600'}>
+                    {selectedResponseDetail.passed ? 'Passed' : 'Not Passed'}
+                  </span>
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedResponseDetail(null)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="px-8 py-6 overflow-y-auto space-y-4">
+              {(selectedAssessmentForResponses?.questions || []).length === 0 ? (
+                <p className="text-gray-500 text-sm">No questions recorded for this assessment.</p>
+              ) : (
+                (selectedAssessmentForResponses?.questions || []).map((q, idx) => {
+                  const answers = selectedResponseDetail.answers || {};
+                  const studentAnswer = answers[q.id];
+                  const isCorrect = studentAnswer === q.correctAnswer;
+                  const options = q.options || [];
+                  return (
+                    <div
+                      key={q.id || idx}
+                      className={`rounded-xl border p-4 ${isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}
+                    >
+                      <p className="font-semibold text-gray-900 mb-2">
+                        {idx + 1}. {q.question || q.text || 'Question'}
+                      </p>
+                      <div className="space-y-1 text-sm">
+                        {options.map((opt, optIdx) => {
+                          const chosen = studentAnswer === optIdx;
+                          const correct = q.correctAnswer === optIdx;
+                          return (
+                            <div
+                              key={optIdx}
+                              className={`px-3 py-1.5 rounded-lg flex items-center justify-between ${
+                                correct ? 'bg-green-100 text-green-800' : chosen ? 'bg-red-100 text-red-800' : 'text-gray-700'
+                              }`}
+                            >
+                              <span>{opt}</span>
+                              <span className="text-xs font-medium">
+                                {correct ? 'Correct answer' : chosen ? 'Their answer' : ''}
+                              </span>
+                            </div>
+                          );
+                        })}
+                        {studentAnswer === undefined && (
+                          <p className="text-xs text-gray-500 italic">No answer submitted.</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -4811,19 +4979,19 @@ const ClassDetail = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Instructions</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Instructions <span className="text-red-500">*</span></label>
                 <textarea
                   rows={3}
                   value={newTaskDesc}
                   onChange={(e) => setNewTaskDesc(e.target.value)}
-                  placeholder="What should students submit?"
+                  placeholder="What should students submit? (required — this is the task prompt)"
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Due date</label>
-                  <input type="date" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  <input type="date" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} min={new Date().toISOString().split('T')[0]} max="2099-12-31" className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Points</label>

@@ -648,14 +648,7 @@ export const deleteClass = async (classId) => {
  */
 export const applyCourse = async (studentId, courseId) => {
   try {
-    // First, check if student has active enrollment
-    const activeEnrollment = await queryActiveEnrollment(studentId);
-    if (activeEnrollment) {
-      throw new Error(
-        'You have an active enrollment. Complete or terminate it before applying to another course.'
-      );
-    }
-    
+    // Students may enroll in multiple subjects, so no single-enrollment gate.
     // Get course and trainer info
     const courseRef = doc(db, 'courses', courseId);
     const courseSnap = await getDoc(courseRef);
@@ -1138,20 +1131,9 @@ export const joinClassByCode = async (studentId, classCode) => {
     const classData = classDoc.data();
     const classId = classDoc.id;
 
-    // Prevent joining when student is currently taking another class
+    // Students may hold several enrollments at once, but not duplicate the same
+    // class or re-join one they already have a request/seat in.
     const enrollmentsRef = collection(db, 'enrollments');
-    const activeEnrollmentQ = query(
-      enrollmentsRef,
-      where('studentId', '==', studentId),
-      where('status', 'in', ['active', 'ongoing'])
-    );
-    const activeEnrollmentSnapshot = await getDocs(activeEnrollmentQ);
-
-    if (!activeEnrollmentSnapshot.empty) {
-      throw new Error('You are currently enrolled in an active class. Complete it first before joining a new class.');
-    }
-
-    // Check if student is already enrolled in this class
     const existingQ = query(
       enrollmentsRef,
       where('studentId', '==', studentId),
@@ -1164,16 +1146,20 @@ export const joinClassByCode = async (studentId, classCode) => {
       if (existingEnrollment.status === 'completed') {
         throw new Error('You have already completed this class and cannot re-enroll.');
       }
+      if (existingEnrollment.status === 'pending') {
+        throw new Error('Your request to join this class is already awaiting trainer approval.');
+      }
       throw new Error('You are already enrolled in this class.');
     }
 
-    // Create enrollment
+    // Create a PENDING enrollment — the class trainer approves it before the
+    // student gains access. (Class code = request, not instant access.)
     const enrollmentData = {
       studentId,
       classId,
       className: classData.name || 'Unnamed Class',
-      status: 'active',
-      joinedAt: new Date().toISOString(),
+      status: 'pending',
+      requestedAt: new Date().toISOString(),
       progress: {
         attendanceRate: 0,
         tasksCompleted: 0,
@@ -1198,7 +1184,29 @@ export const joinClassByCode = async (studentId, classCode) => {
     }
 
     const docRef = await addDoc(enrollmentsRef, enrollmentData);
-    
+
+    // Let the trainer know someone is waiting for approval.
+    if (classData.trainerId) {
+      try {
+        const studentProfile = await getUserProfile(studentId).catch(() => null);
+        const studentName =
+          studentProfile?.name ||
+          studentProfile?.displayName ||
+          studentProfile?.email ||
+          'A student';
+        await createNotification({
+          toUid: classData.trainerId,
+          type: 'join_request',
+          text: `${studentName} requested to join ${classData.name || 'your class'}. Approve them in the class roster.`,
+          fromUid: studentId,
+          fromName: studentName,
+          metadata: { classId, enrollmentId: docRef.id },
+        });
+      } catch (notifyErr) {
+        console.warn('Could not notify trainer of join request:', notifyErr?.message);
+      }
+    }
+
     return {
       id: docRef.id,
       ...enrollmentData,
@@ -1206,6 +1214,38 @@ export const joinClassByCode = async (studentId, classCode) => {
     };
   } catch (error) {
     console.error('Error joining class by code:', error);
+    throw error;
+  }
+};
+
+/**
+ * Trainer approves a pending class-join request (pending -> active).
+ */
+export const approveEnrollment = async (enrollmentId, { studentId, className } = {}) => {
+  try {
+    const enrollmentRef = doc(db, 'enrollments', enrollmentId);
+    await updateDoc(enrollmentRef, {
+      status: 'active',
+      joinedAt: new Date().toISOString(),
+      approvedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    if (studentId) {
+      try {
+        await createNotification({
+          toUid: studentId,
+          type: 'join_approved',
+          text: `You've been added to ${className || 'your class'}. Your dashboard is now unlocked.`,
+          metadata: { enrollmentId },
+        });
+      } catch (notifyErr) {
+        console.warn('Could not notify student of approval:', notifyErr?.message);
+      }
+    }
+    return true;
+  } catch (error) {
+    console.error('Error approving enrollment:', error);
     throw error;
   }
 };
@@ -1666,13 +1706,15 @@ export const createAnnouncement = async (classId, { title, message, author, auth
   try {
     const announcementsRef = collection(db, 'classes', classId, 'announcements');
     
+    // Firestore rejects `undefined` field values, so coerce any missing
+    // fields to safe defaults (null/empty) before writing.
     const announcement = {
-      title,
-      message,
-      author,
-      authorId,
-      authorAvatar,
-      attachments,
+      title: title ?? '',
+      message: message ?? '',
+      author: author ?? 'Trainer',
+      authorId: authorId ?? null,
+      authorAvatar: authorAvatar ?? null,
+      attachments: attachments ?? [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -3481,6 +3523,7 @@ export default {
   updateEnrollmentStatus,
   updateEnrollmentProgress,
   removeEnrollment,
+  approveEnrollment,
   
   // Materials
   getCourseMaterials,

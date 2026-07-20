@@ -218,6 +218,15 @@ const StudentSettings = () => {
     { id: 'security', label: 'Security & Privacy', icon: Shield },
   ];
 
+  // Derive real account dates from Firebase Auth metadata (no hardcoded values).
+  const authMeta = auth?.currentUser?.metadata;
+  const memberSince = authMeta?.creationTime
+    ? new Date(authMeta.creationTime).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    : '—';
+  const lastLogin = authMeta?.lastSignInTime
+    ? new Date(authMeta.lastSignInTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '—';
+
   const renderProfileSettings = () => (
     <div className="space-y-6">
       <div className="flex items-center gap-6">
@@ -330,6 +339,7 @@ const StudentSettings = () => {
               type="tel"
               value={profileForm.phone}
               onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
+              autoComplete="off"
               className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 bg-white"
             />
           </div>
@@ -342,6 +352,7 @@ const StudentSettings = () => {
               type="text"
               value={profileForm.address}
               onChange={(e) => setProfileForm((prev) => ({ ...prev, address: e.target.value }))}
+              autoComplete="off"
               className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 bg-white"
             />
           </div>
@@ -357,11 +368,11 @@ const StudentSettings = () => {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-white/70">Member Since</span>
-            <span className="font-medium">Jan 2024</span>
+            <span className="font-medium">{memberSince}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-white/70">Last Login</span>
-            <span className="font-medium">Today</span>
+            <span className="font-medium">{lastLogin}</span>
           </div>
         </div>
       </div>

@@ -203,10 +203,13 @@ service cloud.firestore {
     match /enrollments/{enrollmentId} {
       allow read: if isSignedIn();
 
+      // A student self-joining by class code creates a PENDING enrollment that
+      // the class trainer must approve before it becomes active. Admins and
+      // trainers may still create active enrollments directly.
       allow create: if isAdmin()
         || (isSignedIn()
             && request.resource.data.get('studentId', '') == request.auth.uid
-            && request.resource.data.get('status', '') == 'active'
+            && request.resource.data.get('status', '') == 'pending'
             && classExists(request.resource.data.get('classId', 'none')))
         || (isTrainer() && request.resource.data.get('trainerId', '') == request.auth.uid);
 

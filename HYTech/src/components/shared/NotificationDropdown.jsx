@@ -29,12 +29,47 @@ const NotificationDropdown = ({ role = 'student' }) => {
     addToast('All notifications marked as read.', 'success');
   };
 
+  const basePath = role === 'admin' ? '/admin' : role === 'trainer' ? '/trainer' : '/student';
+
   const handleViewAll = () => {
     setShowNotifications(false);
     setIsViewingAll(false);
-
-    const basePath = role === 'admin' ? '/admin' : role === 'trainer' ? '/trainer' : '/student';
     navigate(`${basePath}/notifications`);
+  };
+
+  // Route a notification to the most relevant existing page for its type.
+  const destinationFor = (notification) => {
+    const meta = notification?.metadata || {};
+    if (meta.link) return meta.link;
+    switch (notification?.type) {
+      case 'id_request':
+      case 'id_request_approved':
+      case 'id_request_rejected':
+      case 'id_request_completed':
+        return role === 'admin' ? '/admin/id-requests' : `${basePath}/request-id`;
+      case 'incident_filed':
+        return `${basePath}/incident-forms`;
+      case 'student_waiting':
+      case 'notify_trainer':
+      case 'join_class':
+      case 'join_request':
+        // Trainer roster / home is where students get added to / approved for a class.
+        return basePath;
+      case 'join_approved':
+        // Student's dashboard is now unlocked.
+        return basePath;
+      default:
+        return `${basePath}/notifications`;
+    }
+  };
+
+  const handleNotificationClick = (notification) => {
+    if (notification.unread) {
+      markAsRead(notification.id);
+    }
+    setShowNotifications(false);
+    setIsViewingAll(false);
+    navigate(destinationFor(notification));
   };
 
   // Close dropdown when clicking outside
@@ -113,11 +148,7 @@ const NotificationDropdown = ({ role = 'student' }) => {
                     className={`p-4 border-b border-gray-50 hover:bg-gray-50:bg-gray-700 transition-colors cursor-pointer group ${
                       notification.unread ? 'bg-blue-50/50' : ''
                     }`}
-                    onClick={() => {
-                      if (notification.unread) {
-                        markAsRead(notification.id);
-                      }
-                    }}
+                    onClick={() => handleNotificationClick(notification)}
                   >
                     <div className="flex items-start gap-3">
                       {/* Unread indicator */}
