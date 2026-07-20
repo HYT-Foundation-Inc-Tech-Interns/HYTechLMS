@@ -1,81 +1,74 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Search } from 'lucide-react';
+import { getCoursesTemplates, getSectorById } from '../../utils/firestoreService';
 
 const SectorDetail = () => {
   const { sectorId } = useParams();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTraining, setSelectedTraining] = useState(null);
+  const [sector, setSector] = useState(null);
+  const [trainings, setTrainings] = useState(null); // null = loading
 
-  // Mock data based on sector ID
-  const sectorData = {
-    1: {
-      name: 'HEALTH, SOCIAL, AND OTHER COMMUNITY DEVELOPMENT SERVICES',
-      trainings: [
-        { id: 1, name: 'Hilot (Wellness Massage)', level: 'NC II', isPopular: true },
-        { id: 2, name: 'Hilot (Wellness Massage)', level: 'NC II', isPopular: true },
-        { id: 3, name: 'Hilot (Wellness Massage)', level: 'NC II', isPopular: true },
-        { id: 4, name: 'Hilot (Wellness Massage)', level: 'NC II', isPopular: true },
-        { id: 5, name: 'Hilot (Wellness Massage)', level: 'NC II', isPopular: true },
-        { id: 6, name: 'Hilot (Wellness Massage)', level: 'NC II', isPopular: true },
-      ]
-    },
-    2: {
-      name: 'CONSTRUCTION SECTOR',
-      trainings: [
-        { id: 1, name: 'Masonry', level: 'NC II', isPopular: false },
-        { id: 2, name: 'Carpentry', level: 'NC II', isPopular: true },
-      ]
-    },
-    3: {
-      name: 'ELECTRICAL & ELECTRONICS SECTOR',
-      trainings: [
-        { id: 1, name: 'Electrical Installation and Maintenance', level: 'NC II', isPopular: true },
-        { id: 2, name: 'Electronics Products Assembly and Servicing', level: 'NC II', isPopular: false },
-      ]
-    },
-    4: {
-      name: 'SOCIAL AND OTHER COMMUNITY DEVELOPMENT SERVICES SECTOR',
-      trainings: [
-        { id: 1, name: 'Beauty Care Services', level: 'NC II', isPopular: true },
-        { id: 2, name: 'Hairdressing', level: 'NC II', isPopular: true },
-      ]
-    },
-    5: {
-      name: 'AUTOMOTIVE/LAND TRANSPORT SECTOR',
-      trainings: [
-        { id: 1, name: 'Automotive Servicing', level: 'NC II', isPopular: true },
-      ]
-    },
-    6: {
-      name: 'TOURISM SECTOR (HOTEL AND RESTAURANT)',
-      trainings: [
-        { id: 1, name: 'Barista', level: 'NC II', isPopular: true },
-        { id: 2, name: 'Food and Beverage Services', level: 'NC II', isPopular: true },
-        { id: 3, name: 'Cookery', level: 'NC II', isPopular: true },
-      ]
-    }
-  };
+  useEffect(() => {
+    let isMounted = true;
 
-  const sector = sectorData[sectorId] || { name: 'Unknown Sector', trainings: [] };
+    const loadSector = async () => {
+      try {
+        const [sectorData, courseTemplates] = await Promise.all([
+          getSectorById(sectorId),
+          getCoursesTemplates({ sectorId }),
+        ]);
 
-  const filteredTrainings = sector.trainings.filter(training =>
-    training.name.toLowerCase().includes(searchQuery.toLowerCase())
+        if (isMounted) {
+          setSector(sectorData);
+          setTrainings(courseTemplates || []);
+        }
+      } catch (error) {
+        console.error('Error loading sector detail:', error);
+        if (isMounted) {
+          setSector(null);
+          setTrainings([]);
+        }
+      }
+    };
+
+    loadSector();
+    return () => {
+      isMounted = false;
+    };
+  }, [sectorId]);
+
+  const filteredTrainings = (trainings || []).filter((training) =>
+    (training.name || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (trainings === null) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="w-10 h-10 rounded-full border-4 border-gray-300 border-t-[#0B005C] animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8">
       {/* Back Button & Header */}
       <div className="mb-8">
-        <button 
+        <button
           onClick={() => navigate('/trainer/sectors')}
           className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
           Back to Sectors
         </button>
-        <h1 className="text-lg font-bold text-gray-900 uppercase">{sector.name}</h1>
+        <h1 className="text-lg font-bold text-gray-900 uppercase">
+          {sector?.name || 'Unknown Sector'}
+        </h1>
+        {sector?.description && (
+          <p className="text-sm text-gray-500 mt-1">{sector.description}</p>
+        )}
       </div>
 
       {/* Search */}
@@ -95,9 +88,9 @@ const SectorDetail = () => {
       {/* Trainings Section */}
       <div>
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">TRAININGS</h2>
-        
+
         <div className="space-y-3">
-          {filteredTrainings.map((training, index) => (
+          {filteredTrainings.map((training) => (
             <div
               key={training.id}
               onClick={() => setSelectedTraining(selectedTraining === training.id ? null : training.id)}
@@ -110,20 +103,13 @@ const SectorDetail = () => {
               <div className="p-5">
                 <h3 className="font-semibold text-lg mb-2">{training.name}</h3>
                 <div className="flex items-center gap-2">
-                  <span className={`px-2.5 py-1 rounded text-xs font-medium ${
-                    selectedTraining === training.id
-                      ? 'bg-white/20 text-white'
-                      : 'bg-blue-100 text-blue-700'
-                  }`}>
-                    {training.level}
-                  </span>
-                  {training.isPopular && (
+                  {training.level && (
                     <span className={`px-2.5 py-1 rounded text-xs font-medium ${
                       selectedTraining === training.id
-                        ? 'bg-green-400 text-white'
-                        : 'bg-green-100 text-green-700'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-blue-100 text-blue-700'
                     }`}>
-                      Popular
+                      {training.level}
                     </span>
                   )}
                 </div>
@@ -137,7 +123,11 @@ const SectorDetail = () => {
           <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
             <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No trainings found</h3>
-            <p className="text-gray-500">Try adjusting your search criteria</p>
+            <p className="text-gray-500">
+              {searchQuery
+                ? 'Try adjusting your search criteria'
+                : 'No course templates exist for this sector yet. An admin can add them.'}
+            </p>
           </div>
         )}
       </div>

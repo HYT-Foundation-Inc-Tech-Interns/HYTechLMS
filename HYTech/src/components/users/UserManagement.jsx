@@ -29,6 +29,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db, firebaseConfig, firebaseInitError, hasValidFirebaseConfig } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
+import { createNotification, logActivity } from '../../utils/firestoreService';
 
 const UserManagement = () => {
   const { addToast } = useToast();
@@ -99,27 +100,6 @@ const UserManagement = () => {
       }
 
       try {
-        // Ensure current user doc exists
-        const currentUserRef = doc(db, 'users', currentUser.uid);
-        const currentUserSnap = await getDoc(currentUserRef);
-        if (!currentUserSnap.exists()) {
-          const normalizedEmail = String(currentUser.email || '').trim().toLowerCase();
-          const fallbackName = normalizedEmail.split('@')[0] || 'User';
-          await setDoc(
-            currentUserRef,
-            {
-              uid: currentUser.uid,
-              name: fallbackName,
-              email: normalizedEmail,
-              role: 'admin',
-              status: 'Active',
-              createdAt: serverTimestamp(),
-              createdBy: 'system-backfill',
-            },
-            { merge: true }
-          );
-        }
-
         // Set up real-time listener for users
         if (isMounted) {
           try {
@@ -255,6 +235,11 @@ const UserManagement = () => {
 
       await secondaryAuth.signOut();
 
+      logActivity(auth?.currentUser?.uid, 'user_created', 'users', credential.user.uid, {
+        email: newUser.email.trim().toLowerCase(),
+        role: newUser.role.trim().toLowerCase(),
+      });
+
       setNewUser({
         firstName: '',
         middleName: '',
@@ -296,6 +281,10 @@ const UserManagement = () => {
       await updateDoc(doc(db, 'users', user.id), {
         status: newStatus,
         updatedAt: serverTimestamp(),
+      });
+      logActivity(auth?.currentUser?.uid, 'user_status_updated', 'users', user.id, {
+        email: user.email || '',
+        newStatus,
       });
       addToast(`User marked ${newStatus}.`, 'success');
     } catch {
@@ -368,6 +357,26 @@ const UserManagement = () => {
         updatedAt: serverTimestamp(),
       });
 
+      const newRole = editUser.role.trim().toLowerCase();
+      const oldRole = String(selectedUser.role || '').toLowerCase();
+      if (newRole !== oldRole) {
+        logActivity(auth?.currentUser?.uid, 'user_role_updated', 'users', selectedUser.id, {
+          email: editUser.email.trim().toLowerCase(),
+          role: newRole,
+          previousRole: oldRole,
+        });
+        createNotification({
+          toUid: selectedUser.id,
+          type: 'role_changed',
+          text: `Your account role was changed to ${newRole}. Sign in again to see your new dashboard.`,
+        }).catch(() => {});
+      } else {
+        logActivity(auth?.currentUser?.uid, 'user_updated', 'users', selectedUser.id, {
+          email: editUser.email.trim().toLowerCase(),
+          role: newRole,
+        });
+      }
+
       addToast('User profile updated in Firestore.', 'success');
       setShowEditModal(false);
       setSelectedUser(null);
@@ -381,7 +390,6 @@ const UserManagement = () => {
     switch (role.toLowerCase()) {
       case 'admin': return 'bg-purple-100 text-purple-600';
       case 'trainer': return 'bg-blue-100 text-blue-600';
-      case 'supervisor': return 'bg-indigo-100 text-indigo-600';
       case 'student': return 'bg-green-100 text-green-600';
       default: return 'bg-gray-100 text-gray-600';
     }
@@ -404,7 +412,7 @@ const UserManagement = () => {
       if (settingsSnap.exists()) {
         const data = settingsSnap.data();
         // Try to find avatar in any of the role settings
-        const roles = ['admin', 'trainer', 'supervisor', 'student'];
+        const roles = ['admin', 'trainer', 'student'];
         for (const role of roles) {
           const roleData = data[role];
           if (roleData?.avatarUrl || roleData?.avatarPreview || roleData?.avatarBase64) {
@@ -755,7 +763,6 @@ const UserManagement = () => {
                     <option value="">Select</option>
                     <option value="Admin">Admin</option>
                     <option value="Trainer">Trainer</option>
-                    <option value="Supervisor">Supervisor</option>
                     <option value="Student">Student</option>
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
@@ -946,7 +953,6 @@ const UserManagement = () => {
                     <option value="">Select</option>
                     <option value="Admin">Admin</option>
                     <option value="Trainer">Trainer</option>
-                    <option value="Supervisor">Supervisor</option>
                     <option value="Student">Student</option>
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />

@@ -2,9 +2,267 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow all authenticated users to read/write everything (development mode)
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+
+    // ==================== HELPERS ====================
+
+    function isSignedIn() {
+      return request.auth != null;
     }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Role from the caller's own users doc. exists() guard handles
+    // first-login before the doc is created.
+    function myRole() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'none')
+        : 'none';
+    }
+
+    function isAdmin()   { return isSignedIn() && myRole() == 'admin'; }
+    function isTrainer() { return isSignedIn() && myRole() == 'trainer'; }
+
+    // Role of an arbitrary user (used to restrict who a student may notify).
+    function roleOf(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid))
+        ? get(/databases/$(database)/documents/users/$(uid)).data.get('role', 'none')
+        : 'none';
+    }
+
+    // True when classes/{classId} exists.
+    function classExists(classId) {
+      return exists(/databases/$(database)/documents/classes/$(classId));
+    }
+
+    // True when caller owns classes/{classId}.
+    function classTrainer(classId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/classes/$(classId))
+        && get(/databases/$(database)/documents/classes/$(classId)).data.get('trainerId', '') == request.auth.uid;
+    }
+
+    // Keys added/removed/changed by an update.
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // ==================== USERS ====================
+
+    match /users/{uid} {
+      // All signed-in users read profiles (trainer picker, avatars,
+      // student names on attempts, admin user table).
+      allow read: if isSignedIn();
+
+      // Self-signup may only create a plain Active student.
+      // Admin may create any user doc (Add User writes as admin).
+      allow create: if isAdmin()
+        || (isSelf(uid)
+            && request.resource.data.get('role', '') == 'student'
+            && request.resource.data.get('status', '') == 'Active');
+
+      // Owner edits profile but NEVER role or status.
+      allow update: if isAdmin()
+        || (isSelf(uid) && !changedKeys().hasAny(['role', 'status']));
+
+      allow delete: if isAdmin();
+
+      match /lmsExperience/{docId} {
+        allow read, write: if isSelf(uid) || isAdmin();
+      }
+    }
+
+    // ==================== USER SETTINGS ====================
+    // Read by others for avatar display; write owner-only.
+    match /userSettings/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isSelf(uid) || isAdmin();
+    }
+
+    // ==================== SECTORS ====================
+    match /sectors/{sectorId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ==================== COURSE TEMPLATES ====================
+    match /courses/{courseId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+
+      match /materials/{materialId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+      }
+    }
+
+    // ==================== CLASSES ====================
+    match /classes/{classId} {
+      // Students look classes up by classCode to join.
+      allow read: if isSignedIn();
+
+      allow create: if isAdmin()
+        || (isTrainer() && request.resource.data.get('trainerId', '') == request.auth.uid);
+
+      allow update, delete: if isAdmin()
+        || (isSignedIn() && resource.data.get('trainerId', '') == request.auth.uid);
+
+      // ---- Content subcollections: authed read, owner-trainer write ----
+      match /materials/{materialId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin() || classTrainer(classId);
+      }
+
+      match /modules/{moduleId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin() || classTrainer(classId);
+
+        match /materials/{materialId} {
+          allow read: if isSignedIn();
+          allow write: if isAdmin() || classTrainer(classId);
+        }
+      }
+
+      match /topics/{topicId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin() || classTrainer(classId);
+      }
+
+      match /assignments/{assignmentId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin() || classTrainer(classId);
+      }
+
+      // Announcements: trainer/admin AND the author (students post to the
+      // class feed and then update their own post to attach a file).
+      match /announcements/{announcementId} {
+        allow read: if isSignedIn();
+        allow create: if isAdmin()
+          || classTrainer(classId)
+          || (isSignedIn() && request.resource.data.get('authorId', '') == request.auth.uid);
+        allow update: if isAdmin()
+          || classTrainer(classId)
+          || (isSignedIn() && resource.data.get('authorId', '') == request.auth.uid);
+        allow delete: if isAdmin()
+          || classTrainer(classId)
+          || (isSignedIn() && resource.data.get('authorId', '') == request.auth.uid);
+
+        match /comments/{commentId} {
+          allow read: if isSignedIn();
+          allow create: if isSignedIn()
+            && request.resource.data.get('authorId', '') == request.auth.uid;
+          allow update: if false;
+          allow delete: if isAdmin()
+            || classTrainer(classId)
+            || (isSignedIn() && resource.data.get('authorId', '') == request.auth.uid);
+        }
+      }
+
+      match /assessments/{assessmentId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin() || classTrainer(classId);
+
+        match /attempts/{attemptId} {
+          allow read: if isAdmin()
+            || classTrainer(classId)
+            || (isSignedIn() && resource.data.get('studentId', '') == request.auth.uid);
+          // Student submits only as themselves.
+          allow create: if isSignedIn()
+            && request.resource.data.get('studentId', '') == request.auth.uid;
+          // Attempts are immutable (anti-tampering). Admin may delete.
+          allow update: if false;
+          allow delete: if isAdmin();
+        }
+      }
+    }
+
+    // ==================== ENROLLMENTS ====================
+    // READ is authed-wide BY DESIGN: students render a classmates roster
+    // (query where classId==X) and trainers query by classId without a
+    // trainerId filter. Firestore list rules are static, so an owner-scoped
+    // read rule would reject those queries. Writes are strictly scoped.
+    match /enrollments/{enrollmentId} {
+      allow read: if isSignedIn();
+
+      allow create: if isAdmin()
+        || (isSignedIn()
+            && request.resource.data.get('studentId', '') == request.auth.uid
+            && request.resource.data.get('status', '') == 'active'
+            && classExists(request.resource.data.get('classId', 'none')))
+        || (isTrainer() && request.resource.data.get('trainerId', '') == request.auth.uid);
+
+      // Trainer of record / class trainer / admin change status+progress.
+      // Student may change ONLY their own progress field.
+      allow update: if isAdmin()
+        || (isSignedIn() && resource.data.get('trainerId', '') == request.auth.uid)
+        || (isTrainer() && classTrainer(resource.data.get('classId', 'none')))
+        || (isSignedIn()
+            && resource.data.get('studentId', '') == request.auth.uid
+            && changedKeys().hasOnly(['progress', 'updatedAt']));
+
+      allow delete: if isAdmin()
+        || (isSignedIn() && resource.data.get('trainerId', '') == request.auth.uid)
+        || (isTrainer() && classTrainer(resource.data.get('classId', 'none')));
+    }
+
+    // ==================== COURSE APPLICATIONS ====================
+    match /courseApplications/{applicationId} {
+      allow read: if isAdmin()
+        || (isSignedIn()
+            && (resource.data.get('studentId', '') == request.auth.uid
+                || resource.data.get('trainerId', '') == request.auth.uid));
+
+      allow create: if isSignedIn()
+        && request.resource.data.get('studentId', '') == request.auth.uid
+        && request.resource.data.get('status', '') == 'pending';
+
+      allow update: if isAdmin()
+        || (isSignedIn() && resource.data.get('trainerId', '') == request.auth.uid);
+
+      allow delete: if isAdmin();
+    }
+
+    // ==================== NOTIFICATIONS ====================
+    match /notifications/{notificationId} {
+      // Sender must identify themselves. Staff (admin/trainer) may notify
+      // anyone; a student may only notify staff (prevents a student from
+      // blasting phishing notifications to every other student).
+      allow create: if isSignedIn()
+        && request.resource.data.get('fromUid', '') == request.auth.uid
+        && (isAdmin()
+            || isTrainer()
+            || roleOf(request.resource.data.get('toUid', '')) in ['trainer', 'admin']);
+
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.get('toUid', '') == request.auth.uid);
+
+      // Recipient may only flip the unread flag.
+      allow update: if isSignedIn()
+        && resource.data.get('toUid', '') == request.auth.uid
+        && changedKeys().hasOnly(['unread']);
+
+      allow delete: if isAdmin()
+        || (isSignedIn() && resource.data.get('toUid', '') == request.auth.uid);
+    }
+
+    // ==================== ACTIVITY LOGS ====================
+    // Append-only audit trail. Admin bypass on create covers legacy
+    // logActivity('admin', ...) calls.
+    match /activityLogs/{logId} {
+      allow create: if isAdmin()
+        || (isSignedIn() && request.resource.data.get('userId', '') == request.auth.uid);
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.get('userId', '') == request.auth.uid);
+      allow update, delete: if false;
+    }
+
+    // ==================== STUDENT PROGRESS ====================
+    match /students/{studentId}/progress/{classId} {
+      allow read: if isAdmin() || isTrainer() || isSelf(studentId);
+      allow write: if isAdmin() || isSelf(studentId) || classTrainer(classId);
+    }
+
+    // Unmatched paths are denied by default.
   }
 }

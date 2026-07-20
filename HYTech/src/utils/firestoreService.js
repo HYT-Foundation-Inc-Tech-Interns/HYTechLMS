@@ -21,7 +21,7 @@ import {
   arrayUnion,
   deleteField,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 
 // ==================== USER OPERATIONS ====================
 
@@ -627,6 +627,19 @@ export const deleteCourse = async (courseId) => {
   }
 };
 
+/**
+ * Permanently delete a class (Trainer, from archived view)
+ */
+export const deleteClass = async (classId) => {
+  try {
+    await deleteDoc(doc(db, 'classes', classId));
+    return true;
+  } catch (error) {
+    console.error('Error deleting class:', error);
+    throw error;
+  }
+};
+
 // ==================== COURSE APPLICATIONS ====================
 
 /**
@@ -1175,6 +1188,149 @@ export const logActivity = async (
   } catch (error) {
     // Don't throw - logging should not break functionality
     console.warn('Error logging activity:', error);
+  }
+};
+
+/**
+ * Get recent activity logs across all users (Admin System Logs page)
+ */
+export const subscribeToActivityLogs = (callback, limitResults = 200) => {
+  const logsRef = collection(db, 'activityLogs');
+  const q = query(logsRef, orderBy('timestamp', 'desc'), limit(limitResults));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      callback(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
+    },
+    (error) => {
+      console.error('Error subscribing to activity logs:', error);
+      callback([]);
+    }
+  );
+};
+
+// ==================== NOTIFICATIONS ====================
+
+/**
+ * Create a notification for a specific user
+ */
+export const createNotification = async ({ toUid, type = 'general', text, fromUid = '', fromName = '', metadata = {} }) => {
+  try {
+    if (!toUid || !text) {
+      throw new Error('Notification requires toUid and text');
+    }
+
+    // Rules require fromUid == request.auth.uid; default to the caller.
+    const resolvedFromUid = fromUid || auth?.currentUser?.uid || '';
+
+    const notificationsRef = collection(db, 'notifications');
+    const docRef = await addDoc(notificationsRef, {
+      toUid,
+      type,
+      text,
+      fromUid: resolvedFromUid,
+      fromName,
+      metadata,
+      unread: true,
+      createdAt: serverTimestamp(),
+    });
+
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    throw error;
+  }
+};
+
+/**
+ * Notify every user with a given role (e.g. all admins)
+ */
+export const notifyUsersByRole = async (role, notification) => {
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('role', '==', role));
+    const snapshot = await getDocs(q);
+
+    await Promise.all(
+      snapshot.docs.map((userDoc) => createNotification({ ...notification, toUid: userDoc.id }))
+    );
+  } catch (error) {
+    console.warn('Error notifying users by role:', error);
+  }
+};
+
+/**
+ * Subscribe to a user's notifications (most recent first)
+ */
+export const subscribeToNotifications = (uid, callback, limitResults = 50) => {
+  const notificationsRef = collection(db, 'notifications');
+  const q = query(notificationsRef, where('toUid', '==', uid));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const notifications = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      // Sort in-memory to avoid a composite index requirement
+      notifications.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(0);
+        const dateB = b.createdAt?.toDate?.() || new Date(0);
+        return dateB - dateA;
+      });
+      callback(notifications.slice(0, limitResults));
+    },
+    (error) => {
+      console.error('Error subscribing to notifications:', error);
+      callback([]);
+    }
+  );
+};
+
+/**
+ * Mark a single notification as read
+ */
+export const markNotificationRead = async (notificationId) => {
+  try {
+    await updateDoc(doc(db, 'notifications', notificationId), { unread: false });
+  } catch (error) {
+    console.warn('Error marking notification read:', error);
+  }
+};
+
+/**
+ * Mark all of a user's notifications as read
+ */
+export const markAllNotificationsRead = async (uid) => {
+  try {
+    const notificationsRef = collection(db, 'notifications');
+    const q = query(notificationsRef, where('toUid', '==', uid), where('unread', '==', true));
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) return;
+
+    const batch = writeBatch(db);
+    snapshot.docs.forEach((docSnap) => batch.update(docSnap.ref, { unread: false }));
+    await batch.commit();
+  } catch (error) {
+    console.warn('Error marking all notifications read:', error);
+  }
+};
+
+/**
+ * Get all trainers (for student waiting room trainer picker)
+ */
+export const getTrainers = async () => {
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('role', '==', 'trainer'));
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs
+      .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+      .filter((trainer) => String(trainer.status || 'Active').toLowerCase() === 'active');
+  } catch (error) {
+    console.error('Error fetching trainers:', error);
+    throw error;
   }
 };
 

@@ -9,7 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth, firebaseInitError } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
-import { createUserProfile } from '../../utils/firestoreService';
+import { createUserProfile, logActivity } from '../../utils/firestoreService';
 
 const SignUp = () => {
   const SIGN_UP_DRAFT_KEY = 'hyt:signup:draft';
@@ -181,7 +181,11 @@ const SignUp = () => {
         role: 'student',
       });
 
-      addToast('Student account created successfully. You can now sign in.', 'success');
+      logActivity(credential.user.uid, 'user_signup', 'users', credential.user.uid, {
+        email: formData.email.trim(),
+      });
+
+      addToast('Account created! Sign in, then wait for a trainer to add you to a class.', 'success');
       localStorage.removeItem(SIGN_UP_DRAFT_KEY);
       navigate('/signin');
     } catch (error) {

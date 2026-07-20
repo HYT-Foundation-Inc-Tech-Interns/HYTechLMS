@@ -1,6 +1,3 @@
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { firebaseInitError, storage } from '../firebase';
-
 const MAX_DIMENSION = 512;
 const IMAGE_QUALITY = 0.78;
 
@@ -67,34 +64,5 @@ export const compressAvatarImageToBase64 = async (file) => {
     width,
     height,
     originalSize: file.size,
-  };
-};
-
-export const uploadUserAvatar = async ({ uid, role, file }) => {
-  if (!storage) {
-    throw new Error(firebaseInitError || 'Firebase storage is not configured.');
-  }
-
-  if (!uid) {
-    throw new Error('No authenticated user found.');
-  }
-
-  if (!file) {
-    throw new Error('No file selected for upload.');
-  }
-
-  const { blob } = await compressAvatarImage(file);
-  const avatarPath = `userAvatars/${uid}/${role || 'user'}/avatar.jpg`;
-  const avatarRef = ref(storage, avatarPath);
-
-  await uploadBytes(avatarRef, blob, {
-    contentType: 'image/jpeg',
-    cacheControl: 'public,max-age=86400',
-  });
-
-  const url = await getDownloadURL(avatarRef);
-  return {
-    url,
-    path: avatarPath,
   };
 };
