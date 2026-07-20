@@ -379,7 +379,7 @@ const Sectors = () => {
           <div>
             <p className="font-semibold text-red-900">{error}</p>
             <button 
-              onClick={loadSectors}
+              onClick={reloadSectors}
               className="text-sm text-red-700 underline hover:no-underline mt-1"
             >
               Try Again

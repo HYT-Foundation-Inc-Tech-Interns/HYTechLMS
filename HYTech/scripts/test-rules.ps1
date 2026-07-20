@@ -45,13 +45,15 @@ function Test-Fs([string]$name, [string]$method, [string]$url, [string]$token, [
 }
 
 Write-Host '--- Signing in test accounts ---'
-$admin   = Sign-In 'admin@hyt.com'    'admin1234'
-$trainer = Sign-In 'trainer@hyt.com'  'trainer1234'
-$student = Sign-In 'student1@hyt.com' 'student1234'
-$aTok = $admin.idToken;   $aUid = $admin.localId
-$tTok = $trainer.idToken; $tUid = $trainer.localId
-$sTok = $student.idToken; $sUid = $student.localId
-Write-Host "admin=$aUid trainer=$tUid student=$sUid"
+$admin    = Sign-In 'admin@hyt.com'    'admin1234'
+$trainer  = Sign-In 'trainer@hyt.com'  'trainer1234'
+$student  = Sign-In 'student1@hyt.com' 'student1234'
+$student2 = Sign-In 'student2@hyt.com' 'student1234'
+$aTok = $admin.idToken;    $aUid = $admin.localId
+$tTok = $trainer.idToken;  $tUid = $trainer.localId
+$sTok = $student.idToken;  $sUid = $student.localId
+$s2Uid = $student2.localId
+Write-Host "admin=$aUid trainer=$tUid student=$sUid student2=$s2Uid"
 
 # Sanity: verify roles are what we assume (abort otherwise).
 $adminDoc = Fs 'GET' "$base/users/$aUid" $aTok $null
@@ -105,6 +107,8 @@ try {
 }
 $enrollOther = '{"fields":{"studentId":{"stringValue":"' + $tUid + '"},"classId":{"stringValue":"rulesTestClass"},"status":{"stringValue":"active"}}}'
 Test-Fs 'T15 student enrolls SOMEONE ELSE -> DENY' 'POST' "$base/enrollments" $sTok $enrollOther 403
+$enrollGhost = '{"fields":{"studentId":{"stringValue":"' + $sUid + '"},"classId":{"stringValue":"nonexistent-class-xyz"},"status":{"stringValue":"active"}}}'
+Test-Fs 'T40 student enrolls into NONEXISTENT class -> DENY' 'POST' "$base/enrollments" $sTok $enrollGhost 403
 if ($enrollDocName) {
   $enrollUrl = "https://firestore.googleapis.com/v1/$enrollDocName"
   Test-Fs 'T16 student updates own progress -> ALLOW' 'PATCH' "${enrollUrl}?updateMask.fieldPaths=progress" $sTok '{"fields":{"progress":{"mapValue":{"fields":{"tasksCompleted":{"integerValue":"1"}}}}}}' 200
@@ -141,6 +145,11 @@ Test-Fs 'T29 recipient marks read (unread only) -> ALLOW' 'PATCH' "$base/notific
 Test-Fs 'T30 recipient edits notification TEXT -> DENY' 'PATCH' "$base/notifications/rulesTestNotif?updateMask.fieldPaths=text" $tTok '{"fields":{"text":{"stringValue":"forged"}}}' 403
 $spoofNotif = '{"fields":{"toUid":{"stringValue":"' + $tUid + '"},"fromUid":{"stringValue":"' + $aUid + '"},"text":{"stringValue":"spoof"},"unread":{"booleanValue":true}}}'
 Test-Fs 'T31 student sends notification spoofing fromUid -> DENY' 'POST' "$base/notifications" $sTok $spoofNotif 403
+# Student may only notify staff, not other students (anti phishing-blast).
+$toStudent = '{"fields":{"toUid":{"stringValue":"' + $s2Uid + '"},"fromUid":{"stringValue":"' + $sUid + '"},"text":{"stringValue":"spam"},"unread":{"booleanValue":true}}}'
+Test-Fs 'T38 student notifies ANOTHER STUDENT -> DENY' 'POST' "$base/notifications" $sTok $toStudent 403
+$toTrainer = '{"fields":{"toUid":{"stringValue":"' + $tUid + '"},"fromUid":{"stringValue":"' + $sUid + '"},"text":{"stringValue":"please add me"},"unread":{"booleanValue":true}}}'
+Test-Fs 'T39 student notifies a TRAINER -> ALLOW' 'POST' "$base/notifications" $sTok $toTrainer 200
 
 # activity logs
 $logSelf = '{"fields":{"userId":{"stringValue":"' + $sUid + '"},"action":{"stringValue":"rules_test"},"entityType":{"stringValue":"test"},"entityId":{"stringValue":"t"}}}'

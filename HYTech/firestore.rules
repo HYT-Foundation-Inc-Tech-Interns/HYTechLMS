@@ -24,6 +24,18 @@ service cloud.firestore {
     function isAdmin()   { return isSignedIn() && myRole() == 'admin'; }
     function isTrainer() { return isSignedIn() && myRole() == 'trainer'; }
 
+    // Role of an arbitrary user (used to restrict who a student may notify).
+    function roleOf(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid))
+        ? get(/databases/$(database)/documents/users/$(uid)).data.get('role', 'none')
+        : 'none';
+    }
+
+    // True when classes/{classId} exists.
+    function classExists(classId) {
+      return exists(/databases/$(database)/documents/classes/$(classId));
+    }
+
     // True when caller owns classes/{classId}.
     function classTrainer(classId) {
       return isSignedIn()
@@ -176,7 +188,8 @@ service cloud.firestore {
       allow create: if isAdmin()
         || (isSignedIn()
             && request.resource.data.get('studentId', '') == request.auth.uid
-            && request.resource.data.get('status', '') == 'active')
+            && request.resource.data.get('status', '') == 'active'
+            && classExists(request.resource.data.get('classId', 'none')))
         || (isTrainer() && request.resource.data.get('trainerId', '') == request.auth.uid);
 
       // Trainer of record / class trainer / admin change status+progress.
@@ -212,8 +225,14 @@ service cloud.firestore {
 
     // ==================== NOTIFICATIONS ====================
     match /notifications/{notificationId} {
-      allow create: if isAdmin()
-        || (isSignedIn() && request.resource.data.get('fromUid', '') == request.auth.uid);
+      // Sender must identify themselves. Staff (admin/trainer) may notify
+      // anyone; a student may only notify staff (prevents a student from
+      // blasting phishing notifications to every other student).
+      allow create: if isSignedIn()
+        && request.resource.data.get('fromUid', '') == request.auth.uid
+        && (isAdmin()
+            || isTrainer()
+            || roleOf(request.resource.data.get('toUid', '')) in ['trainer', 'admin']);
 
       allow read: if isAdmin()
         || (isSignedIn() && resource.data.get('toUid', '') == request.auth.uid);

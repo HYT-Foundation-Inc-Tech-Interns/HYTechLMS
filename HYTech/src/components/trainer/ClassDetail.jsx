@@ -1499,6 +1499,21 @@ const ClassDetail = () => {
     }
   };
 
+  // Copy the class join code to the clipboard
+  const copyClassCode = () => {
+    const code = classData?.classCode || '';
+    if (!code) {
+      addToast('No class code available yet.', 'error');
+      return;
+    }
+    try {
+      navigator.clipboard?.writeText(code);
+      addToast('Class code copied to clipboard!');
+    } catch {
+      addToast('Unable to copy. Class code: ' + code, 'error');
+    }
+  };
+
   // Handle invite students
   const handleInviteStudents = (e) => {
     e.preventDefault();

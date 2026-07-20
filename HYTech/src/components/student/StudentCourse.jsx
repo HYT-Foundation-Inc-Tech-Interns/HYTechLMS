@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { 
   BookOpen, 
@@ -866,13 +866,18 @@ const StudentCourse = () => {
     level: courseData?.level || 'N/A'
   };
 
-  const currentDate = new Date().toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+  const currentDate = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
   });
 
+  // Real-time Firestore materials for this class
+  const courseMaterials = firestoreMaterials && firestoreMaterials.length > 0 ? firestoreMaterials : [];
+
+  // Only show published materials
+  const publishedCourseMaterials = courseMaterials.filter((material) => material.isPublished === true);
 
   // Use ONLY real Firestore data - combine assessments AND assignments
   const quizzes = [
@@ -1179,50 +1184,65 @@ const StudentCourse = () => {
     });
   };
 
-  const canPreviewMaterialFile = (fileType = '') => fileType.includes('pdf') || fileType.startsWith('image/');
+  const canPreviewMaterialFile = (fileType = '') => resolveSafePreviewMime(fileType) !== null;
+
+  // Map an untrusted stored MIME string to a hardcoded, safe canonical value.
+  // Returning a constant (never the raw stored string) prevents any HTML/JS
+  // injection through a crafted "type" field when the file is previewed.
+  const resolveSafePreviewMime = (rawType = '') => {
+    const t = String(rawType).toLowerCase();
+    if (t.includes('pdf')) return 'application/pdf';
+    if (t.startsWith('image/png')) return 'image/png';
+    if (t.startsWith('image/jpeg') || t.startsWith('image/jpg')) return 'image/jpeg';
+    if (t.startsWith('image/gif')) return 'image/gif';
+    if (t.startsWith('image/webp')) return 'image/webp';
+    if (t.startsWith('image/')) return 'image/png'; // safe fallback for other raster images
+    return null; // not previewable
+  };
+
+  const base64ToBlob = (base64, mime) => {
+    // Tolerate values that still carry a data: prefix.
+    const raw = base64.includes('base64,') ? base64.split('base64,')[1] : base64;
+    const byteChars = atob(raw);
+    const bytes = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i += 1) {
+      bytes[i] = byteChars.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: mime });
+  };
 
   const previewMaterialFile = (material, fileIndex) => {
     const fileBase64 = material?.filesBase64?.[fileIndex];
-    const fileType = material?.attachments?.[fileIndex]?.type || 'application/octet-stream';
+    const rawType = material?.attachments?.[fileIndex]?.type || '';
 
     if (!fileBase64) {
       addToast('Preview not available for this file', 'error');
       return;
     }
 
-    const previewWindow = window.open();
-    if (!previewWindow) {
-      addToast('Popup blocked. Please allow popups to preview files.', 'error');
+    // Force a safe MIME; never render with the attacker-controllable type.
+    const safeMime = resolveSafePreviewMime(rawType);
+    if (!safeMime) {
+      addToast('Preview not supported for this file type', 'error');
       return;
     }
 
-    if (fileType.includes('pdf')) {
-      previewWindow.document.write(`
-        <html>
-          <head><title>File Preview</title></head>
-          <body style="margin:0;overflow:hidden;">
-            <iframe src="data:${fileType};base64,${fileBase64}" style="width:100%;height:100%;border:none;"></iframe>
-          </body>
-        </html>
-      `);
-      previewWindow.document.close();
-      return;
+    try {
+      const blob = base64ToBlob(fileBase64, safeMime);
+      const objectUrl = URL.createObjectURL(blob);
+      // Open the blob directly: the browser renders the PDF/image natively.
+      // No HTML is written, so there is no injection sink.
+      const previewWindow = window.open(objectUrl, '_blank');
+      if (!previewWindow) {
+        URL.revokeObjectURL(objectUrl);
+        addToast('Popup blocked. Please allow popups to preview files.', 'error');
+        return;
+      }
+      // Give the new tab time to load before releasing the URL.
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    } catch {
+      addToast('Unable to preview this file.', 'error');
     }
-
-    if (fileType.startsWith('image/')) {
-      previewWindow.document.write(`
-        <html>
-          <head><title>Image Preview</title></head>
-          <body style="margin:0;display:flex;justify-content:center;align-items:center;background:#111;">
-            <img src="data:${fileType};base64,${fileBase64}" alt="Preview" style="max-width:100vw;max-height:100vh;object-fit:contain;" />
-          </body>
-        </html>
-      `);
-      previewWindow.document.close();
-      return;
-    }
-
-    addToast('Preview not supported for this file type', 'error');
   };
 
   const downloadMaterialFile = (material, fileIndex) => {
