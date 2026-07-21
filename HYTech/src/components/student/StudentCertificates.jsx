@@ -50,7 +50,7 @@ const StudentCertificates = () => {
           : 'Date TBD',
         finalGrade: enrollment.finalGrade || 'Pass',
         credentialId: enrollment.certificateId || `CERT-${enrollment.id.substring(0, 8).toUpperCase()}`,
-        recipientName: user.displayName || 'Student',
+        recipientName: user.displayName || 'Trainee',
         enrollmentId: enrollment.id,
       }));
 

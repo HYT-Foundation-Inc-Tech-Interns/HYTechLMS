@@ -5,8 +5,8 @@ import { useToast } from '../../context/ToastContext';
 
 const ROLE_LABELS = {
   admin: 'Admin',
-  trainer: 'Trainer',
-  student: 'Student',
+  trainer: 'Trainor',
+  student: 'Trainee',
 };
 
 const NotificationsPage = ({ role = 'student' }) => {

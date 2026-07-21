@@ -20,6 +20,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import SubjectListEditor from '../shared/SubjectListEditor';
 import {
   getCourses,
   getCoursesTemplates,
@@ -84,6 +85,8 @@ const TrainerHome = () => {
   const [newClassForm, setNewClassForm] = useState({
     name: '',
   });
+  // Editable subjects for the class being created (seed the class's modules).
+  const [classSubjects, setClassSubjects] = useState([]);
 
   // Loading & Error States
   const [loadingCourses, setLoadingCourses] = useState(true);
@@ -107,8 +110,8 @@ const TrainerHome = () => {
         });
         setCourses(coursesData || []);
 
-        // Load available course templates with sector names
-        const availableCoursesData = await getCoursesTemplates();
+        // Load available course templates (programs an admin has switched on)
+        const availableCoursesData = await getCoursesTemplates({ availableOnly: true });
         const coursesWithSectorNames = await Promise.all(
           (availableCoursesData || []).map(async (course) => {
             if (course.sectorId) {
@@ -250,7 +253,7 @@ const TrainerHome = () => {
     try {
       setLoadingSectors(true);
       setSelectedSector(sector);
-      const coursesData = await getCoursesTemplates({ sectorId: sector.id });
+      const coursesData = await getCoursesTemplates({ sectorId: sector.id, availableOnly: true });
       setSectorClasses(coursesData || []);
       setSelectedClassDetails(null);
     } catch (error) {
@@ -267,6 +270,9 @@ const TrainerHome = () => {
     setNewClassForm({
       name: courseItem.name || '',
     });
+    // Pre-fill the editable subject list from the program template. The trainer
+    // can rename/reorder/add/remove before these become the class's modules.
+    setClassSubjects(Array.isArray(courseItem.subjects) ? [...courseItem.subjects] : []);
   };
 
   // Handle create class
@@ -297,6 +303,9 @@ const TrainerHome = () => {
         classCode: classCode,
         courseId: selectedClassDetails.id,
         bgImage: selectedClassDetails.bgImage || '',
+        // Trainer-customized module list for this class (falls back to the
+        // template's subjects inside createCourse if empty).
+        subjects: classSubjects,
       }, { sectorId: selectedSector.id, trainerId: user.uid });
       
       addToast(`Class created successfully! Code: ${classCode}`, 'success');
@@ -307,7 +316,8 @@ const TrainerHome = () => {
       setNewClassForm({
         name: '',
       });
-      
+      setClassSubjects([]);
+
       // Reload trainer's courses to show the newly created class
       try {
         const coursesData = await getCourses({
@@ -337,6 +347,144 @@ const TrainerHome = () => {
   const showToast = (message) => {
     addToast(message, 'info');
   };
+
+  // The create-class flow (sector → course → class form) is rendered from both
+  // the empty state and the main grid, so keep it in one place.
+  const renderCreateClassModal = () =>
+    showCreateClassModal && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+          <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+            <div className="flex items-center gap-3">
+              {selectedSector && (
+                <button
+                  onClick={handleBackToSectors}
+                  className="p-1 hover:bg-gray-100 rounded"
+                  title="Back to sectors"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+              )}
+              <h2 className="text-xl font-bold text-gray-900">
+                {selectedClassDetails
+                  ? 'Create Class'
+                  : selectedSector
+                  ? `Courses in ${selectedSector.name}`
+                  : 'Select a Sector'}
+              </h2>
+            </div>
+            <button
+              onClick={() => setShowCreateClassModal(false)}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="p-6">
+            {loadingSectors ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader className="w-6 h-6 animate-spin text-blue-600" />
+              </div>
+            ) : selectedClassDetails ? (
+              // Class Details View - Form to Create Class
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-1">
+                    Class Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={newClassForm.name}
+                    onChange={(e) => setNewClassForm({ ...newClassForm, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter class name"
+                  />
+                </div>
+                <div className="pt-2 border-t border-gray-100">
+                  <SubjectListEditor
+                    subjects={classSubjects}
+                    onChange={setClassSubjects}
+                    label="Modules for this class"
+                    hint="Copied from the program's subjects. Edit them for this class — the shared program template stays unchanged."
+                  />
+                </div>
+                <div className="flex gap-2 pt-4">
+                  <button
+                    onClick={() => setSelectedClassDetails(null)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-900 font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={handleCreateClass}
+                    disabled={loadingSectors}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium transition-colors"
+                  >
+                    {loadingSectors ? 'Creating...' : 'Create Class'}
+                  </button>
+                </div>
+              </div>
+            ) : selectedSector ? (
+              // Courses List View - Select a course to create a class from it
+              <div className="space-y-2">
+                {sectorClasses.length === 0 ? (
+                  <p className="text-gray-600 text-center py-4">No courses in this sector yet.</p>
+                ) : (
+                  sectorClasses.map((classItem) => (
+                    <div
+                      key={classItem.id}
+                      onClick={() => handleClassSelect(classItem)}
+                      className="p-4 border border-gray-200 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
+                    >
+                      <h4 className="font-semibold text-gray-900">{classItem.name}</h4>
+                      <p className="text-sm text-gray-600 mt-1">{classItem.description}</p>
+                      <div className="flex gap-2 mt-2">
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                          {classItem.level || 'NC'}
+                        </span>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          classItem.status === 'Active'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {classItem.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : (
+              // Sectors List View
+              <div className="space-y-2">
+                {sectors.length === 0 ? (
+                  <p className="text-gray-600 text-center py-4">No sectors available.</p>
+                ) : (
+                  sectors.map((sector) => (
+                    <div
+                      key={sector.id}
+                      onClick={() => handleSectorSelect(sector)}
+                      className="p-4 border border-gray-200 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
+                    >
+                      <h4 className="font-semibold text-gray-900">{sector.name}</h4>
+                      <p className="text-sm text-gray-600 mt-1">{sector.description}</p>
+                      <span className={`inline-block text-xs px-2 py-1 rounded mt-2 ${
+                        sector.status === 'Active'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {sector.status}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
 
   // Loading State
   if (loadingCourses) {
@@ -379,133 +527,7 @@ const TrainerHome = () => {
           </button>
         </div>
 
-        {/* Create Class Modal - Always Render */}
-        {showCreateClassModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg w-full max-w-2xl max-h-96 overflow-y-auto">
-              <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
-                <div className="flex items-center gap-3">
-                  {selectedSector && (
-                    <button
-                      onClick={handleBackToSectors}
-                      className="p-1 hover:bg-gray-100 rounded"
-                      title="Back to sectors"
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </button>
-                  )}
-                  <h2 className="text-xl font-bold text-gray-900">
-                    {selectedClassDetails 
-                      ? 'Create Class' 
-                      : selectedSector 
-                      ? `Courses in ${selectedSector.name}` 
-                      : 'Select a Sector'}
-                  </h2>
-                </div>
-                <button
-                  onClick={() => setShowCreateClassModal(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              <div className="p-6">
-                {loadingSectors ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader className="w-6 h-6 animate-spin text-blue-600" />
-                  </div>
-                ) : selectedClassDetails ? (
-                  // Class Details View - Form to Create Class
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-1">
-                        Class Name *
-                      </label>
-                      <input
-                        type="text"
-                        value={newClassForm.name}
-                        onChange={(e) => setNewClassForm({ ...newClassForm, name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Enter class name"
-                      />
-                    </div>
-                    <div className="flex gap-2 pt-4">
-                      <button
-                        onClick={() => setSelectedClassDetails(null)}
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-900 font-medium hover:bg-gray-50 transition-colors"
-                      >
-                        Back
-                      </button>
-                      <button
-                        onClick={handleCreateClass}
-                        disabled={loadingSectors}
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium transition-colors"
-                      >
-                        {loadingSectors ? 'Creating...' : 'Create Class'}
-                      </button>
-                    </div>
-                  </div>
-                ) : selectedSector ? (
-                  // Courses List View - Select a course to create a class from it
-                  <div className="space-y-2">
-                    {sectorClasses.length === 0 ? (
-                      <p className="text-gray-600 text-center py-4">No courses in this sector yet.</p>
-                    ) : (
-                      sectorClasses.map((classItem) => (
-                        <div
-                          key={classItem.id}
-                          onClick={() => handleClassSelect(classItem)}
-                          className="p-4 border border-gray-200 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
-                        >
-                          <h4 className="font-semibold text-gray-900">{classItem.name}</h4>
-                          <p className="text-sm text-gray-600 mt-1">{classItem.description}</p>
-                          <div className="flex gap-2 mt-2">
-                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                              {classItem.level || 'NC'}
-                            </span>
-                            <span className={`text-xs px-2 py-1 rounded ${
-                              classItem.status === 'Active'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-gray-100 text-gray-700'
-                            }`}>
-                              {classItem.status}
-                            </span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                ) : (
-                  // Sectors List View
-                  <div className="space-y-2">
-                    {sectors.length === 0 ? (
-                      <p className="text-gray-600 text-center py-4">No sectors available.</p>
-                    ) : (
-                      sectors.map((sector) => (
-                        <div
-                          key={sector.id}
-                          onClick={() => handleSectorSelect(sector)}
-                          className="p-4 border border-gray-200 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
-                        >
-                          <h4 className="font-semibold text-gray-900">{sector.name}</h4>
-                          <p className="text-sm text-gray-600 mt-1">{sector.description}</p>
-                          <span className={`inline-block text-xs px-2 py-1 rounded mt-2 ${
-                            sector.status === 'Active'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            {sector.status}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        {renderCreateClassModal()}
       </>
     );
   }
@@ -798,133 +820,7 @@ const TrainerHome = () => {
           </div>
         )}
 
-        {/* Create Class Modal */}
-        {showCreateClassModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg w-full max-w-2xl max-h-96 overflow-y-auto">
-              <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
-                <div className="flex items-center gap-3">
-                  {selectedSector && (
-                    <button
-                      onClick={handleBackToSectors}
-                      className="p-1 hover:bg-gray-100 rounded"
-                      title="Back to sectors"
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </button>
-                  )}
-                  <h2 className="text-xl font-bold text-gray-900">
-                    {selectedClassDetails 
-                      ? 'Create Class' 
-                      : selectedSector 
-                      ? `Courses in ${selectedSector.name}` 
-                      : 'Select a Sector'}
-                  </h2>
-                </div>
-                <button
-                  onClick={() => setShowCreateClassModal(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              <div className="p-6">
-                {loadingSectors ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader className="w-6 h-6 animate-spin text-blue-600" />
-                  </div>
-                ) : selectedClassDetails ? (
-                  // Class Details View - Form to Create Class
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-1">
-                        Class Name *
-                      </label>
-                      <input
-                        type="text"
-                        value={newClassForm.name}
-                        onChange={(e) => setNewClassForm({ ...newClassForm, name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Enter class name"
-                      />
-                    </div>
-                    <div className="flex gap-2 pt-4">
-                      <button
-                        onClick={() => setSelectedClassDetails(null)}
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-900 font-medium hover:bg-gray-50 transition-colors"
-                      >
-                        Back
-                      </button>
-                      <button
-                        onClick={handleCreateClass}
-                        disabled={loadingSectors}
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium transition-colors"
-                      >
-                        {loadingSectors ? 'Creating...' : 'Create Class'}
-                      </button>
-                    </div>
-                  </div>
-                ) : selectedSector ? (
-                  // Courses List View - Select a course to create a class from it
-                  <div className="space-y-2">
-                    {sectorClasses.length === 0 ? (
-                      <p className="text-gray-600 text-center py-4">No courses in this sector yet.</p>
-                    ) : (
-                      sectorClasses.map((classItem) => (
-                        <div
-                          key={classItem.id}
-                          onClick={() => handleClassSelect(classItem)}
-                          className="p-4 border border-gray-200 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
-                        >
-                          <h4 className="font-semibold text-gray-900">{classItem.name}</h4>
-                          <p className="text-sm text-gray-600 mt-1">{classItem.description}</p>
-                          <div className="flex gap-2 mt-2">
-                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                              {classItem.level || 'NC'}
-                            </span>
-                            <span className={`text-xs px-2 py-1 rounded ${
-                              classItem.status === 'Active'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-gray-100 text-gray-700'
-                            }`}>
-                              {classItem.status}
-                            </span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                ) : (
-                  // Sectors List View
-                  <div className="space-y-2">
-                    {sectors.length === 0 ? (
-                      <p className="text-gray-600 text-center py-4">No sectors available.</p>
-                    ) : (
-                      sectors.map((sector) => (
-                        <div
-                          key={sector.id}
-                          onClick={() => handleSectorSelect(sector)}
-                          className="p-4 border border-gray-200 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
-                        >
-                          <h4 className="font-semibold text-gray-900">{sector.name}</h4>
-                          <p className="text-sm text-gray-600 mt-1">{sector.description}</p>
-                          <span className={`inline-block text-xs px-2 py-1 rounded mt-2 ${
-                            sector.status === 'Active'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            {sector.status}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        {renderCreateClassModal()}
       </div>
   );
 };

@@ -72,7 +72,7 @@ const DashboardLayout = () => {
       return { title: 'Settings', subtitle: 'Configure your Learning Management System.' };
     }
     if (path === '/trainer/notifications') {
-      return { title: 'Notifications', subtitle: 'View all trainer notifications and updates.' };
+      return { title: 'Notifications', subtitle: 'View all trainor notifications and updates.' };
     }
     if (params.className) {
       // ClassDetail route - show class name as title and course name + level as subtitle

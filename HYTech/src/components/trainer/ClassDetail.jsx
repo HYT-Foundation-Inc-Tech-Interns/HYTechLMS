@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { BookOpen, Check, Users, Save, ExternalLink, Calendar, Send, FileText, Video, Copy, Share2, Loader, AlertCircle, X, MessageSquare, Paperclip, ClipboardList, Edit2, Trash2, Download, Eye, Plus, Settings, GripVertical, Upload, Bell, MessageCircle as DiscussionIcon, Award, Clock, Megaphone } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -11,9 +11,20 @@ const ClassDetail = () => {
   const { className } = useParams();
   const decodedClassName = decodeURIComponent(className);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { addToast } = useToast();
-  const [activeTab, setActiveTab] = useState('overview');
+  // Honor a ?tab= hint (e.g. a join-request notification deep-links to Trainees).
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'overview');
+
+  // Due/available date pickers are capped at one year from today (no far-future
+  // 2099 picks). getMaxDate() returns a fresh Date so validation tracks "now".
+  const getMaxDate = () => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 1);
+    return d;
+  };
+  const maxDateStr = getMaxDate().toISOString().split('T')[0];
   const [classData, setClassData] = useState(null);
   const [courseData, setCourseData] = useState(null);
   const [sectorName, setSectorName] = useState('N/A');
@@ -53,6 +64,7 @@ const ClassDetail = () => {
   const [formBuilderTitle, setFormBuilderTitle] = useState('');
   const [formBuilderDescription, setFormBuilderDescription] = useState('');
   const [formBuilderQuestions, setFormBuilderQuestions] = useState([]);
+  const [formBuilderAvailableDate, setFormBuilderAvailableDate] = useState('');
   const [formBuilderDueDate, setFormBuilderDueDate] = useState('');
   const [formBuilderPoints, setFormBuilderPoints] = useState('100');
   const [currentFormQuestionType, setCurrentFormQuestionType] = useState('multiple-choice');
@@ -77,6 +89,8 @@ const ClassDetail = () => {
   const [quizDescription, setQuizDescription] = useState('');
   const [quizTimeLimit, setQuizTimeLimit] = useState('');
   const [quizPoints, setQuizPoints] = useState('100');
+  const [quizAvailableDate, setQuizAvailableDate] = useState('');
+  const [quizDueDate, setQuizDueDate] = useState('');
   const [isSubmittingQuiz, setIsSubmittingQuiz] = useState(false);
   const [isPublishingQuiz, setIsPublishingQuiz] = useState(false);
   const [currentQuizDraftId, setCurrentQuizDraftId] = useState(null);
@@ -174,7 +188,7 @@ const ClassDetail = () => {
         
         // If still no avatar, generate one from initials
         if (!avatar) {
-          const initials = (user?.displayName || user?.email || 'Trainer')
+          const initials = (user?.displayName || user?.email || 'Trainor')
             .split(' ')
             .map(n => n[0])
             .join('')
@@ -250,7 +264,7 @@ const ClassDetail = () => {
                 try {
                   const studentProfile = await getUserProfile(enrollment.studentId);
                   // Try multiple name variations
-                  let studentName = 'Unknown Student';
+                  let studentName = 'Unknown Trainee';
                   
                   // Check various name fields in order of preference
                   if (studentProfile) {
@@ -280,7 +294,7 @@ const ClassDetail = () => {
                   console.error('Error fetching student profile:', error);
                   return {
                     ...enrollment,
-                    studentName: 'Unknown Student',
+                    studentName: 'Unknown Trainee',
                     studentEmail: 'N/A',
                     studentAvatar: null
                   };
@@ -554,9 +568,9 @@ const ClassDetail = () => {
       let formattedDueDate = null;
       if (formBuilderDueDate) {
         const dueDate = new Date(formBuilderDueDate);
-        // Reject nonsensical years (e.g. a 6-digit year typed into the picker).
-        if (isNaN(dueDate.getTime()) || dueDate.getFullYear() > 2099) {
-          addToast('Please enter a valid due date (year 2099 or earlier).', 'error');
+        // Cap at one year out (and reject nonsensical typed-in years).
+        if (isNaN(dueDate.getTime()) || dueDate > getMaxDate()) {
+          addToast('Please enter a due date within the next year.', 'error');
           setIsSubmittingItem(false);
           return;
         }
@@ -564,15 +578,47 @@ const ClassDetail = () => {
         formattedDueDate = dueDate.toISOString();
       }
 
+      // Available-from date (when students can start). Defaults to now (open).
+      let formattedAvailableDate = null;
+      if (formBuilderAvailableDate) {
+        const availableDate = new Date(formBuilderAvailableDate);
+        if (isNaN(availableDate.getTime()) || availableDate > getMaxDate()) {
+          addToast('Please enter an available date within the next year.', 'error');
+          setIsSubmittingItem(false);
+          return;
+        }
+        availableDate.setHours(0, 0, 0, 0);
+        formattedAvailableDate = availableDate.toISOString();
+      }
+
+      // Available date must not be after the due date.
+      if (formattedAvailableDate && formattedDueDate && formattedAvailableDate > formattedDueDate) {
+        addToast('Available date cannot be after the due date.', 'error');
+        setIsSubmittingItem(false);
+        return;
+      }
+
       if (isFormBuilderEditMode && editingAssignmentId) {
         const updatedAssignmentData = {
           title: formBuilderTitle.trim(),
           message: formBuilderDescription.trim(),
+          description: formBuilderDescription.trim(),
           questions: formBuilderQuestions,
+          availableDate: formattedAvailableDate,
           dueDate: formattedDueDate,
           points: parseInt(formBuilderPoints) || 100,
           lastModified: new Date().toISOString()
         };
+
+        // Persist the edit to Firestore so it survives reloads and reaches students.
+        await updateAssignment(classData.id, editingAssignmentId, {
+          title: updatedAssignmentData.title,
+          description: updatedAssignmentData.description,
+          questions: updatedAssignmentData.questions,
+          availableDate: formattedAvailableDate,
+          dueDate: formattedDueDate,
+          points: updatedAssignmentData.points,
+        });
 
         setActivityFeed((prev) =>
           prev.map((item) =>
@@ -595,6 +641,7 @@ const ClassDetail = () => {
         setFormBuilderTitle('');
         setFormBuilderDescription('');
         setFormBuilderQuestions([]);
+        setFormBuilderAvailableDate('');
         setFormBuilderDueDate('');
         setFormBuilderPoints('100');
         setShowCreateModal(false);
@@ -607,9 +654,10 @@ const ClassDetail = () => {
           description: formBuilderDescription.trim(),
           type: createType,
           questions: formBuilderQuestions,
+          availableDate: formattedAvailableDate,
           dueDate: formattedDueDate,
           points: parseInt(formBuilderPoints) || 100,
-          createdBy: user?.displayName || user?.email || 'Trainer',
+          createdBy: user?.displayName || user?.email || 'Trainor',
           createdById: user?.uid,
           status: mode === 'draft' ? 'draft' : 'active'
         };
@@ -625,6 +673,7 @@ const ClassDetail = () => {
               title: itemData.title,
               description: itemData.description,
               type: itemData.type,
+              availableDate: itemData.availableDate,
               dueDate: itemData.dueDate,
               points: itemData.points,
               questions: itemData.questions,
@@ -638,6 +687,7 @@ const ClassDetail = () => {
               author: itemData.createdBy,
               authorId: itemData.createdById,
               createdByAvatar: currentUserAvatar || null,
+              availableDate: itemData.availableDate,
               dueDate: itemData.dueDate,
               points: itemData.points,
               questions: itemData.questions,
@@ -655,6 +705,7 @@ const ClassDetail = () => {
           title: itemData.title,
           description: itemData.description,
           type: itemData.type,
+          availableDate: itemData.availableDate,
           dueDate: itemData.dueDate,
           points: itemData.points,
           questions: itemData.questions,
@@ -670,6 +721,7 @@ const ClassDetail = () => {
         setFormBuilderTitle('');
         setFormBuilderDescription('');
         setFormBuilderQuestions([]);
+        setFormBuilderAvailableDate('');
         setFormBuilderDueDate('');
         setFormBuilderPoints('100');
         setShowCreateModal(false);
@@ -700,7 +752,7 @@ const ClassDetail = () => {
       const materialData = {
         title: materialTitle.trim(),
         description: materialDescription.trim(),
-        author: user?.displayName || user?.email || 'Trainer',
+        author: user?.displayName || user?.email || 'Trainor',
         authorId: user?.uid,
         attachments: [],
         filesBase64: [],
@@ -763,7 +815,7 @@ const ClassDetail = () => {
         setCurrentMaterialId(savedMaterial.id);
         setMaterials(prev => [savedMaterial, ...prev]);
 
-        addToast('Material saved as draft! Click "Publish" to make it visible to students.', 'success');
+        addToast('Material saved as draft! Click "Publish" to make it visible to trainees.', 'success');
       }
 
       // Don't close modal - allow user to publish or continue editing
@@ -794,7 +846,7 @@ const ClassDetail = () => {
         )
       );
 
-      addToast('Material published successfully! Students can now see it.', 'success');
+      addToast('Material published successfully! Trainees can now see it.', 'success');
 
       // Close modal and reset form
       setShowCreateModal(false);
@@ -831,7 +883,7 @@ const ClassDetail = () => {
         )
       );
 
-      addToast('Material unpublished. Students can no longer see it.', 'success');
+      addToast('Material unpublished. Trainees can no longer see it.', 'success');
     } catch (error) {
       console.error('Error unpublishing material:', error);
       addToast(`Failed to unpublish material: ${error.message}`, 'error');
@@ -868,7 +920,7 @@ const ClassDetail = () => {
       const topicData = {
         title: topicTitle.trim(),
         description: topicDescription.trim(),
-        author: user?.displayName || user?.email || 'Trainer',
+        author: user?.displayName || user?.email || 'Trainor',
         authorId: user?.uid,
       };
 
@@ -876,7 +928,7 @@ const ClassDetail = () => {
       if (!selectedTopicId) {
         const savedTopic = await createTopic(classData.id, topicData);
         setTopics(prev => [savedTopic, ...prev]);
-        addToast('Topic saved as draft! Click "Publish" to make it visible to students.', 'success');
+        addToast('Topic saved as draft! Click "Publish" to make it visible to trainees.', 'success');
       } else {
         // EDIT MODE - Update existing topic
         await updateTopic(classData.id, selectedTopicId, topicData);
@@ -939,7 +991,7 @@ const ClassDetail = () => {
         )
       );
 
-      addToast('Topic unpublished. Students can no longer see it.', 'success');
+      addToast('Topic unpublished. Trainees can no longer see it.', 'success');
     } catch (error) {
       console.error('Error unpublishing topic:', error);
       addToast(`Failed to unpublish topic: ${error.message}`, 'error');
@@ -1081,7 +1133,7 @@ const ClassDetail = () => {
       const announcementData = {
         title: 'Announcement',
         message: modalAnnouncementText.trim(),
-        author: user?.displayName || user?.email || 'Trainer',
+        author: user?.displayName || user?.email || 'Trainor',
         authorId: user?.uid,
         attachments: [],
         createdAt: new Date().toISOString()
@@ -1182,7 +1234,7 @@ const ClassDetail = () => {
       const announcementData = {
         title: '',
         message: announcementText.trim(),
-        author: user?.displayName || user?.email || 'Trainer',
+        author: user?.displayName || user?.email || 'Trainor',
         authorId: user?.uid,
         authorAvatar: currentUserAvatar || null, // Use the pre-fetched avatar
         attachments: [],
@@ -1223,10 +1275,10 @@ const ClassDetail = () => {
       return;
     }
     try {
+      // Only update the text — leave the existing title and attachments intact
+      // (passing attachments: [] here previously wiped them on every edit).
       await updateAnnouncement(classData.id, announcementId, {
-        title: 'Announcement',
         message: newMessage.trim(),
-        attachments: []
       });
       addToast('Announcement updated successfully!', 'success');
       setEditingAnnouncementId(null);
@@ -1479,7 +1531,7 @@ const ClassDetail = () => {
         addToast(`${studentName} has been removed from the class`, 'success');
       } catch (err) {
         console.error('Error removing student:', err);
-        addToast('Failed to remove student', 'error');
+        addToast('Failed to remove trainee', 'error');
       }
     }
   };
@@ -1498,7 +1550,7 @@ const ClassDetail = () => {
         addToast(`${studentName} has been marked as graduated and will receive a certificate!`, 'success');
       } catch (err) {
         console.error('Error graduating student:', err);
-        addToast('Failed to mark student as graduated', 'error');
+        addToast('Failed to mark trainee as graduated', 'error');
       }
     }
   };
@@ -1513,7 +1565,7 @@ const ClassDetail = () => {
       setEnrollments((prev) =>
         prev.map((e) => (e.id === enrollment.id ? { ...e, status: 'active', joinedAt: new Date().toISOString() } : e))
       );
-      addToast(`${enrollment.studentName || 'Student'} approved and added to the class.`, 'success');
+      addToast(`${enrollment.studentName || 'Trainee'} approved and added to the class.`, 'success');
     } catch (err) {
       console.error('Error approving join request:', err);
       addToast('Failed to approve request', 'error');
@@ -1624,13 +1676,13 @@ const ClassDetail = () => {
     }
     if (!newTaskDesc.trim()) {
       // Submission tasks have no questions, so the instructions ARE the prompt.
-      addToast('Add instructions so students know what to submit.', 'error');
+      addToast('Add instructions so trainees know what to submit.', 'error');
       return;
     }
     if (newTaskDue) {
       const parsedDue = new Date(newTaskDue);
-      if (isNaN(parsedDue.getTime()) || parsedDue.getFullYear() > 2099) {
-        addToast('Please enter a valid due date (year 2099 or earlier).', 'error');
+      if (isNaN(parsedDue.getTime()) || parsedDue > getMaxDate()) {
+        addToast('Please enter a due date within the next year.', 'error');
         return;
       }
     }
@@ -1640,7 +1692,7 @@ const ClassDetail = () => {
         title: newTaskTitle.trim(),
         description: newTaskDesc.trim(),
         type: 'Submission',
-        author: user?.displayName || user?.email || 'Trainer',
+        author: user?.displayName || user?.email || 'Trainor',
         authorId: user?.uid,
         dueDate: newTaskDue || null,
         points: parseInt(newTaskPoints, 10) || 100,
@@ -1678,7 +1730,7 @@ const ClassDetail = () => {
 
   const exportGradebookCsv = () => {
     if (!gradebook) return;
-    const header = ['Student', ...gradebook.columns.map((c) => c.title), 'Average'];
+    const header = ['Trainee', ...gradebook.columns.map((c) => c.title), 'Average'];
     const lines = [header.join(',')];
     gradebook.rows.forEach((row) => {
       const cells = row.cells.map((c) => (c.score === null || c.score === undefined ? '' : c.score));
@@ -1704,7 +1756,7 @@ const ClassDetail = () => {
       const link = `https://meet.google.com/qqi-nwwk-txb`;
       setMeetingLink(link);
       
-      const trainerName = user?.displayName || courseData?.trainer || 'Trainer';
+      const trainerName = user?.displayName || courseData?.trainer || 'Trainor';
       
       const meetingData = {
         id: meetingId,
@@ -1751,6 +1803,8 @@ const ClassDetail = () => {
       setQuizDescription('');
       setQuizTimeLimit('');
       setQuizPoints('100');
+      setQuizAvailableDate('');
+      setQuizDueDate('');
       setAssessmentSettings({
         shuffleQuestions: false,
         shuffleAnswers: false,
@@ -1775,6 +1829,7 @@ const ClassDetail = () => {
       setFormBuilderDescription('');
       setFormBuilderQuestions([]);
       setCurrentAssignmentDraftId(null);
+      setFormBuilderAvailableDate('');
       setFormBuilderDueDate('');
       setFormBuilderPoints('100');
       setIsFormBuilderEditMode(false);
@@ -1878,7 +1933,9 @@ const ClassDetail = () => {
         totalPoints: parseInt(quizPoints) || 100,
         questions: quizQuestions,
         settings: assessmentSettings,
-        author: user?.displayName || 'Trainer',
+        availableDate: quizAvailableDate ? new Date(new Date(quizAvailableDate).setHours(0, 0, 0, 0)).toISOString() : null,
+        dueDate: quizDueDate ? new Date(new Date(quizDueDate).setHours(23, 59, 0, 0)).toISOString() : null,
+        author: user?.displayName || 'Trainor',
         authorId: user?.uid,
         createdByAvatar: null,
         status: 'draft'
@@ -1928,6 +1985,8 @@ const ClassDetail = () => {
         totalPoints: parseInt(quizPoints) || 100,
         questions: quizQuestions,
         settings: assessmentSettings,
+        availableDate: quizAvailableDate ? new Date(new Date(quizAvailableDate).setHours(0, 0, 0, 0)).toISOString() : null,
+        dueDate: quizDueDate ? new Date(new Date(quizDueDate).setHours(23, 59, 0, 0)).toISOString() : null,
         status: 'active'
       });
 
@@ -1942,6 +2001,8 @@ const ClassDetail = () => {
       setQuizDescription('');
       setQuizTimeLimit('');
       setQuizPoints('100');
+      setQuizAvailableDate('');
+      setQuizDueDate('');
       setQuizQuestions([]);
       setCurrentQuestionType('multiple-choice');
       setAssessmentType('quiz');
@@ -2027,7 +2088,7 @@ const ClassDetail = () => {
     { id: 'assessments', label: 'Assessments', icon: FileText },
     { id: 'responses', label: 'Responses', icon: FileText },
     { id: 'grades', label: 'Grades', icon: Award },
-    { id: 'students', label: 'Students', icon: Users },
+    { id: 'students', label: 'Trainees', icon: Users },
   ];
 
   const actions = [
@@ -2093,7 +2154,7 @@ const ClassDetail = () => {
                       </div>
                       <div className="flex items-center gap-2 text-white/70">
                         <Users className="w-4 h-4" />
-                        <span>{enrollments.length} students enrolled</span>
+                        <span>{enrollments.length} trainees enrolled</span>
                       </div>
                     </div>
                   </div>
@@ -2266,7 +2327,7 @@ const ClassDetail = () => {
                       />
                     ) : (
                       <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                        {(user?.displayName || user?.email || 'Trainer').split(' ').map(n => n[0]).join('').toUpperCase()}
+                        {(user?.displayName || user?.email || 'Trainor').split(' ').map(n => n[0]).join('').toUpperCase()}
                       </div>
                     )}
                     <div className="flex-1">
@@ -2372,6 +2433,21 @@ const ClassDetail = () => {
                                   placeholder="Edit announcement..."
                                   rows="3"
                                 />
+                                {Array.isArray(item.attachments) && item.attachments.length > 0 && (
+                                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                                    <p className="text-xs font-medium text-gray-500 mb-2">
+                                      {item.attachments.length} attachment{item.attachments.length === 1 ? '' : 's'} — kept when you save
+                                    </p>
+                                    <div className="space-y-1">
+                                      {item.attachments.map((att, idx) => (
+                                        <div key={idx} className="flex items-center gap-2 text-sm text-gray-700">
+                                          <Paperclip className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                                          <span className="truncate">{att.name || att.fileName || att.title || `Attachment ${idx + 1}`}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => handleEditAnnouncement(item.id, editingAnnouncementText)}
@@ -2400,12 +2476,12 @@ const ClassDetail = () => {
                                   {item.authorAvatar ? (
                                     <img 
                                       src={item.authorAvatar} 
-                                      alt={item.author || 'Trainer'}
+                                      alt={item.author || 'Trainor'}
                                       className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-gray-200"
                                     />
                                   ) : (
                                     <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                                      {(item.author || 'Trainer').split(' ').map(n => n[0]).join('').toUpperCase()}
+                                      {(item.author || 'Trainor').split(' ').map(n => n[0]).join('').toUpperCase()}
                                     </div>
                                   )}
                                   <div className="absolute -bottom-0 -right-0 w-5 h-5 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 border-2 border-white shadow-sm">
@@ -2417,7 +2493,7 @@ const ClassDetail = () => {
                                 <div className="flex-1 min-w-0">
                                   {/* Author & Action */}
                                   <div className="mb-1">
-                                    <span className="font-semibold text-gray-900">{item.author || 'Trainer'}</span>
+                                    <span className="font-semibold text-gray-900">{item.author || 'Trainor'}</span>
                                     <span className="text-gray-600 ml-1">made an announcement:</span>
                                   </div>
 
@@ -2499,12 +2575,12 @@ const ClassDetail = () => {
                                 {item.authorAvatar ? (
                                   <img 
                                     src={item.authorAvatar} 
-                                    alt={item.author || 'Trainer'}
+                                    alt={item.author || 'Trainor'}
                                     className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-gray-200"
                                   />
                                 ) : (
                                   <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                                    {(item.author || 'Trainer').split(' ').map(n => n[0]).join('').toUpperCase()}
+                                    {(item.author || 'Trainor').split(' ').map(n => n[0]).join('').toUpperCase()}
                                   </div>
                                 )}
                                 <div className="absolute -bottom-0 -right-0 w-5 h-5 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 border-2 border-white shadow-sm">
@@ -2516,7 +2592,7 @@ const ClassDetail = () => {
                               <div className="flex-1 min-w-0">
                                 {/* Author & Action */}
                                 <div className="mb-1">
-                                  <span className="font-semibold text-gray-900">{item.author || 'Trainer'}</span>
+                                  <span className="font-semibold text-gray-900">{item.author || 'Trainor'}</span>
                                   <span className="text-gray-600 ml-1">posted an assignment</span>
                                 </div>
 
@@ -3248,7 +3324,7 @@ const ClassDetail = () => {
           </div>
         )}
 
-        {/* Students Tab */}
+        {/* Trainees Tab */}
         {activeTab === 'students' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
@@ -3261,7 +3337,7 @@ const ClassDetail = () => {
                 </div>
               </div>
               <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm">
-                <p className="text-gray-500 text-sm">Trainers</p>
+                <p className="text-gray-500 text-sm">Trainors</p>
                 <div className="mt-2 text-4xl font-bold text-gray-900">1</div>
                 <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-purple-50 px-3 py-2 text-sm text-purple-700">
                   <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-purple-100">T</span>
@@ -3269,7 +3345,7 @@ const ClassDetail = () => {
                 </div>
               </div>
               <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm">
-                <p className="text-gray-500 text-sm">Active Students</p>
+                <p className="text-gray-500 text-sm">Active Trainees</p>
                 <div className="mt-2 text-4xl font-bold text-gray-900">{enrollments.filter(e => e.status !== 'completed').length}</div>
                 <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
                   <Users className="w-4 h-4" />
@@ -3301,8 +3377,8 @@ const ClassDetail = () => {
               <div className="lg:col-span-3 bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
                 <div className="p-5 border-b border-gray-100 flex items-center justify-between">
                   <div>
-                    <h3 className="font-bold text-gray-900 text-lg">Students ({enrollments.filter((e) => e.status !== 'pending').length})</h3>
-                    <p className="text-sm text-gray-500 mt-1">All students including graduated ones in this class</p>
+                    <h3 className="font-bold text-gray-900 text-lg">Trainees ({enrollments.filter((e) => e.status !== 'pending').length})</h3>
+                    <p className="text-sm text-gray-500 mt-1">All trainees including graduated ones in this class</p>
                   </div>
                 </div>
 
@@ -3316,7 +3392,7 @@ const ClassDetail = () => {
                       </h4>
                       <div className="space-y-2">
                         {enrollments.filter((e) => e.status === 'pending').map((enrollment) => {
-                          const displayName = enrollment.studentName || enrollment.name || 'Student';
+                          const displayName = enrollment.studentName || enrollment.name || 'Trainee';
                           const email = enrollment.studentEmail || enrollment.email || 'N/A';
                           return (
                             <div key={enrollment.id} className="flex items-center justify-between gap-3 rounded-xl bg-white border border-amber-100 p-3">
@@ -3351,7 +3427,7 @@ const ClassDetail = () => {
                       <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-blue-100 text-blue-600">
                         <Users className="w-10 h-10" />
                       </div>
-                      <h4 className="text-2xl font-bold text-gray-900">Add Your First Student</h4>
+                      <h4 className="text-2xl font-bold text-gray-900">Add Your First Trainee</h4>
                       <p className="mx-auto mt-3 max-w-md text-gray-500">
                         Share the class code or send email invitations to get students enrolled.
                       </p>
@@ -3379,7 +3455,7 @@ const ClassDetail = () => {
                   ) : (
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
                       {enrollments.filter((e) => e.status !== 'pending').map((enrollment) => {
-                        const displayName = enrollment.studentName || enrollment.name || 'Student';
+                        const displayName = enrollment.studentName || enrollment.name || 'Trainee';
                         const email = enrollment.studentEmail || enrollment.email || 'N/A';
                         const initials = displayName
                           .split(' ')
@@ -3457,8 +3533,17 @@ const ClassDetail = () => {
         {activeTab === 'assessments' && (
           <div className="bg-white rounded-lg p-8 border border-gray-200">
             <div className="mb-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-6">Assessments</h3>
-              
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-gray-900">Assessments</h3>
+                <button
+                  onClick={() => handleCreateItem('assignment')}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Assessment
+                </button>
+              </div>
+
               {/* Combined assessments and assignments */}
               {(() => {
                 const allAssessments = [...(assessments || []), ...(assignments || [])];
@@ -3580,14 +3665,14 @@ const ClassDetail = () => {
             ) : !gradebook || gradebook.rows.length === 0 ? (
               <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
                 <p className="text-gray-500 text-lg font-medium">No grades yet</p>
-                <p className="text-gray-400 text-sm mt-2">Quiz scores and graded submissions appear here once students are enrolled and assessed</p>
+                <p className="text-gray-400 text-sm mt-2">Quiz scores and graded submissions appear here once trainees are enrolled and assessed</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="border-b-2 border-gray-200 bg-gray-50">
-                      <th className="px-4 py-3 text-left font-semibold text-gray-900 sticky left-0 bg-gray-50">Student</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-900 sticky left-0 bg-gray-50">Trainee</th>
                       {gradebook.columns.map((c) => (
                         <th key={c.id} className="px-4 py-3 text-center font-semibold text-gray-700 whitespace-nowrap">
                           {c.title}
@@ -3634,7 +3719,7 @@ const ClassDetail = () => {
               {/* Assessment Selection */}
               {!selectedAssessmentForResponses ? (
                 <div className="space-y-6">
-                  <p className="text-gray-600">Select an assessment to view and analyze student responses:</p>
+                  <p className="text-gray-600">Select an assessment to view and analyze trainee responses:</p>
                   {(() => {
                     const allAssessments = [...(assessments || []), ...(assignments || [])];
                     return allAssessments.length > 0 ? (
@@ -3683,7 +3768,7 @@ const ClassDetail = () => {
                     ) : (
                       <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
                         <p className="text-gray-500 text-lg font-medium">No assessments yet</p>
-                        <p className="text-gray-400 text-sm mt-2">Create assessments to start receiving student responses</p>
+                        <p className="text-gray-400 text-sm mt-2">Create assessments to start receiving trainee responses</p>
                       </div>
                     );
                   })()}
@@ -3717,7 +3802,7 @@ const ClassDetail = () => {
                       {itemSubmissions.length === 0 ? (
                         <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
                           <p className="text-gray-500 text-lg font-medium">No submissions yet</p>
-                          <p className="text-gray-400 text-sm mt-2">Student submissions will appear here for grading</p>
+                          <p className="text-gray-400 text-sm mt-2">Trainee submissions will appear here for grading</p>
                         </div>
                       ) : (
                         itemSubmissions.map((sub) => (
@@ -3801,7 +3886,7 @@ const ClassDetail = () => {
                       <table className="min-w-full">
                         <thead>
                           <tr className="border-b-2 border-gray-200 bg-gray-50">
-                            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Student</th>
+                            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Trainee</th>
                             <th className="px-6 py-3 text-center text-sm font-semibold text-gray-900">Score</th>
                             <th className="px-6 py-3 text-center text-sm font-semibold text-gray-900">Percentage</th>
                             <th className="px-6 py-3 text-center text-sm font-semibold text-gray-900">Status</th>
@@ -3868,7 +3953,7 @@ const ClassDetail = () => {
                   ) : selectedAssessmentForResponses.type !== 'Submission' ? (
                     <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
                       <p className="text-gray-500 text-lg font-medium">No responses yet</p>
-                      <p className="text-gray-400 text-sm mt-2">Students who complete this assessment will appear here</p>
+                      <p className="text-gray-400 text-sm mt-2">Trainees who complete this assessment will appear here</p>
                     </div>
                   ) : null}
                 </div>
@@ -3986,7 +4071,7 @@ const ClassDetail = () => {
                     {createType === 'material' ? (currentMaterialId && materials.find(m => m.id === currentMaterialId)?.isPublished ? 'Edit Material' : 'Add Material') : createType === 'topic' ? (selectedTopicId ? 'Edit Topic' : 'Create Topic') : 'Create Assignment'}
                   </h2>
                   <p className="text-gray-500 text-sm mt-1">
-                    {createType === 'material' ? (currentMaterialId && materials.find(m => m.id === currentMaterialId)?.isPublished ? 'Update learning resources for your class' : 'Upload learning resources for your class') : createType === 'topic' ? (selectedTopicId ? 'Update your discussion topic' : 'Create a new discussion topic') : 'Create an assignment for your students'}
+                    {createType === 'material' ? (currentMaterialId && materials.find(m => m.id === currentMaterialId)?.isPublished ? 'Update learning resources for your class' : 'Upload learning resources for your class') : createType === 'topic' ? (selectedTopicId ? 'Update your discussion topic' : 'Create a new discussion topic') : 'Create an assignment for your trainees'}
                   </p>
                 </div>
                 <button 
@@ -4264,7 +4349,7 @@ const ClassDetail = () => {
                         ) : (
                           <>
                             <Upload className="w-4 h-4" />
-                            Publish to Students
+                            Publish to Trainees
                           </>
                         )}
                       </button>
@@ -4555,8 +4640,23 @@ const ClassDetail = () => {
                   </div>
                 </div>
 
-                {/* Due Date & Points */}
-                <div className="grid grid-cols-2 gap-4">
+                {/* Available date, Due Date & Points */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Available From</label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      <input
+                        type="date"
+                        value={formBuilderAvailableDate}
+                        onChange={(e) => setFormBuilderAvailableDate(e.target.value)}
+                        min={new Date().toISOString().split('T')[0]}
+                        max={maxDateStr}
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Blank = open immediately</p>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
                     <div className="relative">
@@ -4565,8 +4665,8 @@ const ClassDetail = () => {
                         type="date"
                         value={formBuilderDueDate}
                         onChange={(e) => setFormBuilderDueDate(e.target.value)}
-                        min={new Date().toISOString().split('T')[0]}
-                        max="2099-12-31"
+                        min={formBuilderAvailableDate || new Date().toISOString().split('T')[0]}
+                        max={maxDateStr}
                         className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                       />
                     </div>
@@ -4574,7 +4674,7 @@ const ClassDetail = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Points</label>
-                    <input 
+                    <input
                       type="number"
                       value={formBuilderPoints}
                       onChange={(e) => setFormBuilderPoints(e.target.value)}
@@ -4679,7 +4779,7 @@ const ClassDetail = () => {
         </div>
       )}
 
-      {/* Student Response Detail Modal (quiz/assessment "View Details") */}
+      {/* Trainee Response Detail Modal (quiz/assessment "View Details") */}
       {selectedResponseDetail && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl animate-slide-up my-8 max-h-[90vh] flex flex-col">
@@ -4818,22 +4918,19 @@ const ClassDetail = () => {
                       onClick={() => {
                         // Populate form builder with current assignment data
                         setFormBuilderTitle(selectedAssignmentDetail.title || '');
-                        setFormBuilderDescription(selectedAssignmentDetail.message || '');
+                        setFormBuilderDescription(selectedAssignmentDetail.message || selectedAssignmentDetail.description || '');
                         setFormBuilderQuestions(selectedAssignmentDetail.questions || []);
-                        
-                        // Safely parse dueDate (could be string, Date, or Firestore Timestamp)
-                        let dueDateString = '';
-                        if (selectedAssignmentDetail.dueDate) {
-                          if (typeof selectedAssignmentDetail.dueDate === 'string') {
-                            dueDateString = selectedAssignmentDetail.dueDate.split('T')[0];
-                          } else if (selectedAssignmentDetail.dueDate instanceof Date) {
-                            dueDateString = selectedAssignmentDetail.dueDate.toISOString().split('T')[0];
-                          } else if (selectedAssignmentDetail.dueDate.toDate) {
-                            // Firestore Timestamp
-                            dueDateString = selectedAssignmentDetail.dueDate.toDate().toISOString().split('T')[0];
-                          }
-                        }
-                        setFormBuilderDueDate(dueDateString);
+
+                        // Safely parse a date (string, Date, or Firestore Timestamp) → YYYY-MM-DD.
+                        const toDateInput = (val) => {
+                          if (!val) return '';
+                          if (typeof val === 'string') return val.split('T')[0];
+                          if (val instanceof Date) return val.toISOString().split('T')[0];
+                          if (val.toDate) return val.toDate().toISOString().split('T')[0];
+                          return '';
+                        };
+                        setFormBuilderAvailableDate(toDateInput(selectedAssignmentDetail.availableDate));
+                        setFormBuilderDueDate(toDateInput(selectedAssignmentDetail.dueDate));
                         setFormBuilderPoints(selectedAssignmentDetail.points?.toString() || '100');
                         
                         // Set edit mode and close current modal
@@ -4885,27 +4982,44 @@ const ClassDetail = () => {
                     )}
                   </div>
 
-                  {selectedAssignmentDetail.dueDate && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-1">
+                    <p className="text-sm text-gray-700">
+                      <span className="font-semibold">Available from:</span>{' '}
+                      {selectedAssignmentDetail.availableDate
+                        ? new Date(selectedAssignmentDetail.availableDate).toLocaleDateString()
+                        : 'Open immediately'}
+                    </p>
+                    <p className="text-sm text-gray-700">
+                      <span className="font-semibold">Due Date:</span>{' '}
+                      {selectedAssignmentDetail.dueDate
+                        ? `${new Date(selectedAssignmentDetail.dueDate).toLocaleDateString()} at 11:59 PM`
+                        : 'No due date'}
+                    </p>
+                    <p className="text-sm text-gray-700">
+                      <span className="font-semibold">Points:</span> {selectedAssignmentDetail.points}
+                    </p>
+                    {selectedAssignmentDetail.createdAt && (
                       <p className="text-sm text-gray-700">
-                        <span className="font-semibold">Due Date:</span> {new Date(selectedAssignmentDetail.dueDate).toLocaleDateString()} at 11:59 PM
+                        <span className="font-semibold">Created:</span>{' '}
+                        {new Date(
+                          selectedAssignmentDetail.createdAt?.toDate
+                            ? selectedAssignmentDetail.createdAt.toDate()
+                            : selectedAssignmentDetail.createdAt
+                        ).toLocaleDateString()}
                       </p>
-                      <p className="text-sm text-gray-700 mt-1">
-                        <span className="font-semibold">Points:</span> {selectedAssignmentDetail.points}
-                      </p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               )}
 
               {/* Responses Tab */}
               {assignmentDetailTab === 'responses' && (
                 <div className="space-y-4">
-                  <h3 className="font-semibold text-gray-900 mb-4">Student Responses</h3>
+                  <h3 className="font-semibold text-gray-900 mb-4">Trainee Responses</h3>
                   <div className="text-center py-12">
                     <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                     <p className="text-gray-600">No responses yet</p>
-                    <p className="text-gray-500 text-sm mt-1">Responses will appear here once students submit</p>
+                    <p className="text-gray-500 text-sm mt-1">Responses will appear here once trainees submit</p>
                   </div>
                 </div>
               )}
@@ -4918,11 +5032,11 @@ const ClassDetail = () => {
                     <div className="space-y-3">
                       <label className="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" defaultChecked className="w-5 h-5 rounded border-gray-300 text-blue-600" />
-                        <span className="text-sm text-gray-700">Allow students to submit responses</span>
+                        <span className="text-sm text-gray-700">Allow trainees to submit responses</span>
                       </label>
                       <label className="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" className="w-5 h-5 rounded border-gray-300 text-blue-600" />
-                        <span className="text-sm text-gray-700">Show correct answers to students</span>
+                        <span className="text-sm text-gray-700">Show correct answers to trainees</span>
                       </label>
                       <label className="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" className="w-5 h-5 rounded border-gray-300 text-blue-600" />
@@ -4966,7 +5080,7 @@ const ClassDetail = () => {
             </div>
             <div className="p-6 space-y-4">
               <p className="text-sm text-gray-500">
-                Students upload their work (text and/or files) for this task, and you grade each submission.
+                Trainees upload their work (text and/or files) for this task, and you grade each submission.
               </p>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Title <span className="text-red-500">*</span></label>
@@ -4991,7 +5105,7 @@ const ClassDetail = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Due date</label>
-                  <input type="date" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} min={new Date().toISOString().split('T')[0]} max="2099-12-31" className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  <input type="date" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} min={new Date().toISOString().split('T')[0]} max={maxDateStr} className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Points</label>
@@ -5010,12 +5124,12 @@ const ClassDetail = () => {
         </div>
       )}
 
-      {/* Invite Students Modal */}
+      {/* Invite Trainees Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-slide-up">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-gray-900">Invite Students</h2>
+              <h2 className="text-xl font-bold text-gray-900">Invite Trainees</h2>
               <button 
                 onClick={() => setShowInviteModal(false)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -5205,13 +5319,42 @@ const ClassDetail = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Total Points</label>
-                    <input 
+                    <input
                       type="number"
                       value={quizPoints}
                       onChange={(e) => setQuizPoints(e.target.value)}
                       placeholder="100"
                       className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Available From</label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      <input
+                        type="date"
+                        value={quizAvailableDate}
+                        onChange={(e) => setQuizAvailableDate(e.target.value)}
+                        min={new Date().toISOString().split('T')[0]}
+                        max={maxDateStr}
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Blank = open immediately</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      <input
+                        type="date"
+                        value={quizDueDate}
+                        onChange={(e) => setQuizDueDate(e.target.value)}
+                        min={quizAvailableDate || new Date().toISOString().split('T')[0]}
+                        max={maxDateStr}
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -5785,7 +5928,7 @@ const ClassDetail = () => {
                   )}
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900">{selectedPost.author || 'Trainer'}</p>
+                  <p className="font-semibold text-gray-900">{selectedPost.author || 'Trainor'}</p>
                   <p className="text-xs text-gray-500">
                     {formatAbsoluteTime(selectedPost.createdAt)}
                   </p>

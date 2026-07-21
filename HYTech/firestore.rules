@@ -71,6 +71,12 @@ service cloud.firestore {
       match /lmsExperience/{docId} {
         allow read, write: if isSelf(uid) || isAdmin();
       }
+
+      // Sensitive PII (phone, address, birthDate) lives here so it is NOT
+      // exposed by the org-wide `users` read. Only the owner and admins see it.
+      match /private/{docId} {
+        allow read, write: if isSelf(uid) || isAdmin();
+      }
     }
 
     // ==================== USER SETTINGS ====================
@@ -307,7 +313,9 @@ service cloud.firestore {
         || (isSignedIn() && request.resource.data.get('userId', '') == request.auth.uid);
       allow read: if isAdmin()
         || (isSignedIn() && resource.data.get('userId', '') == request.auth.uid);
-      allow update, delete: if false;
+      // Logs are immutable; admins may purge them for maintenance/history reset.
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     // ==================== STUDENT PROGRESS ====================

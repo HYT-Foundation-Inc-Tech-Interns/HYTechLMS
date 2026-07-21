@@ -65,7 +65,7 @@ const LandingPage = () => {
             </h1>
             
             <p className="text-xs sm:text-sm md:text-base lg:text-lg text-gray-200/90 leading-relaxed mb-5 sm:mb-6 md:mb-7 max-w-full lg:max-w-xl">
-              HYTech is a centralized learning management system designed to support structured training programs, simplify course management, and enhance collaboration between administrators, trainers, and students.
+              HYTech is a centralized learning management system designed to support structured training programs, simplify course management, and enhance collaboration between administrators, trainors, and trainees.
             </p>
 
             {/* CTA Button */}

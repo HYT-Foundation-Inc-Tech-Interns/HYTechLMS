@@ -18,7 +18,7 @@ const StudentDashboardLayout = () => {
   const [courseInfo, setCourseInfo] = useState(null);
   const [enrollments, setEnrollments] = useState(null); // null = still loading
 
-  // Students with no enrollment at all are held in the waiting room
+  // Trainees with no enrollment at all are held in the waiting room
   useEffect(() => {
     if (!user?.uid) {
       return undefined;
@@ -102,7 +102,7 @@ const StudentDashboardLayout = () => {
       return { title: 'Settings', subtitle: 'Configure your account and preferences.' };
     }
     if (path === '/student/notifications') {
-      return { title: 'Notifications', subtitle: 'View all student alerts and announcements.' };
+      return { title: 'Notifications', subtitle: 'View all trainee alerts and announcements.' };
     }
     return { title: '', subtitle: '' };
   };

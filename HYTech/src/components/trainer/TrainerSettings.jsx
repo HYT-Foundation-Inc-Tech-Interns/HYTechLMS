@@ -8,6 +8,7 @@ import MyCoursesCard from '../shared/MyCoursesCard';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
+import { getUserPrivateProfile, saveUserPrivateProfile } from '../../utils/firestoreService';
 
 const TrainerSettings = () => {
   const [activeTab, setActiveTab] = useState('profile');
@@ -58,7 +59,9 @@ useEffect(() => {
   }
 
   if (settingsData.profileForm) {
-    setProfileForm((prev) => ({ ...prev, ...settingsData.profileForm }));
+    // Sensitive fields come from the private subcollection, not userSettings.
+    const { phone: _p, birthDate: _b, ...publicPF } = settingsData.profileForm;
+    setProfileForm((prev) => ({ ...prev, ...publicPF }));
   }
   if (settingsData.trainerNotificationSettings) {
     setTrainerNotificationSettings((prev) => ({ ...prev, ...settingsData.trainerNotificationSettings }));
@@ -96,6 +99,7 @@ useEffect(() => {
 
       const data = userDoc.data() || {};
       const p = data.profile || {};
+      const priv = (await getUserPrivateProfile(uid)) || {};
       const fallbackName = String(data.name || '').trim().split(/\s+/);
       setProfileForm((prev) => ({
         ...prev,
@@ -103,9 +107,9 @@ useEffect(() => {
         middleName: data.middleName || p.middleName || prev.middleName,
         lastName: data.lastName || p.lastName || fallbackName.slice(1).join(' ') || prev.lastName,
         nameExtension: data.nameExtension || p.nameExtension || prev.nameExtension,
-        birthDate: data.birthDate || p.dateOfBirth || prev.birthDate,
+        birthDate: priv.birthDate || data.birthDate || p.dateOfBirth || prev.birthDate,
         email: auth?.currentUser?.email || data.email || prev.email,
-        phone: data.phone || p.phoneNumber || prev.phone,
+        phone: priv.phone || data.phone || p.phoneNumber || prev.phone,
         bio: data.bio || prev.bio,
       }));
       profileHydratedRef.current = true;
@@ -156,8 +160,10 @@ const handleSave = async () => {
       avatarBase64 = null;
     }
 
+    // Keep PII out of the world-readable userSettings copy.
+    const publicProfileForm = { ...profileForm, phone: '', birthDate: '' };
     await saveSettings({
-      profileForm,
+      profileForm: publicProfileForm,
       trainerNotificationSettings,
       appearanceSettings,
       privacySettings,
@@ -174,16 +180,19 @@ const handleSave = async () => {
           middleName: profileForm.middleName.trim(),
           lastName: profileForm.lastName.trim(),
           nameExtension: profileForm.nameExtension.trim(),
-          birthDate: profileForm.birthDate,
           name: fullName,
           email: auth?.currentUser?.email || profileForm.email,
-          phone: profileForm.phone.trim(),
           bio: profileForm.bio.trim(),
           updatedAt: serverTimestamp(),
           avatarBase64: avatarBase64 || null,
         },
         { merge: true }
       );
+      // Sensitive PII to the owner/admin-only private subcollection.
+      await saveUserPrivateProfile(uid, {
+        phone: profileForm.phone.trim(),
+        birthDate: profileForm.birthDate,
+      });
     }
 
     setAvatar(avatarBase64 || null);

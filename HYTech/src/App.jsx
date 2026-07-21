@@ -21,7 +21,7 @@ import IdRequests from './components/shared/IdRequests';
 import IncidentForms from './components/shared/IncidentForms';
 import StudentRequestId from './components/student/StudentRequestId';
 
-// Trainer imports
+// Trainor imports
 import DashboardLayout from './components/layout/DashboardLayout';
 import TrainerHome from './components/trainer/TrainerHome';
 import ClassDetail from './components/trainer/ClassDetail';
@@ -30,7 +30,7 @@ import SectorDetail from './components/trainer/SectorDetail';
 import ArchivedCourses from './components/trainer/ArchivedCourses';
 import TrainerSettings from './components/trainer/TrainerSettings';
 
-// Student imports
+// Trainee imports
 import StudentDashboardLayout from './components/student/StudentDashboardLayout';
 import StudentHome from './components/student/StudentHome';
 import StudentCourse from './components/student/StudentCourse';
@@ -95,7 +95,7 @@ function App() {
           <Route path="notifications" element={<NotificationsPage role="admin" />} />
         </Route>
 
-        {/* Trainer Dashboard Routes */}
+        {/* Trainor Dashboard Routes */}
         <Route
           path="/trainer"
           element={(
@@ -114,7 +114,7 @@ function App() {
           <Route path="notifications" element={<NotificationsPage role="trainer" />} />
         </Route>
 
-        {/* Student Dashboard Routes */}
+        {/* Trainee Dashboard Routes */}
         <Route
           path="/student"
           element={(

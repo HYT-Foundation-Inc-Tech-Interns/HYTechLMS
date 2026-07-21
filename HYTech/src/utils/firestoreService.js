@@ -22,6 +22,7 @@ import {
   deleteField,
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { TESDA_CATALOG, parseLevel } from '../data/tesdaCatalog';
 
 // ==================== USER OPERATIONS ====================
 
@@ -104,6 +105,48 @@ export const updateUserProfile = async (userId, updates) => {
     return true;
   } catch (error) {
     console.error('Error updating user profile:', error);
+    throw error;
+  }
+};
+
+// ==================== PRIVATE PROFILE (PII) ====================
+// Phone / address / birthDate are kept out of the org-wide-readable `users`
+// doc. They live in users/{uid}/private/profile, readable only by the owner
+// and admins (see firestore.rules).
+
+export const getUserPrivateProfile = async (userId) => {
+  try {
+    const ref = doc(db, 'users', userId, 'private', 'profile');
+    const snap = await getDoc(ref);
+    return snap.exists() ? snap.data() : null;
+  } catch (error) {
+    // A student reading someone else's private doc will be denied — that's fine.
+    console.warn('Could not read private profile:', error?.code || error?.message);
+    return null;
+  }
+};
+
+export const saveUserPrivateProfile = async (userId, fields = {}) => {
+  try {
+    const ref = doc(db, 'users', userId, 'private', 'profile');
+    await setDoc(ref, { ...fields, updatedAt: serverTimestamp() }, { merge: true });
+
+    // Best-effort: strip any legacy sensitive fields that used to live on the
+    // world-readable users doc (lazy migration as users re-save their profile).
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        phone: deleteField(),
+        address: deleteField(),
+        birthDate: deleteField(),
+        'profile.phoneNumber': deleteField(),
+        'profile.dateOfBirth': deleteField(),
+      });
+    } catch (cleanupErr) {
+      console.debug('Legacy PII cleanup skipped:', cleanupErr?.code);
+    }
+    return true;
+  } catch (error) {
+    console.error('Error saving private profile:', error);
     throw error;
   }
 };
@@ -391,7 +434,13 @@ export const getCoursesTemplates = async (filters = {}) => {
       id: doc.id,
       ...doc.data(),
     }));
-    
+
+    // Trainers only see programs an admin has switched on. Filter in-memory so
+    // we don't need a composite index on (sectorId, available).
+    if (filters.availableOnly) {
+      courses = courses.filter((c) => c.available === true);
+    }
+
     // Sort in-memory if we filtered (orderBy wasn't added)
     if (constraints.length > 0) {
       courses.sort((a, b) => {
@@ -400,7 +449,7 @@ export const getCoursesTemplates = async (filters = {}) => {
         return dateB - dateA;
       });
     }
-    
+
     return courses;
   } catch (error) {
     console.error('Error fetching course templates:', error);
@@ -537,31 +586,66 @@ export const createCourseTemplate = async (courseData, { sectorId = null } = {})
 };
 
 /**
- * Create a new class from course template (Trainer only) - saves to 'classes' collection
+ * Create a new class from course template (Trainor only) - saves to 'classes' collection
  */
 export const createCourse = async (courseData, { sectorId = null, trainerId = null } = {}) => {
   try {
     const classesRef = collection(db, 'classes');
-    
+
+    // `subjects` drives the class's modules but is not itself a class field —
+    // keep it off the class doc.
+    const { subjects: inlineSubjects, ...classFields } = courseData;
+
     const newCourse = {
-      ...courseData,
+      ...classFields,
       sectorId: sectorId || null,
       trainerId: trainerId || null,
-      status: courseData.status || 'Active',
+      status: classFields.status || 'Active',
       currentEnrollments: 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-    
+
     const docRef = await addDoc(classesRef, newCourse);
-    
+
+    // Seed the class's modules from the program's subjects. Each subject
+    // becomes an editable collapsible section (module) in the new class.
+    // A trainer-edited list is passed inline; otherwise read off the template.
+    try {
+      let subjects = Array.isArray(inlineSubjects) ? inlineSubjects : null;
+      if (!subjects && classFields.courseId) {
+        const template = await getCourseTemplateById(classFields.courseId).catch(() => null);
+        subjects = Array.isArray(template?.subjects) ? template.subjects : null;
+      }
+      if (subjects && subjects.length) {
+        const batch = writeBatch(db);
+        subjects.forEach((subject, index) => {
+          const title = (typeof subject === 'string' ? subject : subject?.title || '').trim();
+          if (!title) return;
+          const moduleRef = doc(collection(db, 'classes', docRef.id, 'modules'));
+          batch.set(moduleRef, {
+            title,
+            description: '',
+            order: index + 1,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        });
+        await batch.commit();
+      }
+    } catch (moduleErr) {
+      // A class with no seeded modules is still usable — the trainer can add
+      // them manually. Don't fail class creation over this.
+      console.warn('Could not seed class modules from subjects:', moduleErr?.message);
+    }
+
     // Log activity
     const actionBy = trainerId || 'admin';
     await logActivity(actionBy, 'create_class', 'classes', docRef.id, {
       className: courseData.name,
       sectorId: sectorId,
     });
-    
+
     return docRef.id;
   } catch (error) {
     console.error('Error creating class:', error);
@@ -589,7 +673,7 @@ export const updateCourseTemplate = async (courseId, updates) => {
 };
 
 /**
- * Update class (Trainer or Admin) - updates 'classes' collection
+ * Update class (Trainor or Admin) - updates 'classes' collection
  */
 export const updateCourse = async (courseId, updates) => {
   try {
@@ -605,6 +689,100 @@ export const updateCourse = async (courseId, updates) => {
     console.error('Error updating class:', error);
     throw error;
   }
+};
+
+/**
+ * Toggle whether a program (course template) is available to trainers.
+ * Admin-only (enforced by rules). Trainers only see programs with available:true.
+ */
+export const setCourseAvailability = async (courseId, available) => {
+  try {
+    await updateDoc(doc(db, 'courses', courseId), {
+      available: !!available,
+      updatedAt: serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error setting course availability:', error);
+    throw error;
+  }
+};
+
+/**
+ * Seed the full TESDA taxonomy (sectors + programs w/ subjects) into Firestore.
+ * Admin-only. Idempotent: existing sectors (by name) and programs (by
+ * sector+name) are reused/skipped, so re-running never duplicates.
+ *
+ * Programs are seeded with `available: false` — an admin must switch each one
+ * on before trainers can offer it.
+ *
+ * @returns {Promise<{sectorsCreated:number, programsCreated:number, programsSkipped:number}>}
+ */
+export const seedTesdaCatalog = async () => {
+  const norm = (s) => String(s || '').trim().toLowerCase();
+
+  // Existing data, so we can reconcile instead of blindly inserting.
+  const [existingSectors, existingCourses] = await Promise.all([
+    getSectors({}),
+    getCoursesTemplates({}),
+  ]);
+
+  const sectorByName = new Map(existingSectors.map((s) => [norm(s.name), s]));
+  // Key programs by "sectorId|programName" so the same program name under two
+  // different sectors stays distinct (e.g. Food Processing appears twice).
+  const courseKey = new Set(
+    existingCourses.map((c) => `${c.sectorId || ''}|${norm(c.name)}`)
+  );
+
+  let sectorsCreated = 0;
+  let programsCreated = 0;
+  let programsSkipped = 0;
+
+  for (const entry of TESDA_CATALOG) {
+    // Resolve (or create) the sector.
+    let sector = sectorByName.get(norm(entry.sector));
+    if (!sector) {
+      const created = await createSector({
+        name: entry.sector,
+        description: '',
+        status: 'Active',
+      });
+      sector = { id: created.id, name: entry.sector };
+      sectorByName.set(norm(entry.sector), sector);
+      sectorsCreated += 1;
+    }
+
+    // Create each program (course template) under the sector.
+    for (const program of entry.programs) {
+      const key = `${sector.id}|${norm(program.name)}`;
+      if (courseKey.has(key)) {
+        programsSkipped += 1;
+        continue;
+      }
+      await addDoc(collection(db, 'courses'), {
+        name: program.name,
+        description: '',
+        level: parseLevel(program.name),
+        sectorId: sector.id,
+        subjects: program.subjects, // editable module templates
+        available: false, // admin must enable before trainers can offer it
+        status: 'Active',
+        source: 'tesda-catalog',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      courseKey.add(key);
+      programsCreated += 1;
+    }
+  }
+
+  await logActivity('admin', 'seed_catalog', 'courses', 'tesda', {
+    sectorsCreated,
+    programsCreated,
+    programsSkipped,
+  });
+
+  return { sectorsCreated, programsCreated, programsSkipped };
 };
 
 /**
@@ -628,7 +806,7 @@ export const deleteCourse = async (courseId) => {
 };
 
 /**
- * Permanently delete a class (Trainer, from archived view)
+ * Permanently delete a class (Trainor, from archived view)
  */
 export const deleteClass = async (classId) => {
   try {
@@ -643,12 +821,12 @@ export const deleteClass = async (classId) => {
 // ==================== COURSE APPLICATIONS ====================
 
 /**
- * Student applies to a course
+ * Trainee applies to a course
  * Checks: No active enrollment
  */
 export const applyCourse = async (studentId, courseId) => {
   try {
-    // Students may enroll in multiple subjects, so no single-enrollment gate.
+    // Trainees may enroll in multiple subjects, so no single-enrollment gate.
     // Get course and trainer info
     const courseRef = doc(db, 'courses', courseId);
     const courseSnap = await getDoc(courseRef);
@@ -737,7 +915,7 @@ export const getCourseApplications = async (filters = {}) => {
 };
 
 /**
- * Trainer approves an application
+ * Trainor approves an application
  * This should trigger a Cloud Function to create enrollment atomically
  */
 export const approveApplication = async (applicationId) => {
@@ -759,7 +937,7 @@ export const approveApplication = async (applicationId) => {
 };
 
 /**
- * Trainer rejects an application
+ * Trainor rejects an application
  */
 export const rejectApplication = async (applicationId, reason = '') => {
   try {
@@ -779,7 +957,7 @@ export const rejectApplication = async (applicationId, reason = '') => {
 };
 
 // ==================== ID CARD REQUESTS ====================
-// Student raises an ID ticket -> class trainer approves/rejects -> admin
+// Trainee raises an ID ticket -> class trainer approves/rejects -> admin
 // (the "ID maker") sees the approved list and marks it completed.
 
 const sortByField = (items, field) =>
@@ -790,7 +968,7 @@ const sortByField = (items, field) =>
   });
 
 /**
- * Student creates an ID request (blocked if one is already pending/approved).
+ * Trainee creates an ID request (blocked if one is already pending/approved).
  */
 export const createIdRequest = async (
   studentId,
@@ -861,7 +1039,7 @@ export const getIdRequests = async (filters = {}) => {
 };
 
 /**
- * Trainer approves -> notify student + notify admins (the ID maker queue).
+ * Trainor approves -> notify student + notify admins (the ID maker queue).
  */
 export const approveIdRequest = async (requestId, reviewerUid = '') => {
   try {
@@ -892,7 +1070,7 @@ export const approveIdRequest = async (requestId, reviewerUid = '') => {
 };
 
 /**
- * Trainer rejects -> notify student.
+ * Trainor rejects -> notify student.
  */
 export const rejectIdRequest = async (requestId, reason = '', reviewerUid = '') => {
   try {
@@ -1110,7 +1288,7 @@ export const subscribeToStudentEnrollments = (studentId, callback) => {
 };
 
 /**
- * Join a class by class code (Student view)
+ * Join a class by class code (Trainee view)
  */
 export const joinClassByCode = async (studentId, classCode) => {
   try {
@@ -1131,7 +1309,7 @@ export const joinClassByCode = async (studentId, classCode) => {
     const classData = classDoc.data();
     const classId = classDoc.id;
 
-    // Students may hold several enrollments at once, but not duplicate the same
+    // Trainees may hold several enrollments at once, but not duplicate the same
     // class or re-join one they already have a request/seat in.
     const enrollmentsRef = collection(db, 'enrollments');
     const existingQ = query(
@@ -1200,7 +1378,7 @@ export const joinClassByCode = async (studentId, classCode) => {
           text: `${studentName} requested to join ${classData.name || 'your class'}. Approve them in the class roster.`,
           fromUid: studentId,
           fromName: studentName,
-          metadata: { classId, enrollmentId: docRef.id },
+          metadata: { classId, enrollmentId: docRef.id, className: classData.name || '' },
         });
       } catch (notifyErr) {
         console.warn('Could not notify trainer of join request:', notifyErr?.message);
@@ -1219,7 +1397,7 @@ export const joinClassByCode = async (studentId, classCode) => {
 };
 
 /**
- * Trainer approves a pending class-join request (pending -> active).
+ * Trainor approves a pending class-join request (pending -> active).
  */
 export const approveEnrollment = async (enrollmentId, { studentId, className } = {}) => {
   try {
@@ -1251,7 +1429,7 @@ export const approveEnrollment = async (enrollmentId, { studentId, className } =
 };
 
 /**
- * Get enrollments for a course (Trainer view)
+ * Get enrollments for a course (Trainor view)
  */
 export const getCourseEnrollments = async (courseId) => {
   try {
@@ -1415,7 +1593,7 @@ export const getCourseMaterials = async (courseId) => {
 };
 
 /**
- * Upload course material (Trainer only)
+ * Upload course material (Trainor only)
  */
 export const uploadCourseMaterial = async (
   courseId,
@@ -1443,7 +1621,7 @@ export const uploadCourseMaterial = async (
 };
 
 /**
- * Delete course material (Trainer only)
+ * Delete course material (Trainor only)
  */
 export const deleteCourseMaterial = async (courseId, materialId) => {
   try {
@@ -1614,6 +1792,38 @@ export const markAllNotificationsRead = async (uid) => {
 };
 
 /**
+ * Delete a single notification (recipient dismisses it).
+ */
+export const deleteNotification = async (notificationId) => {
+  try {
+    await deleteDoc(doc(db, 'notifications', notificationId));
+  } catch (error) {
+    console.warn('Error deleting notification:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete all of a user's notifications (clear the inbox).
+ */
+export const clearAllNotifications = async (uid) => {
+  try {
+    const notificationsRef = collection(db, 'notifications');
+    const snapshot = await getDocs(query(notificationsRef, where('toUid', '==', uid)));
+    if (snapshot.empty) return 0;
+    for (let i = 0; i < snapshot.docs.length; i += 450) {
+      const batch = writeBatch(db);
+      snapshot.docs.slice(i, i + 450).forEach((docSnap) => batch.delete(docSnap.ref));
+      await batch.commit();
+    }
+    return snapshot.docs.length;
+  } catch (error) {
+    console.warn('Error clearing notifications:', error);
+    throw error;
+  }
+};
+
+/**
  * Get all trainers (for student waiting room trainer picker)
  */
 export const getTrainers = async () => {
@@ -1627,6 +1837,115 @@ export const getTrainers = async () => {
       .filter((trainer) => String(trainer.status || 'Active').toLowerCase() === 'active');
   } catch (error) {
     console.error('Error fetching trainers:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all student users (for admin roster management pickers).
+ */
+export const getStudents = async () => {
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('role', '==', 'student'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  } catch (error) {
+    console.error('Error fetching students:', error);
+    throw error;
+  }
+};
+
+/**
+ * All enrollments for a class, any status (admin/trainer roster management).
+ */
+export const getClassEnrollments = async (classId) => {
+  try {
+    const enrollmentsRef = collection(db, 'enrollments');
+    const q = query(enrollmentsRef, where('classId', '==', classId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  } catch (error) {
+    console.error('Error fetching class enrollments:', error);
+    throw error;
+  }
+};
+
+/**
+ * Admin adds a student directly to a class (active enrollment, no approval).
+ * Rules permit admins to create enrollments in any state.
+ */
+export const adminAddStudentToClass = async (classId, student, classData = {}) => {
+  try {
+    const enrollmentsRef = collection(db, 'enrollments');
+    // Guard against duplicates.
+    const existingSnap = await getDocs(
+      query(enrollmentsRef, where('studentId', '==', student.id), where('classId', '==', classId))
+    );
+    if (!existingSnap.empty) {
+      const existing = existingSnap.docs[0].data();
+      if (existing.status === 'completed') {
+        throw new Error('That student already completed this class.');
+      }
+      throw new Error('That student is already enrolled (or has a pending request) in this class.');
+    }
+
+    const enrollmentData = {
+      studentId: student.id,
+      classId,
+      className: classData.name || 'Unnamed Class',
+      studentName: student.name || student.displayName || student.email || 'Trainee',
+      studentEmail: student.email || '',
+      status: 'active',
+      joinedAt: new Date().toISOString(),
+      progress: { attendanceRate: 0, tasksCompleted: 0, totalTasks: 0 },
+    };
+    if (classData.trainerId) enrollmentData.trainerId = classData.trainerId;
+    if (classData.trainerName) enrollmentData.trainerName = classData.trainerName;
+    if (classData.courseId) enrollmentData.courseId = classData.courseId;
+    if (classData.level) enrollmentData.level = classData.level;
+
+    const docRef = await addDoc(enrollmentsRef, enrollmentData);
+
+    // Notify the student they were added.
+    try {
+      await createNotification({
+        toUid: student.id,
+        type: 'join_approved',
+        text: `You've been added to ${classData.name || 'a class'}. Your dashboard is now unlocked.`,
+        metadata: { classId, enrollmentId: docRef.id },
+      });
+    } catch (notifyErr) {
+      console.warn('Could not notify added student:', notifyErr?.message);
+    }
+
+    return { id: docRef.id, ...enrollmentData };
+  } catch (error) {
+    console.error('Error adding student to class:', error);
+    throw error;
+  }
+};
+
+/**
+ * Purge activity logs. Pass a list of ids to delete a subset, or omit to purge
+ * everything currently loaded. Admin-only (enforced by security rules).
+ */
+export const purgeActivityLogs = async (logIds = null) => {
+  try {
+    let ids = logIds;
+    if (!ids) {
+      const snapshot = await getDocs(collection(db, 'activityLogs'));
+      ids = snapshot.docs.map((d) => d.id);
+    }
+    // Firestore batches cap at 500 writes.
+    for (let i = 0; i < ids.length; i += 450) {
+      const batch = writeBatch(db);
+      ids.slice(i, i + 450).forEach((id) => batch.delete(doc(db, 'activityLogs', id)));
+      await batch.commit();
+    }
+    return ids.length;
+  } catch (error) {
+    console.error('Error purging activity logs:', error);
     throw error;
   }
 };
@@ -1711,7 +2030,7 @@ export const createAnnouncement = async (classId, { title, message, author, auth
     const announcement = {
       title: title ?? '',
       message: message ?? '',
-      author: author ?? 'Trainer',
+      author: author ?? 'Trainor',
       authorId: authorId ?? null,
       authorAvatar: authorAvatar ?? null,
       attachments: attachments ?? [],
@@ -1730,18 +2049,21 @@ export const createAnnouncement = async (classId, { title, message, author, auth
 /**
  * Update an announcement for a class
  */
-export const updateAnnouncement = async (classId, announcementId, { title, message, attachments = [] }) => {
+export const updateAnnouncement = async (classId, announcementId, { title, message, attachments } = {}) => {
   try {
     const announcementRef = doc(db, 'classes', classId, 'announcements', announcementId);
-    
-    await updateDoc(announcementRef, {
-      title,
-      message,
-      attachments,
-      updatedAt: serverTimestamp(),
-    });
-    
-    return { id: announcementId, title, message, attachments };
+
+    // Only overwrite the fields the caller actually provided. This prevents an
+    // edit that changes just the text from wiping the announcement's existing
+    // attachments (or resetting its title).
+    const updates = { updatedAt: serverTimestamp() };
+    if (title !== undefined) updates.title = title;
+    if (message !== undefined) updates.message = message;
+    if (attachments !== undefined) updates.attachments = attachments;
+
+    await updateDoc(announcementRef, updates);
+
+    return { id: announcementId, ...updates };
   } catch (error) {
     console.error('Error updating announcement:', error);
     throw error;
@@ -2552,18 +2874,20 @@ export const deleteTopic = async (classId, topicId) => {
  * Create an assessment/quiz for a class (Google Forms style)
  * Supports multiple question types: multiple-choice, checkbox, short-answer, paragraph
  */
-export const createAssessment = async (classId, { 
-  title, 
-  description, 
+export const createAssessment = async (classId, {
+  title,
+  description,
   author,
   authorId,
   createdByAvatar = null,
-  timeLimit = 0, 
+  timeLimit = 0,
   totalPoints = 100,
   shuffleQuestions = false,
   showScores = true,
   showCorrectAnswers = true,
   questions = [],
+  availableDate = null,
+  dueDate = null,
   status = 'active'
 }) => {
   try {
@@ -2597,9 +2921,10 @@ export const createAssessment = async (classId, {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       status,
-      dueDate: null
+      availableDate,
+      dueDate
     };
-    
+
     const docRef = await addDoc(assessmentsRef, assessment);
     
     return { id: docRef.id, ...assessment };
@@ -2647,13 +2972,14 @@ export const deleteAssessment = async (classId, assessmentId) => {
 /**
  * Create an assignment (Material/Assignment for a class)
  */
-export const createAssignment = async (classId, { 
-  title, 
-  description, 
+export const createAssignment = async (classId, {
+  title,
+  description,
   type = 'Assignment',
   author,
   authorId,
   createdByAvatar = null,
+  availableDate = null,
   dueDate = null,
   points = 100,
   questions = [],
@@ -2686,6 +3012,7 @@ export const createAssignment = async (classId, {
       author,
       authorId,
       createdByAvatar,
+      availableDate,
       dueDate,
       points,
       questions,
@@ -2755,7 +3082,7 @@ export const updateAssignment = async (classId, assignmentId, updates) => {
 // look it up deterministically.
 
 /**
- * Student creates/updates their submission for a submission-type assignment.
+ * Trainee creates/updates their submission for a submission-type assignment.
  */
 export const submitAssignment = async (
   classId,
@@ -2858,7 +3185,7 @@ export const subscribeToMySubmission = (classId, assignmentId, studentId, callba
 };
 
 /**
- * Trainer view: all submissions for one assignment.
+ * Trainor view: all submissions for one assignment.
  */
 export const getAssignmentSubmissions = async (classId, assignmentId) => {
   try {
@@ -2879,7 +3206,7 @@ export const getAssignmentSubmissions = async (classId, assignmentId) => {
 };
 
 /**
- * Trainer grades a submission and notifies the student.
+ * Trainor grades a submission and notifies the student.
  */
 export const gradeSubmission = async (
   classId,
@@ -3129,24 +3456,31 @@ export const subscribeToAssignments = (classId, callback) => {
 export const subscribeToEnrollments = (classId, callback) => {
   try {
     const enrollmentsRef = collection(db, 'enrollments');
-    const q = query(
-      enrollmentsRef,
-      where('classId', '==', classId),
-      orderBy('joinedAt', 'desc')
-    );
-    
+    // NOTE: do NOT orderBy('joinedAt') here. Pending join-requests only have
+    // `requestedAt` (joinedAt is set on approval), and Firestore's orderBy
+    // silently drops documents missing that field — which hid pending requests
+    // from the trainer's roster so they could never be approved. Query by
+    // classId only and sort in-memory instead.
+    const q = query(enrollmentsRef, where('classId', '==', classId));
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const enrollments = snapshot.docs.map((doc) => {
         const data = doc.data();
         return {
           id: doc.id,
           ...data,
-          enrolledAt: data.joinedAt?.toDate?.() || new Date(data.joinedAt)
+          enrolledAt: data.joinedAt?.toDate?.() || (data.joinedAt ? new Date(data.joinedAt) : null),
         };
+      });
+      // Newest first, tolerating pending rows that only have requestedAt.
+      enrollments.sort((a, b) => {
+        const da = new Date(a.joinedAt || a.requestedAt || 0).getTime();
+        const dbb = new Date(b.joinedAt || b.requestedAt || 0).getTime();
+        return dbb - da;
       });
       callback(enrollments);
     });
-    
+
     return unsubscribe;
   } catch (error) {
     console.error('Error subscribing to enrollments:', error);
@@ -3488,6 +3822,8 @@ export default {
   createUserProfile,
   getUserProfile,
   updateUserProfile,
+  getUserPrivateProfile,
+  saveUserPrivateProfile,
   initializeLmsExperience,
   getLmsExperience,
   updateLmsExperience,
@@ -3524,7 +3860,10 @@ export default {
   updateEnrollmentProgress,
   removeEnrollment,
   approveEnrollment,
-  
+  getStudents,
+  getClassEnrollments,
+  adminAddStudentToClass,
+
   // Materials
   getCourseMaterials,
   getClassMaterials,
@@ -3534,7 +3873,8 @@ export default {
   
   // Activity
   logActivity,
-  
+  purgeActivityLogs,
+
   // Class Announcements
   createAnnouncement,
   getAnnouncements,

@@ -19,7 +19,7 @@ const STATUS_CLS = {
 
 /**
  * Admin ID-request queue: admin approves/rejects pending requests directly and
- * marks approved ones as completed. (Trainers are not involved in ID approval.)
+ * marks approved ones as completed. (Trainors are not involved in ID approval.)
  */
 const IdRequests = () => {
   const { user } = useAuth();
@@ -107,7 +107,7 @@ const IdRequests = () => {
       <div>
         <h2 className="text-lg font-bold text-gray-900">ID Requests</h2>
         <p className="text-sm text-gray-500">
-          Review student ID requests: approve or reject, then mark completed once produced.
+          Review trainee ID requests: approve or reject, then mark completed once produced.
         </p>
       </div>
 

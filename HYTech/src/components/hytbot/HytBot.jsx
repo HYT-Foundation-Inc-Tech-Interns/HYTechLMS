@@ -6,7 +6,13 @@ import { useToast } from '../../context/ToastContext';
 
 const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_FALLBACK_MODEL = import.meta.env.VITE_GEMINI_FALLBACK_MODEL || 'gemini-flash-latest';
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+// SECURITY: any VITE_* value is bundled into the client and publicly visible.
+// Calling Gemini directly with a raw key therefore exposes it. In production we
+// require the backend proxy (VITE_HYTBOT_API_URL) and do NOT ship the key,
+// unless an operator explicitly accepts the risk via VITE_ALLOW_CLIENT_GEMINI_KEY.
+const ALLOW_CLIENT_GEMINI_KEY =
+  import.meta.env.DEV || import.meta.env.VITE_ALLOW_CLIENT_GEMINI_KEY === 'true';
+const GEMINI_API_KEY = ALLOW_CLIENT_GEMINI_KEY ? import.meta.env.VITE_GEMINI_API_KEY : undefined;
 const HYTBOT_API_URL = import.meta.env.VITE_HYTBOT_API_URL;
 const MAX_GEMINI_RETRIES = 2;
 const BASE_RETRY_DELAY_MS = 1200;
@@ -50,8 +56,8 @@ const buildLocalFallbackReply = (userMessage, currentRole = 'guest') => {
 
   const roleLabelByRole = {
     admin: 'Admin',
-    trainer: 'Trainer',
-    student: 'Student',
+    trainer: 'Trainor',
+    student: 'Trainee',
     guest: 'User',
   };
 
@@ -80,22 +86,22 @@ const buildLocalFallbackReply = (userMessage, currentRole = 'guest') => {
 
   if (role === 'student') {
     if (includesAny(text, ['course', 'my course', 'enrolled', 'lessons', 'materials'])) {
-      return 'Student course navigation:\n1. Open My Courses from the sidebar.\n2. Select your enrolled course.\n3. Use Tasks and Calendar tabs to track deadlines.';
+      return 'Trainee course navigation:\n1. Open My Courses from the sidebar.\n2. Select your enrolled course.\n3. Use Tasks and Calendar tabs to track deadlines.';
     }
     if (includesAny(text, ['certificate', 'certificates'])) {
-      return 'Certificates are in the Student sidebar under Certificates. Completed courses with requirements met will appear there.';
+      return 'Certificates are in the Trainee sidebar under Certificates. Completed courses with requirements met will appear there.';
     }
     if (includesAny(text, ['task', 'assignment', 'deadline'])) {
-      return 'Use Student > Tasks to view pending assignments and deadlines. You can also check Calendar for schedule-based reminders.';
+      return 'Use Trainee > Tasks to view pending assignments and deadlines. You can also check Calendar for schedule-based reminders.';
     }
   }
 
   if (role === 'trainer') {
     if (includesAny(text, ['course', 'courses', 'manage course'])) {
-      return 'Trainer course flow:\n1. Go to /trainer.\n2. Open a course from My Courses.\n3. Manage tasks, materials, and learner progress inside the course.';
+      return 'Trainor course flow:\n1. Go to /trainer.\n2. Open a course from My Courses.\n3. Manage tasks, materials, and learner progress inside the course.';
     }
     if (includesAny(text, ['sector', 'sectors'])) {
-      return 'Use Trainer > Sectors to view Training Regulations and sector details.';
+      return 'Use Trainor > Sectors to view Training Regulations and sector details.';
     }
   }
 

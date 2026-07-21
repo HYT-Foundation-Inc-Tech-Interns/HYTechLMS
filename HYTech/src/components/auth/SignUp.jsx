@@ -9,7 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth, firebaseInitError } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
-import { createUserProfile, logActivity } from '../../utils/firestoreService';
+import { createUserProfile, saveUserPrivateProfile, logActivity } from '../../utils/firestoreService';
 
 const SignUp = () => {
   const SIGN_UP_DRAFT_KEY = 'hyt:signup:draft';
@@ -166,7 +166,9 @@ const SignUp = () => {
         formData.password
       );
 
-      // Use the new Firestore service to create user profile with lmsExperience
+      // Public profile (name/email) on the users doc. Sensitive PII (phone,
+      // birth date) goes to the private subcollection so it is not exposed by
+      // the org-wide users read.
       await createUserProfile(credential.user.uid, {
         email: formData.email.trim(),
         displayName: `${formData.firstName.trim()} ${formData.middleName.trim()} ${formData.lastName.trim()}${formData.nameExtension.trim() ? ` ${formData.nameExtension.trim()}` : ''}`.replace(/\s+/g, ' ').trim(),
@@ -175,17 +177,20 @@ const SignUp = () => {
           middleName: formData.middleName.trim(),
           lastName: formData.lastName.trim(),
           nameExtension: formData.nameExtension.trim(),
-          phoneNumber: formData.phone.trim(),
-          dateOfBirth: formData.birthDate,
         },
         role: 'student',
       });
+
+      await saveUserPrivateProfile(credential.user.uid, {
+        phone: formData.phone.trim(),
+        birthDate: formData.birthDate,
+      }).catch((err) => console.warn('Could not save private profile at signup:', err?.message));
 
       logActivity(credential.user.uid, 'user_signup', 'users', credential.user.uid, {
         email: formData.email.trim(),
       });
 
-      addToast('Account created! Sign in, then wait for a trainer to add you to a class.', 'success');
+      addToast('Account created! Sign in, then wait for a trainor to add you to a class.', 'success');
       localStorage.removeItem(SIGN_UP_DRAFT_KEY);
       navigate('/signin');
     } catch (error) {

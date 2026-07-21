@@ -34,6 +34,9 @@ import { createNotification, logActivity } from '../../utils/firestoreService';
 const UserManagement = () => {
   const { addToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  // Active vs Archived (inactive) users — kept for history.
+  const [userTab, setUserTab] = useState('active');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -170,12 +173,27 @@ const UserManagement = () => {
     };
   }, [addToast]);
 
-  // Filter users based on search
-  const filteredUsers = users.filter(user => 
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.idNumber.includes(searchQuery) ||
-    user.role.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const isArchived = (user) => String(user.status || 'Active').toLowerCase() !== 'active';
+  const activeCount = users.filter((u) => !isArchived(u)).length;
+  const archivedCount = users.filter((u) => isArchived(u)).length;
+
+  // Filter users by tab (active/archived) + search text + role.
+  const filteredUsers = users.filter((user) => {
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      !q ||
+      user.name.toLowerCase().includes(q) ||
+      String(user.idNumber).includes(searchQuery) ||
+      user.role.toLowerCase().includes(q);
+    const matchesRole = roleFilter === 'all' || String(user.role).toLowerCase() === roleFilter;
+    const matchesTab = userTab === 'archived' ? isArchived(user) : !isArchived(user);
+    return matchesSearch && matchesRole && matchesTab;
+  });
+
+  // Any filter change resets to the first page so results aren't hidden.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, roleFilter, userTab]);
 
   // Pagination
   const totalPages = Math.ceil(filteredUsers.length / rowsPerPage);
@@ -398,6 +416,16 @@ const UserManagement = () => {
     }
   };
 
+  // Display label for a role. Underlying role values stay 'student'/'trainer'.
+  const roleLabel = (role) => {
+    switch (String(role || '').toLowerCase()) {
+      case 'admin': return 'Admin';
+      case 'trainer': return 'Trainor';
+      case 'student': return 'Trainee';
+      default: return role;
+    }
+  };
+
   const getInitials = (name) => {
     if (!name) return '?';
     const parts = name.trim().split(' ').filter(part => part);
@@ -449,20 +477,42 @@ const UserManagement = () => {
       {/* Top Bar */}
       <div className="card p-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50:bg-gray-700 transition-colors">
-              <Filter className="w-5 h-5 text-gray-500" />
-            </button>
-            <div className="relative flex-1 sm:w-80">
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex-1 sm:w-72 min-w-[12rem]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search..."
+                placeholder="Search name or ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white"
               />
             </div>
+            {/* Role filter */}
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="pl-9 pr-8 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm appearance-none"
+                aria-label="Filter by role"
+              >
+                <option value="all">All roles</option>
+                <option value="admin">Admin</option>
+                <option value="trainer">Trainor</option>
+                <option value="student">Trainee</option>
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
+            {(roleFilter !== 'all' || searchQuery) && (
+              <button
+                onClick={() => { setRoleFilter('all'); setSearchQuery(''); }}
+                className="flex items-center gap-1 px-3 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <X className="w-4 h-4" />
+                Clear
+              </button>
+            )}
           </div>
           <button
             onClick={() => setShowAddModal(true)}
@@ -474,6 +524,30 @@ const UserManagement = () => {
         </div>
       </div>
 
+      {/* Active / Archived tabs */}
+      <div className="flex gap-2 border-b border-gray-200">
+        <button
+          onClick={() => setUserTab('active')}
+          className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors ${
+            userTab === 'active'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-blue-600'
+          }`}
+        >
+          Active ({activeCount})
+        </button>
+        <button
+          onClick={() => setUserTab('archived')}
+          className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors ${
+            userTab === 'archived'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-blue-600'
+          }`}
+        >
+          Archived ({archivedCount})
+        </button>
+      </div>
+
       {/* Table */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
@@ -481,6 +555,7 @@ const UserManagement = () => {
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="table-header w-12">#</th>
+                <th className="table-header w-28">ID NO.</th>
                 <th className="table-header">NAME</th>
                 <th className="table-header">ROLE</th>
                 <th className="table-header">STATUS</th>
@@ -490,12 +565,12 @@ const UserManagement = () => {
             <tbody className="divide-y divide-gray-100">
               {isLoadingUsers && (
                 <tr>
-                  <td className="table-cell text-center text-gray-500" colSpan={5}>Loading users...</td>
+                  <td className="table-cell text-center text-gray-500" colSpan={6}>Loading users...</td>
                 </tr>
               )}
               {!isLoadingUsers && paginatedUsers.length === 0 && (
                 <tr>
-                  <td className="table-cell text-center text-gray-500" colSpan={5}>No users found.</td>
+                  <td className="table-cell text-center text-gray-500" colSpan={6}>No users found.</td>
                 </tr>
               )}
               {paginatedUsers.map((user, index) => (
@@ -506,11 +581,14 @@ const UserManagement = () => {
                 >
                   <td className="table-cell text-gray-500">{startIndex + index + 1}</td>
                   <td className="table-cell">
+                    <span className="font-mono text-sm text-gray-700">{user.idNumber}</span>
+                  </td>
+                  <td className="table-cell">
                     <div className="flex items-center gap-3">
                       <div className="relative w-10 h-10 flex-shrink-0">
                         {userAvatars[user.id] ? (
-                          <img 
-                            src={userAvatars[user.id]} 
+                          <img
+                            src={userAvatars[user.id]}
                             alt={user.name}
                             className="w-10 h-10 rounded-full object-cover border border-gray-200"
                           />
@@ -520,15 +598,15 @@ const UserManagement = () => {
                           </div>
                         )}
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-800">{user.name}</p>
-                        <p className="text-xs text-gray-400">{user.idNumber}</p>
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-800 truncate">{user.name}</p>
+                        <p className="text-xs text-gray-400 truncate">{user.email}</p>
                       </div>
                     </div>
                   </td>
                   <td className="table-cell">
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
-                      {user.role}
+                      {roleLabel(user.role)}
                     </span>
                   </td>
                   <td className="table-cell">
@@ -586,7 +664,7 @@ const UserManagement = () => {
                           className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-700 hover:bg-gray-50 transition-colors text-sm whitespace-nowrap"
                         >
                           <span className={`${user.status === 'Active' ? 'text-red-600' : 'text-green-600'}`}>
-                            {user.status === 'Active' ? 'Mark Inactive' : 'Mark Active'}
+                            {user.status === 'Active' ? 'Archive (mark inactive)' : 'Restore (mark active)'}
                           </span>
                         </button>
                       </div>
@@ -776,8 +854,8 @@ const UserManagement = () => {
                   >
                     <option value="">Select</option>
                     <option value="Admin">Admin</option>
-                    <option value="Trainer">Trainer</option>
-                    <option value="Student">Student</option>
+                    <option value="Trainer">Trainor</option>
+                    <option value="Student">Trainee</option>
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
                 </div>
@@ -844,7 +922,7 @@ const UserManagement = () => {
                   <label className="block text-sm font-medium text-gray-600 mb-1">Role</label>
                   <p className="text-gray-900 font-medium">
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(selectedUser.role)}`}>
-                      {selectedUser.role}
+                      {roleLabel(selectedUser.role)}
                     </span>
                   </p>
                 </div>
@@ -966,8 +1044,8 @@ const UserManagement = () => {
                   >
                     <option value="">Select</option>
                     <option value="Admin">Admin</option>
-                    <option value="Trainer">Trainer</option>
-                    <option value="Student">Student</option>
+                    <option value="Trainer">Trainor</option>
+                    <option value="Student">Trainee</option>
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
                 </div>

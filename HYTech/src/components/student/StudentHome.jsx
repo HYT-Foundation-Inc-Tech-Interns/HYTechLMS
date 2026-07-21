@@ -244,7 +244,7 @@ const StudentHome = () => {
     // tracking exists (Phase 2). Showing them would be fake data.
   ];
 
-  // Handle course modal. Students may enroll in multiple subjects, so opening
+  // Handle course modal. Trainees may enroll in multiple subjects, so opening
   // a course is never blocked by an existing enrollment.
   const handleCourseClick = (course) => {
     setSelectedCourse(course);
@@ -259,7 +259,7 @@ const StudentHome = () => {
       setLoadingApply(true);
       const appId = await applyCourse(user.uid, selectedCourse.id);
       addToast(
-        `Successfully applied to ${selectedCourse.name}. Awaiting trainer approval.`,
+        `Successfully applied to ${selectedCourse.name}. Awaiting trainor approval.`,
         'success'
       );
       setShowCourseModal(false);
@@ -284,7 +284,7 @@ const StudentHome = () => {
     try {
       setJoiningClass(true);
       const enrollment = await joinClassByCode(user.uid, classCode);
-      addToast(`Request sent to join ${enrollment.className}. Awaiting trainer approval.`, 'success');
+      addToast(`Request sent to join ${enrollment.className}. Awaiting trainor approval.`, 'success');
 
       // Clear code input
       setClassCode('');
@@ -316,7 +316,7 @@ const StudentHome = () => {
           <div>
             <h2 className="text-3xl font-bold mb-3">Join a Class</h2>
             <p className="text-blue-100 mb-4">
-              Enter your class code to join a class immediately. Your trainer will assign you a class code.
+              Enter your class code to join a class immediately. Your trainor will assign you a class code.
             </p>
             <div className="flex items-center gap-2 text-blue-100 text-sm">
               <Plus className="w-4 h-4" />

@@ -52,8 +52,8 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState([
     { label: 'Total Participants', value: '0', icon: Users, change: '+0%', changeType: 'positive', color: 'blue' },
-    { label: 'Active Trainers', value: '0', icon: GraduationCap, change: '0%', changeType: 'neutral', color: 'purple' },
-    { label: 'Active Students', value: '0', icon: Users, change: '+0%', changeType: 'positive', color: 'cyan' },
+    { label: 'Active Trainors', value: '0', icon: GraduationCap, change: '0%', changeType: 'neutral', color: 'purple' },
+    { label: 'Active Trainees', value: '0', icon: Users, change: '+0%', changeType: 'positive', color: 'cyan' },
     { label: 'Total Sectors', value: '0', icon: FolderOpen, change: '+0%', changeType: 'positive', color: 'green' },
     { label: 'Active Programs', value: '0', icon: BookOpen, change: '+0%', changeType: 'positive', color: 'orange' },
     { label: 'Total Courses', value: '0', icon: BookOpen, change: '+0%', changeType: 'positive', color: 'teal' },
@@ -116,8 +116,8 @@ const Dashboard = () => {
         // Update stats
         setStats([
           { label: 'Accounts', value: totalAccounts.toString(), icon: Users, color: 'blue' },
-          { label: 'Active Trainers', value: totalTrainers.toString(), icon: GraduationCap, color: 'purple' },
-          { label: 'Active Students', value: enrolledStudents.toString(), icon: Users, color: 'cyan' },
+          { label: 'Active Trainors', value: totalTrainers.toString(), icon: GraduationCap, color: 'purple' },
+          { label: 'Active Trainees', value: enrolledStudents.toString(), icon: Users, color: 'cyan' },
           { label: 'Sectors', value: totalSectors.toString(), icon: FolderOpen, color: 'green' },
           { label: 'Courses', value: totalCourses.toString(), icon: BookOpen, color: 'teal' },
           { label: 'Classes', value: activeClasses.toString(), icon: BookOpen, color: 'orange' },
@@ -165,8 +165,8 @@ const Dashboard = () => {
         if (waitingStudents > 0) {
           newAlerts.push({
             type: 'info',
-            title: 'Students waiting',
-            message: `${waitingStudents} student${waitingStudents > 1 ? 's are' : ' is'} not yet in a class.`,
+            title: 'Trainees waiting',
+            message: `${waitingStudents} trainee${waitingStudents > 1 ? 's are' : ' is'} not yet in a class.`,
             icon: Bell,
           });
         }
@@ -372,7 +372,7 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="font-medium text-gray-800 text-sm">{sector.name}</h4>
-                    <p className="text-xs text-gray-400">{sector.students} students</p>
+                    <p className="text-xs text-gray-400">{sector.students} trainees</p>
                   </div>
                   <span className="text-xs font-medium text-gray-500">{sector.courses} courses</span>
                 </div>

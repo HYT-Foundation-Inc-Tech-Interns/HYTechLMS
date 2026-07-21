@@ -31,16 +31,20 @@ const AdminNavbar = ({ title, subtitle }) => {
 
   // Easter egg: show Flappy Bird after 5 logo clicks
   const [showGame, setShowGame] = useState(false);
-  const logoClickCount = useRef(0);
-  const logoClickTimer = useRef(null);
+  const eggClickCount = useRef(0);
+  const eggClickTimer = useRef(null);
 
   const handleLogoClick = () => {
-    logoClickCount.current += 1;
-    clearTimeout(logoClickTimer.current);
-    logoClickTimer.current = setTimeout(() => { logoClickCount.current = 0; }, 2000);
-    if (logoClickCount.current >= 5) {
-      logoClickCount.current = 0;
-      clearTimeout(logoClickTimer.current);
+    navigate('/admin');
+  };
+
+  const handleEasterEgg = () => {
+    eggClickCount.current += 1;
+    clearTimeout(eggClickTimer.current);
+    eggClickTimer.current = setTimeout(() => { eggClickCount.current = 0; }, 2000);
+    if (eggClickCount.current >= 5) {
+      eggClickCount.current = 0;
+      clearTimeout(eggClickTimer.current);
       setShowGame(true);
     }
   };
@@ -81,9 +85,14 @@ const AdminNavbar = ({ title, subtitle }) => {
           className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 object-contain cursor-pointer select-none"
           onClick={handleLogoClick}
           onError={(e) => { e.target.style.display = 'none'; }}
-          title="HYTech"
+          title="Go to home"
         />
-        <span className="font-semibold text-base md:text-lg whitespace-nowrap">HYTech</span>
+        <span
+          className="font-semibold text-base md:text-lg whitespace-nowrap cursor-pointer select-none"
+          onClick={handleEasterEgg}
+        >
+          HYTech
+        </span>
         {title && (
           <div className="min-w-0 ml-2 sm:ml-4 md:ml-9 lg:ml-32 xl:ml-32 pl-3 sm:pl-4 md:pl-5">
               <h1 className="font-semibold text-base md:text-lg leading-tight truncate">{title}</h1>

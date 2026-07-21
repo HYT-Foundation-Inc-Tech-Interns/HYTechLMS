@@ -25,26 +25,31 @@ const StudentNavbar = ({ title, subtitle }) => {
   const lastName = settingsData?.profileForm?.lastName?.trim() || user?.lastName?.trim() || '';
   const nameExtension = settingsData?.profileForm?.nameExtension?.trim() || user?.nameExtension?.trim() || '';
   const composedName = `${firstName} ${middleName} ${lastName}${nameExtension ? ` ${nameExtension}` : ''}`.replace(/\s+/g, ' ').trim();
-  const fullName = composedName || user?.displayName?.trim() || user?.name?.trim() || 'Student User';
+  const fullName = composedName || user?.displayName?.trim() || user?.name?.trim() || 'Trainee User';
   const email = settingsData?.profileForm?.email || auth?.currentUser?.email || user?.email || 'student@hytech.com';
   const computedInitials = `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
   const initials = computedInitials
-    || (fullName !== 'Student User'
+    || (fullName !== 'Trainee User'
       ? fullName.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
       : 'SU');
 
-  // Easter egg: show Flappy Bird after 5 logo clicks
+  // Easter egg: show Flappy Bird after 5 quick clicks on the wordmark.
+  // (The logo itself now navigates home — see handleLogoClick.)
   const [showGame, setShowGame] = useState(false);
-  const logoClickCount = useRef(0);
-  const logoClickTimer = useRef(null);
+  const eggClickCount = useRef(0);
+  const eggClickTimer = useRef(null);
 
   const handleLogoClick = () => {
-    logoClickCount.current += 1;
-    clearTimeout(logoClickTimer.current);
-    logoClickTimer.current = setTimeout(() => { logoClickCount.current = 0; }, 2000);
-    if (logoClickCount.current >= 5) {
-      logoClickCount.current = 0;
-      clearTimeout(logoClickTimer.current);
+    navigate('/student');
+  };
+
+  const handleEasterEgg = () => {
+    eggClickCount.current += 1;
+    clearTimeout(eggClickTimer.current);
+    eggClickTimer.current = setTimeout(() => { eggClickCount.current = 0; }, 2000);
+    if (eggClickCount.current >= 5) {
+      eggClickCount.current = 0;
+      clearTimeout(eggClickTimer.current);
       setShowGame(true);
     }
   };
@@ -85,9 +90,14 @@ const StudentNavbar = ({ title, subtitle }) => {
           className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 object-contain cursor-pointer select-none"
           onClick={handleLogoClick}
           onError={(e) => { e.target.style.display = 'none'; }}
-          title="HYTech"
+          title="Go to home"
         />
-        <span className="font-semibold text-base md:text-lg whitespace-nowrap">HYTech</span>
+        <span
+          className="font-semibold text-base md:text-lg whitespace-nowrap cursor-pointer select-none"
+          onClick={handleEasterEgg}
+        >
+          HYTech
+        </span>
         {title && (
           <div className="min-w-0 ml-2 sm:ml-4 md:ml-9 lg:ml-32 xl:ml-32 pl-3 sm:pl-4 md:pl-5">
               <h1 className="font-semibold text-base md:text-lg leading-tight truncate">{title}</h1>
@@ -110,7 +120,7 @@ const StudentNavbar = ({ title, subtitle }) => {
             className="flex items-center gap-2 hover:bg-white/10 rounded-lg p-1 transition-colors"
           >
             {avatar ? (
-              <img src={avatar} alt="Student profile" className="w-9 h-9 rounded-full object-cover border border-white/20" />
+              <img src={avatar} alt="Trainee profile" className="w-9 h-9 rounded-full object-cover border border-white/20" />
             ) : (
               <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center text-white font-medium text-sm shadow-lg">
                 {initials}

@@ -18,7 +18,7 @@ const SectorDetail = () => {
       try {
         const [sectorData, courseTemplates] = await Promise.all([
           getSectorById(sectorId),
-          getCoursesTemplates({ sectorId }),
+          getCoursesTemplates({ sectorId, availableOnly: true }),
         ]);
 
         if (isMounted) {
@@ -126,7 +126,7 @@ const SectorDetail = () => {
             <p className="text-gray-500">
               {searchQuery
                 ? 'Try adjusting your search criteria'
-                : 'No course templates exist for this sector yet. An admin can add them.'}
+                : 'No available programs in this sector yet. An admin needs to make one available first.'}
             </p>
           </div>
         )}

@@ -16,7 +16,24 @@ const NotificationDropdown = ({ role = 'student' }) => {
     unreadCount,
     markAllAsRead,
     markAsRead,
+    dismiss,
+    clearAll,
   } = useRoleNotifications(role);
+
+  const handleDismiss = (e, id) => {
+    e.stopPropagation();
+    dismiss(id);
+  };
+
+  const handleClearAll = async () => {
+    if (notificationList.length === 0) {
+      addToast('No notifications to clear.', 'info');
+      return;
+    }
+    if (!window.confirm('Delete all notifications?')) return;
+    await clearAll();
+    addToast('Notifications cleared.', 'success');
+  };
   const visibleNotifications = isViewingAll ? notificationList : notificationList.slice(0, 3);
 
   const handleMarkAllAsRead = () => {
@@ -49,14 +66,19 @@ const NotificationDropdown = ({ role = 'student' }) => {
         return role === 'admin' ? '/admin/id-requests' : `${basePath}/request-id`;
       case 'incident_filed':
         return `${basePath}/incident-forms`;
+      case 'join_request':
+        // Open the specific class on its Trainees tab, where the trainer
+        // approves pending join requests. Fall back to home if we lack the name.
+        return role === 'trainer' && meta.className
+          ? `${basePath}/${encodeURIComponent(meta.className)}?tab=students`
+          : basePath;
       case 'student_waiting':
       case 'notify_trainer':
       case 'join_class':
-      case 'join_request':
-        // Trainer roster / home is where students get added to / approved for a class.
+        // Trainor roster / home is where students get added to / approved for a class.
         return basePath;
       case 'join_approved':
-        // Student's dashboard is now unlocked.
+        // Trainee's dashboard is now unlocked.
         return basePath;
       default:
         return `${basePath}/notifications`;
@@ -168,6 +190,15 @@ const NotificationDropdown = ({ role = 'student' }) => {
                           <p className="text-xs text-gray-400">{notification.time}</p>
                         </div>
                       </div>
+
+                      {/* Dismiss */}
+                      <button
+                        onClick={(e) => handleDismiss(e, notification.id)}
+                        className="flex-shrink-0 p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        title="Dismiss"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 ))
@@ -181,14 +212,22 @@ const NotificationDropdown = ({ role = 'student' }) => {
 
             {/* Footer */}
             {notificationList.length > 0 && (
-              <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                <button
-                  onClick={handleMarkAllAsRead}
-                  disabled={unreadCount === 0}
-                  className="text-sm text-gray-500 hover:text-gray-700:text-gray-200 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Mark all as read
-                </button>
+              <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleMarkAllAsRead}
+                    disabled={unreadCount === 0}
+                    className="text-sm text-gray-500 hover:text-gray-700:text-gray-200 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Mark all as read
+                  </button>
+                  <button
+                    onClick={handleClearAll}
+                    className="text-sm text-red-500 hover:text-red-600 font-medium transition-colors"
+                  >
+                    Clear all
+                  </button>
+                </div>
                 <button
                   onClick={isViewingAll ? () => setIsViewingAll(false) : handleViewAll}
                   className="text-sm text-orange-600 hover:text-orange-700:text-orange-300 font-medium transition-colors"

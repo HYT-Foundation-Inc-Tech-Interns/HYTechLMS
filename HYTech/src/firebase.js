@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
@@ -31,6 +32,26 @@ export let firebaseInitError = '';
 
 if (hasValidFirebaseConfig) {
   app = initializeApp(firebaseConfig);
+
+  // App Check (optional): when a reCAPTCHA v3 site key is provided, attest that
+  // requests come from this app. Enforce it in the Firebase console to block
+  // API abuse from scripts/stolen configs. No-op when the key is absent.
+  const appCheckSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+  if (appCheckSiteKey) {
+    try {
+      if (import.meta.env.VITE_APPCHECK_DEBUG_TOKEN) {
+        // eslint-disable-next-line no-undef
+        self.FIREBASE_APPCHECK_DEBUG_TOKEN = import.meta.env.VITE_APPCHECK_DEBUG_TOKEN;
+      }
+      initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(appCheckSiteKey),
+        isTokenAutoRefreshEnabled: true,
+      });
+    } catch (appCheckErr) {
+      console.warn('App Check init failed:', appCheckErr?.message);
+    }
+  }
+
   auth = getAuth(app);
   db = getFirestore(app);
   storage = getStorage(app);

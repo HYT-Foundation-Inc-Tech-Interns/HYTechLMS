@@ -32,6 +32,87 @@ import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, submitQuizAttempt, hasStudentAttempted, getStudentQuizAttempts, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments, submitAssignment, getMySubmission } from '../../utils/firestoreService';
 
+// ---- Quiz question helpers (support every trainer-builder question type) ----
+// Types: multiple-choice | true-false | dropdown (single index),
+// checkbox (index array), short-answer (string), paragraph (free text, not
+// auto-graded), linear-scale (number), multiple-grid (row->column map).
+const isBlankAnswer = (v) =>
+  v === undefined ||
+  v === null ||
+  (typeof v === 'string' && v.trim() === '') ||
+  (Array.isArray(v) && v.length === 0) ||
+  (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
+
+const normalizeText = (v) => String(v ?? '').trim().toLowerCase();
+
+// Grade one question. Paragraph has no objective answer, so it is left for the
+// trainer to review (autoGraded: false) rather than auto-marked wrong.
+const gradeQuestion = (q, answer) => {
+  const type = q?.type || 'multiple-choice';
+  if (type === 'paragraph') return { isCorrect: false, autoGraded: false };
+  if (type === 'checkbox') {
+    const correct = Array.isArray(q.correctAnswer) ? q.correctAnswer : [];
+    const given = Array.isArray(answer) ? answer : [];
+    const a = [...correct].map(String).sort().join(',');
+    const b = [...given].map(String).sort().join(',');
+    return { isCorrect: correct.length > 0 && a === b, autoGraded: true };
+  }
+  if (type === 'short-answer') {
+    return {
+      isCorrect: !isBlankAnswer(answer) && normalizeText(answer) === normalizeText(q.correctAnswer),
+      autoGraded: true,
+    };
+  }
+  if (type === 'linear-scale') {
+    return { isCorrect: !isBlankAnswer(answer) && Number(answer) === Number(q.correctAnswer), autoGraded: true };
+  }
+  if (type === 'multiple-grid') {
+    const rows = Array.isArray(q.rows) ? q.rows : [];
+    const key = q.correctAnswer && typeof q.correctAnswer === 'object' ? q.correctAnswer : {};
+    const given = answer && typeof answer === 'object' ? answer : {};
+    const hasKey = Object.keys(key).length > 0;
+    const allMatch = rows.length > 0 && rows.every((_, rIdx) => String(given[rIdx]) === String(key[rIdx]));
+    return { isCorrect: hasKey && allMatch, autoGraded: true };
+  }
+  // single-choice: multiple-choice, true-false, dropdown
+  return { isCorrect: !isBlankAnswer(answer) && answer === q.correctAnswer, autoGraded: true };
+};
+
+// Human-readable rendering of a student's answer (results review).
+const describeAnswer = (q, answer) => {
+  const type = q?.type || 'multiple-choice';
+  const opts = Array.isArray(q?.options) ? q.options : [];
+  if (isBlankAnswer(answer)) return 'Not answered';
+  if (type === 'checkbox') {
+    return (Array.isArray(answer) ? answer : []).map((i) => opts[i]).filter(Boolean).join(', ') || 'Not answered';
+  }
+  if (type === 'short-answer' || type === 'paragraph' || type === 'linear-scale') return String(answer);
+  if (type === 'multiple-grid') {
+    const rows = Array.isArray(q.rows) ? q.rows : [];
+    const cols = Array.isArray(q.columns) ? q.columns : [];
+    const given = answer && typeof answer === 'object' ? answer : {};
+    return rows.map((row, rIdx) => `${row}: ${cols[given[rIdx]] ?? '—'}`).join('; ');
+  }
+  return opts[answer] ?? 'Not answered';
+};
+
+// Human-readable correct answer (results review).
+const describeCorrect = (q) => {
+  const type = q?.type || 'multiple-choice';
+  const opts = Array.isArray(q?.options) ? q.options : [];
+  if (type === 'checkbox') {
+    return (Array.isArray(q.correctAnswer) ? q.correctAnswer : []).map((i) => opts[i]).filter(Boolean).join(', ');
+  }
+  if (type === 'short-answer' || type === 'linear-scale') return String(q.correctAnswer ?? '');
+  if (type === 'multiple-grid') {
+    const rows = Array.isArray(q.rows) ? q.rows : [];
+    const cols = Array.isArray(q.columns) ? q.columns : [];
+    const key = q.correctAnswer && typeof q.correctAnswer === 'object' ? q.correctAnswer : {};
+    return rows.map((row, rIdx) => `${row}: ${cols[key[rIdx]] ?? '—'}`).join('; ');
+  }
+  return opts[q.correctAnswer] ?? '';
+};
+
 const StudentCourse = () => {
   const { classname } = useParams();
   const decodedClassname = decodeURIComponent(classname || '');
@@ -179,7 +260,7 @@ const StudentCourse = () => {
         }
         
         // If no avatar found, generate one
-        const initials = (user?.displayName || user?.email || 'Student')
+        const initials = (user?.displayName || user?.email || 'Trainee')
           .split(' ')
           .map(n => n[0])
           .join('')
@@ -313,7 +394,7 @@ const StudentCourse = () => {
               [profile?.firstName, profile?.lastName].filter(Boolean).join(' ').trim() ||
               profile?.name ||
               profile?.email ||
-              'Student';
+              'Trainee';
 
             return {
               id: enrollment.studentId || enrollment.id,
@@ -432,7 +513,7 @@ const StudentCourse = () => {
     ? firestoreAnnouncements.map(ann => ({
         id: ann.id,
         title: ann.title || null,  // Don't default to 'Announcement' - let message be the main content
-        author: ann.author || 'Trainer',
+        author: ann.author || 'Trainor',
         authorId: ann.authorId,
         message: ann.message || '',
         preview: ann.message?.substring(0, 100) || ann.message || 'No content',
@@ -451,7 +532,7 @@ const StudentCourse = () => {
     ...(firestoreAssessments || []).map(assessment => ({
       id: assessment.id,
       title: assessment.title || 'Assignment',
-      author: assessment.createdBy || 'Trainer',
+      author: assessment.createdBy || 'Trainor',
       authorId: assessment.createdById,
       preview: `${assessment.questions?.length || 0} questions`,
       fullMessage: assessment.description || 'No description',
@@ -500,7 +581,7 @@ const StudentCourse = () => {
             setActiveMeeting({
               id: classData.meeting.meetingCode || 'N/A',
               link: classData.meeting.meetingLink || '',
-              host: classData.meeting.trainerName || 'Trainer',
+              host: classData.meeting.trainerName || 'Trainor',
               startTime: startTimeStr,
               participants: classData.meeting.participants || 0
             });
@@ -572,7 +653,7 @@ const StudentCourse = () => {
     // This handles legacy announcements that may not have authorId set
     if (!announcement.authorId) {
       // For announcements without authorId, check if they match the current user's name
-      return announcement.author === (user?.displayName || user?.email || 'Student');
+      return announcement.author === (user?.displayName || user?.email || 'Trainee');
     }
     return user?.uid === announcement.authorId;
   };
@@ -824,7 +905,7 @@ const StudentCourse = () => {
       
       // If no avatar, generate one with initials using canvas
       if (!studentAvatar) {
-        const initials = (user?.displayName || user?.email || 'Student')
+        const initials = (user?.displayName || user?.email || 'Trainee')
           .split(' ')
           .map(n => n[0])
           .join('')
@@ -868,7 +949,7 @@ const StudentCourse = () => {
       const announcementData = {
         title: '',
         message: announcementText.trim(),
-        author: user?.displayName || user?.email || 'Student',
+        author: user?.displayName || user?.email || 'Trainee',
         authorId: user?.uid,
         authorAvatar: studentAvatar,
         attachments: [],
@@ -954,6 +1035,21 @@ const StudentCourse = () => {
     })
   ];
 
+  // Split quizzes (auto-graded assessments) from submission tasks so they live
+  // under their own tabs — quizzes under "Assessments", submit-work tasks under
+  // "Assignments" (Classroom/Teams style).
+  const submissionTasks = quizzes.filter((q) => q.type === 'Submission');
+  const assessmentItems = quizzes.filter((q) => q.type !== 'Submission');
+
+  // An assessment/task is open once its "available from" date has passed
+  // (or if none is set). Trainees can't start it before then.
+  const isAssessmentOpen = (item) =>
+    !item?.availableDate || new Date(item.availableDate).getTime() <= Date.now();
+  const availableFromLabel = (item) =>
+    item?.availableDate
+      ? new Date(item.availableDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+      : '';
+
   // Timer effect
   useEffect(() => {
     let interval;
@@ -1036,6 +1132,10 @@ const StudentCourse = () => {
   }, [quizStarted, quizSubmitted]);
 
   const handleStartQuiz = async (quiz) => {
+    if (!isAssessmentOpen(quiz)) {
+      addToast(`This assessment opens ${availableFromLabel(quiz)}.`, 'info');
+      return;
+    }
     // Check if student has already attempted this assessment
     try {
       if (courseId && user?.uid) {
@@ -1066,8 +1166,21 @@ const StudentCourse = () => {
     enterFullscreen();
   };
 
+  // Route an assessment to the right flow. Submission-type tasks open the
+  // submission bin (upload/text), everything else opens the quiz runner.
+  // Without this, a Submission task opened the quiz UI — a progress bar with
+  // no questions and no submission bin.
+  const openAssessment = (item) => {
+    if (item?.type === 'Submission') return openSubmission(item);
+    return handleStartQuiz(item);
+  };
+
   // ---- Submission-type assignments ----
   const openSubmission = async (item) => {
+    if (!isAssessmentOpen(item)) {
+      addToast(`This task opens ${availableFromLabel(item)}.`, 'info');
+      return;
+    }
     setSubmissionItem(item);
     setSubmissionText('');
     setSubmissionFiles([]);
@@ -1092,7 +1205,7 @@ const StudentCourse = () => {
     try {
       const saved = await submitAssignment(courseId, submissionItem.id, {
         studentId: user.uid,
-        studentName: user.displayName || user.name || user.email || 'Student',
+        studentName: user.displayName || user.name || user.email || 'Trainee',
         text: submissionText.trim(),
         files: submissionFiles,
       });
@@ -1113,6 +1226,207 @@ const StudentCourse = () => {
     }));
   };
 
+  // Free-text (short-answer / paragraph) answers.
+  const handleTextAnswer = (questionId, value) => {
+    setAnswers(prev => ({ ...prev, [questionId]: value }));
+  };
+
+  // Linear-scale answers (stored as a number).
+  const handleScaleAnswer = (questionId, value) => {
+    setAnswers(prev => ({ ...prev, [questionId]: value }));
+  };
+
+  // Checkbox questions store an array of selected option indexes.
+  const handleCheckboxToggle = (questionId, index) => {
+    setAnswers(prev => {
+      const current = Array.isArray(prev[questionId]) ? prev[questionId] : [];
+      const next = current.includes(index)
+        ? current.filter(i => i !== index)
+        : [...current, index];
+      return { ...prev, [questionId]: next };
+    });
+  };
+
+  // Grid questions store a { [rowIndex]: columnIndex } map.
+  const handleGridAnswer = (questionId, rowIndex, colIndex) => {
+    setAnswers(prev => {
+      const current = prev[questionId] && typeof prev[questionId] === 'object' ? prev[questionId] : {};
+      return { ...prev, [questionId]: { ...current, [rowIndex]: colIndex } };
+    });
+  };
+
+  // Render the answer input for a question, by type.
+  const renderQuestionInput = (q) => {
+    if (!q) return null;
+    const type = q.type || 'multiple-choice';
+    const answer = answers[q.id];
+    const options = Array.isArray(q.options) ? q.options : [];
+
+    // Single-select: multiple-choice, true-false, dropdown
+    if (type === 'multiple-choice' || type === 'true-false' || type === 'dropdown') {
+      return options.map((option, index) => {
+        const selected = answer === index;
+        return (
+          <button
+            key={index}
+            onClick={() => handleAnswerSelect(q.id, index)}
+            className={`w-full p-4 text-left rounded-xl border-2 transition-all ${
+              selected ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                selected ? 'border-orange-500 bg-orange-500' : 'border-gray-300'
+              }`}>
+                {selected && <div className="w-2 h-2 bg-white rounded-full" />}
+              </div>
+              <span className="font-medium text-gray-700">{option}</span>
+            </div>
+          </button>
+        );
+      });
+    }
+
+    // Multi-select checkboxes
+    if (type === 'checkbox') {
+      const selectedList = Array.isArray(answer) ? answer : [];
+      return options.map((option, index) => {
+        const selected = selectedList.includes(index);
+        return (
+          <button
+            key={index}
+            onClick={() => handleCheckboxToggle(q.id, index)}
+            className={`w-full p-4 text-left rounded-xl border-2 transition-all ${
+              selected ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center ${
+                selected ? 'border-orange-500 bg-orange-500' : 'border-gray-300'
+              }`}>
+                {selected && <CheckCircle className="w-4 h-4 text-white" />}
+              </div>
+              <span className="font-medium text-gray-700">{option}</span>
+            </div>
+          </button>
+        );
+      });
+    }
+
+    // Short answer (single line)
+    if (type === 'short-answer') {
+      return (
+        <input
+          type="text"
+          value={answer ?? ''}
+          onChange={(e) => handleTextAnswer(q.id, e.target.value)}
+          placeholder="Type your answer…"
+          className="w-full p-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition-all"
+        />
+      );
+    }
+
+    // Paragraph (multi-line, reviewed by trainer)
+    if (type === 'paragraph') {
+      return (
+        <>
+          <textarea
+            value={answer ?? ''}
+            onChange={(e) => handleTextAnswer(q.id, e.target.value)}
+            rows={5}
+            placeholder="Write your response…"
+            className="w-full p-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition-all resize-y"
+          />
+          <p className="text-xs text-gray-400">This response will be reviewed by your trainer.</p>
+        </>
+      );
+    }
+
+    // Linear scale (radio row)
+    if (type === 'linear-scale') {
+      const range = Number(q.scaleRange) || 5;
+      const values = Array.from({ length: range }, (_, i) => i + 1);
+      return (
+        <div>
+          <div className="flex items-center justify-between gap-2">
+            {values.map((val) => {
+              const selected = Number(answer) === val;
+              return (
+                <button
+                  key={val}
+                  onClick={() => handleScaleAnswer(q.id, val)}
+                  className={`flex-1 flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all ${
+                    selected ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                    selected ? 'border-orange-500 bg-orange-500' : 'border-gray-300'
+                  }`}>
+                    {selected && <div className="w-2 h-2 bg-white rounded-full" />}
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">{val}</span>
+                </button>
+              );
+            })}
+          </div>
+          {(q.scaleMin || q.scaleMax) && (
+            <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+              <span>{q.scaleMin}</span>
+              <span>{q.scaleMax}</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Multiple grid (rows x columns, one column per row)
+    if (type === 'multiple-grid') {
+      const rows = Array.isArray(q.rows) ? q.rows : [];
+      const columns = Array.isArray(q.columns) ? q.columns : [];
+      const gridAnswer = answer && typeof answer === 'object' ? answer : {};
+      return (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th className="p-2" />
+                {columns.map((col, cIdx) => (
+                  <th key={cIdx} className="p-2 text-sm font-medium text-gray-600 text-center">{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rIdx) => (
+                <tr key={rIdx} className="border-t border-gray-100">
+                  <td className="p-2 text-sm font-medium text-gray-700">{row}</td>
+                  {columns.map((_, cIdx) => {
+                    const selected = gridAnswer[rIdx] === cIdx;
+                    return (
+                      <td key={cIdx} className="p-2 text-center">
+                        <button
+                          onClick={() => handleGridAnswer(q.id, rIdx, cIdx)}
+                          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mx-auto ${
+                            selected ? 'border-orange-500 bg-orange-500' : 'border-gray-300 hover:border-orange-300'
+                          }`}
+                          aria-label={`${row} - ${columns[cIdx]}`}
+                        >
+                          {selected && <div className="w-2 h-2 bg-white rounded-full" />}
+                        </button>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    // Unknown type — show a note rather than crashing.
+    return <p className="text-sm text-gray-400 italic">This question type isn’t supported yet.</p>;
+  };
+
   const handleSubmitQuiz = async () => {
     if (!selectedQuiz) return;
     
@@ -1122,21 +1436,27 @@ const StudentCourse = () => {
     const questionResults = [];
 
     selectedQuiz.questions.forEach(q => {
-      totalPoints += q.points;
+      const points = Number(q.points) || 0;
       const userAnswer = answers[q.id];
-      const isCorrect = userAnswer === q.correctAnswer;
-      if (isCorrect) {
-        correctCount++;
-        earnedPoints += q.points;
+      const { isCorrect, autoGraded } = gradeQuestion(q, userAnswer);
+      // Paragraph answers can't be auto-graded — keep them out of the score
+      // denominator (the trainer reviews them in Responses) but still record them.
+      if (autoGraded) {
+        totalPoints += points;
+        if (isCorrect) {
+          correctCount++;
+          earnedPoints += points;
+        }
       }
       questionResults.push({
         ...q,
         userAnswer,
-        isCorrect
+        isCorrect,
+        autoGraded,
       });
     });
 
-    const percentage = Math.round((earnedPoints / totalPoints) * 100);
+    const percentage = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
     
     setQuizResults({
       correctCount,
@@ -1436,6 +1756,17 @@ const StudentCourse = () => {
             Assessments
           </button>
           <button
+            onClick={() => setActiveTab('assignments')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm transition-all ${
+              activeTab === 'assignments'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <FileText className="w-5 h-5 inline-block mr-2" />
+            Assignments
+          </button>
+          <button
             onClick={() => setActiveTab('students')}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-all ${
               activeTab === 'students'
@@ -1444,7 +1775,7 @@ const StudentCourse = () => {
             }`}
           >
             <Users className="w-5 h-5 inline-block mr-2" />
-            Students
+            Trainees
           </button>
         </div>
       </div>
@@ -1469,7 +1800,7 @@ const StudentCourse = () => {
                       <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
                       Live Class in Progress
                     </p>
-                    <p className="text-sm text-white/80">Hosted by {activeMeeting.host} Â· Started at {activeMeeting.startTime}</p>
+                    <p className="text-sm text-white/80">Hosted by {activeMeeting.host} · Started at {activeMeeting.startTime}</p>
                     <div className="flex items-center gap-2 mt-1 text-sm text-white/70">
                       <Users className="w-4 h-4" />
                       <span>{activeMeeting.participants} participants</span>
@@ -1510,7 +1841,7 @@ const StudentCourse = () => {
                   </button>
                   <div className="flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-lg text-white/80 text-sm">
                     <Clock className="w-4 h-4" />
-                    <span>{displayCourseData.progress}% complete Â· Est. {displayCourseData.weeksLeft} weeks left</span>
+                    <span>{displayCourseData.progress}% complete · Est. {displayCourseData.weeksLeft} weeks left</span>
                   </div>
                 </div>
               </div>
@@ -1520,7 +1851,7 @@ const StudentCourse = () => {
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
                 <p className="text-xs text-white/70 uppercase tracking-wider">Quiz Completion</p>
                 <p className="text-2xl font-bold mt-1">{quizCompletionRate}%</p>
-                <p className="text-xs text-white/70 mt-1">{attemptedQuizCount}/{quizzes.length} quizzes attempted</p>
+                <p className="text-xs text-white/70 mt-1">{attemptedQuizCount}/{assessmentItems.length} quizzes attempted</p>
               </div>
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
                 <p className="text-xs text-white/70 uppercase tracking-wider">Average Score</p>
@@ -1568,18 +1899,18 @@ const StudentCourse = () => {
               </div>
             </div>
 
-            {/* Inline Announcement Composer - Students can post too */}
+            {/* Inline Announcement Composer - Trainees can post too */}
             <div className="p-5 border-b border-gray-100 bg-gray-50/50">
               <div className="flex gap-3">
                 {studentAvatar ? (
                   <img 
                     src={studentAvatar}
-                    alt={user?.displayName || 'Student'}
+                    alt={user?.displayName || 'Trainee'}
                     className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-gray-200"
                   />
                 ) : (
                   <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                    {(user?.displayName || user?.email || 'Student').split(' ').map(n => n[0]).join('').toUpperCase()}
+                    {(user?.displayName || user?.email || 'Trainee').split(' ').map(n => n[0]).join('').toUpperCase()}
                   </div>
                 )}
                 <div className="flex-1">
@@ -1671,12 +2002,12 @@ const StudentCourse = () => {
                             {(item.authorId && item.authorId in authorAvatars ? authorAvatars[item.authorId] : item.authorAvatar) ? (
                               <img
                                 src={item.authorId && item.authorId in authorAvatars ? authorAvatars[item.authorId] : item.authorAvatar}
-                                alt={item.author || 'Trainer'}
+                                alt={item.author || 'Trainor'}
                                 className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-gray-200"
                               />
                             ) : (
                               <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                                {(item.author || 'Trainer').split(' ').map(n => n[0]).join('').toUpperCase()}
+                                {(item.author || 'Trainor').split(' ').map(n => n[0]).join('').toUpperCase()}
                               </div>
                             )}
                             <div className="absolute -bottom-0 -right-0 w-5 h-5 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 border-2 border-white shadow-sm">
@@ -1688,7 +2019,7 @@ const StudentCourse = () => {
                           <div className="flex-1 min-w-0">
                             {/* Author & Action */}
                             <div className="mb-1">
-                              <span className="font-semibold text-gray-900">{item.author || 'Trainer'}</span>
+                              <span className="font-semibold text-gray-900">{item.author || 'Trainor'}</span>
                               <span className="text-gray-600 ml-1">made an announcement:</span>
                             </div>
 
@@ -1770,12 +2101,12 @@ const StudentCourse = () => {
                             {(item.authorId && item.authorId in authorAvatars ? authorAvatars[item.authorId] : item.authorAvatar) ? (
                               <img
                                 src={item.authorId && item.authorId in authorAvatars ? authorAvatars[item.authorId] : item.authorAvatar}
-                                alt={item.author || 'Trainer'}
+                                alt={item.author || 'Trainor'}
                                 className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-gray-200"
                               />
                             ) : (
                               <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                                {(item.author || 'Trainer').split(' ').map(n => n[0]).join('').toUpperCase()}
+                                {(item.author || 'Trainor').split(' ').map(n => n[0]).join('').toUpperCase()}
                               </div>
                             )}
                             <div className="absolute -bottom-0 -right-0 w-5 h-5 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 border-2 border-white shadow-sm">
@@ -1787,7 +2118,7 @@ const StudentCourse = () => {
                           <div className="flex-1 min-w-0">
                             {/* Author & Action */}
                             <div className="mb-1">
-                              <span className="font-semibold text-gray-900">{item.author || 'Trainer'}</span>
+                              <span className="font-semibold text-gray-900">{item.author || 'Trainor'}</span>
                               <span className="text-gray-600 ml-1">posted an assignment</span>
                             </div>
 
@@ -1856,11 +2187,11 @@ const StudentCourse = () => {
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
               <h2 className="font-bold text-gray-900">Quizzes & Assessments</h2>
-              <span className="text-sm text-gray-500">{quizzes.length} available</span>
+              <span className="text-sm text-gray-500">{assessmentItems.length} available</span>
             </div>
 
             <div className="p-5 space-y-4 max-h-[420px] overflow-y-auto">
-              {quizzes.map((quiz) => (
+              {assessmentItems.map((quiz) => (
                 <div 
                   key={quiz.id}
                   className="p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors relative"
@@ -1881,6 +2212,9 @@ const StudentCourse = () => {
                         <h3 className="font-semibold text-gray-900">{quiz.title}</h3>
                         <p className="text-sm text-gray-500">
                           <span>Due {quiz.dueDate}</span>
+                          {!isAssessmentOpen(quiz) && (
+                            <span className="text-xs text-amber-600 block">Opens {availableFromLabel(quiz)}</span>
+                          )}
                           {quiz.author && (
                             <span className="text-xs text-gray-400 block">Posted by {quiz.author}</span>
                           )}
@@ -1916,8 +2250,21 @@ const StudentCourse = () => {
                         <CheckCircle className="w-4 h-4" />
                         Taken
                       </div>
+                    ) : !isAssessmentOpen(quiz) ? (
+                      <div className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-500 rounded-lg font-medium cursor-not-allowed">
+                        <Timer className="w-4 h-4" />
+                        Opens {availableFromLabel(quiz)}
+                      </div>
+                    ) : quiz.type === 'Submission' ? (
+                      <button
+                        onClick={() => openSubmission(quiz)}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                      >
+                        <FileText className="w-4 h-4" />
+                        Open &amp; Submit
+                      </button>
                     ) : (
-                      <button 
+                      <button
                         onClick={() => handleStartQuiz(quiz)}
                         className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
                       >
@@ -1929,7 +2276,7 @@ const StudentCourse = () => {
                 </div>
               ))}
 
-              {quizzes.length === 0 && (
+              {assessmentItems.length === 0 && (
                 <div className="text-center py-8">
                   <Pencil className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                   <p className="text-gray-500">No quizzes available</p>
@@ -1961,7 +2308,7 @@ const StudentCourse = () => {
                     <div>
                       <span className="font-medium text-blue-600 block">{material.title}</span>
                       <span className="text-xs text-gray-500">
-                        {(Array.isArray(material.attachments) ? material.attachments.length : 1)} {(Array.isArray(material.attachments) ? material.attachments.length : 1) === 1 ? 'file' : 'files'} Â· Uploaded {material.uploadedOn || (material.createdAt ? getRelativeTime(material.createdAt) : 'recently')}
+                        {(Array.isArray(material.attachments) ? material.attachments.length : 1)} {(Array.isArray(material.attachments) ? material.attachments.length : 1) === 1 ? 'file' : 'files'} · Uploaded {material.uploadedOn || (material.createdAt ? getRelativeTime(material.createdAt) : 'recently')}
                       </span>
                     </div>
                   </button>
@@ -2093,7 +2440,7 @@ const StudentCourse = () => {
                             <h3 className="text-base font-semibold text-gray-900 mb-2">{material.title}</h3>
                             <p className="text-sm text-gray-700 mb-4 line-clamp-2">{material.description || 'No description provided'}</p>
                             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-                              <span>By {material.author || 'Trainer'}</span>
+                              <span>By {material.author || 'Trainor'}</span>
                               <span>•</span>
                               <span className="inline-flex items-center gap-2">
                                 <Paperclip className="w-4 h-4" />
@@ -2121,7 +2468,7 @@ const StudentCourse = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-white rounded-xl border border-gray-100 p-4">
                 <p className="text-gray-600 text-sm font-medium">Total Assessments</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{quizzes.length}</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{assessmentItems.length}</p>
               </div>
               <div className="bg-white rounded-xl border border-gray-100 p-4">
                 <p className="text-gray-600 text-sm font-medium">Completed</p>
@@ -2129,7 +2476,7 @@ const StudentCourse = () => {
               </div>
               <div className="bg-white rounded-xl border border-gray-100 p-4">
                 <p className="text-gray-600 text-sm font-medium">Pending</p>
-                <p className="text-3xl font-bold text-orange-600 mt-2">{quizzes.length - attemptedAssessmentIds.size}</p>
+                <p className="text-3xl font-bold text-orange-600 mt-2">{assessmentItems.length - attemptedAssessmentIds.size}</p>
               </div>
               <div className="bg-white rounded-xl border border-gray-100 p-4">
                 <p className="text-gray-600 text-sm font-medium">Average Score</p>
@@ -2138,11 +2485,11 @@ const StudentCourse = () => {
             </div>
 
             {/* All Assessments List */}
-            {quizzes.length > 0 ? (
+            {assessmentItems.length > 0 ? (
               <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                 <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
                   <h2 className="text-lg font-bold text-gray-900">All Assessments</h2>
-                  <p className="text-sm text-gray-600 mt-1">View and take assessments posted by your trainer</p>
+                  <p className="text-sm text-gray-600 mt-1">View and take assessments posted by your trainor</p>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -2157,7 +2504,7 @@ const StudentCourse = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {quizzes.map((quiz) => {
+                      {assessmentItems.map((quiz) => {
                         const isCompleted = isQuizTaken(quiz.id);
                         const attempt = quizAttemptHistory.find((a) => String(a.quizId) === String(quiz.id) || String(a.id) === String(quiz.id));
                         const statusColor = isCompleted 
@@ -2217,7 +2564,12 @@ const StudentCourse = () => {
                               )}
                             </td>
                             <td className="px-6 py-4 text-center">
-                              {quiz.type === 'Submission' ? (
+                              {!isCompleted && !isAssessmentOpen(quiz) ? (
+                                <span className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-500">
+                                  <Clock className="w-4 h-4" />
+                                  Opens {availableFromLabel(quiz)}
+                                </span>
+                              ) : quiz.type === 'Submission' ? (
                                 <button
                                   onClick={() => openSubmission(quiz)}
                                   className="px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 justify-center bg-blue-600 text-white hover:bg-blue-700"
@@ -2256,7 +2608,7 @@ const StudentCourse = () => {
             )}
 
             {/* Legend */}
-            {quizzes.length > 0 && (
+            {assessmentItems.length > 0 && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                   <div className="flex items-center gap-2">
@@ -2277,12 +2629,66 @@ const StudentCourse = () => {
           </div>
         )}
 
-        {/* Students Tab */}
+        {/* Assignments Tab (submission-type tasks) */}
+        {activeTab === 'assignments' && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="text-xl font-bold text-gray-900">Assignments</h2>
+                <span className="text-sm text-gray-500">{submissionTasks.length} total</span>
+              </div>
+              <p className="text-sm text-gray-600">Submit your work for these tasks.</p>
+            </div>
+
+            {submissionTasks.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
+                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-600">No assignments yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {submissionTasks.map((task) => (
+                  <div key={task.id} className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center justify-between gap-4">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="p-2 bg-blue-100 rounded-lg flex-shrink-0">
+                        <FileText className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-gray-900 truncate">{task.title}</h3>
+                        <p className="text-sm text-gray-500">
+                          Due {task.dueDate}
+                          {task.totalPoints ? ` · ${task.totalPoints} pts` : ''}
+                        </p>
+                        {task.author && <p className="text-xs text-gray-400 mt-0.5">Posted by {task.author}</p>}
+                      </div>
+                    </div>
+                    {isAssessmentOpen(task) ? (
+                      <button
+                        onClick={() => openSubmission(task)}
+                        className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                      >
+                        <FileText className="w-4 h-4" />
+                        Open &amp; Submit
+                      </button>
+                    ) : (
+                      <span className="flex-shrink-0 inline-flex items-center gap-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-500">
+                        <Timer className="w-4 h-4" />
+                        Opens {availableFromLabel(task)}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Trainees Tab */}
         {activeTab === 'students' && (
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
             <div className="p-6 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-gray-900">Students</h2>
-              <p className="text-sm text-gray-600 mt-1">All students enrolled in this class</p>
+              <h2 className="text-xl font-bold text-gray-900">Trainees</h2>
+              <p className="text-sm text-gray-600 mt-1">All trainees enrolled in this class</p>
             </div>
             <div className="divide-y divide-gray-100">
               {loadingClassStudents ? (
@@ -2321,7 +2727,7 @@ const StudentCourse = () => {
                 })
               ) : (
                 <div className="p-6 text-center">
-                  <p className="text-gray-500">No students found for this class</p>
+                  <p className="text-gray-500">No trainees found for this class</p>
                 </div>
               )}
             </div>
@@ -2434,7 +2840,7 @@ const StudentCourse = () => {
                         </span>
                       </div>
                       <p className="text-sm text-gray-500 mt-1">{item.preview}</p>
-                      <p className="text-xs text-gray-400 mt-2">{item.author} Â· {item.time || getRelativeTime(item.createdAt)}</p>
+                      <p className="text-xs text-gray-400 mt-2">{item.author} · {item.time || getRelativeTime(item.createdAt)}</p>
                     </div>
                     <button
                       onClick={() => {
@@ -2469,7 +2875,7 @@ const StudentCourse = () => {
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">{selectedMaterial.title}</h2>
                 <p className="text-base text-gray-600 mt-1">
-                  By {selectedMaterial.author || 'Trainer'} | {formatMaterialDate(selectedMaterial.publishedAt || selectedMaterial.createdAt)}
+                  By {selectedMaterial.author || 'Trainor'} | {formatMaterialDate(selectedMaterial.publishedAt || selectedMaterial.createdAt)}
                 </p>
               </div>
               <button
@@ -2567,7 +2973,7 @@ const StudentCourse = () => {
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{selectedQuizInfo.title}</h2>
-                <p className="text-sm text-gray-500 mt-1">Due {selectedQuizInfo.dueDate} Â· {selectedQuizInfo.questions.length} questions</p>
+                <p className="text-sm text-gray-500 mt-1">Due {selectedQuizInfo.dueDate} · {selectedQuizInfo.questions?.length || 0} questions</p>
               </div>
               <button
                 onClick={() => setShowQuizInfoModal(false)}
@@ -2626,13 +3032,13 @@ const StudentCourse = () => {
                 onClick={() => {
                   if (isQuizTaken(selectedQuizInfo?.id)) return;
                   setShowQuizInfoModal(false);
-                  handleStartQuiz(selectedQuizInfo);
+                  openAssessment(selectedQuizInfo);
                 }}
                 disabled={isQuizTaken(selectedQuizInfo?.id)}
                 className="px-5 py-2.5 bg-orange-500 text-white rounded-xl font-medium hover:bg-orange-600 transition-colors flex items-center gap-2 disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-gray-300"
               >
-                {isQuizTaken(selectedQuizInfo?.id) ? <CheckCircle className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                {isQuizTaken(selectedQuizInfo?.id) ? 'Taken' : 'Start Quiz'}
+                {isQuizTaken(selectedQuizInfo?.id) ? <CheckCircle className="w-4 h-4" /> : selectedQuizInfo?.type === 'Submission' ? <FileText className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                {isQuizTaken(selectedQuizInfo?.id) ? 'Taken' : selectedQuizInfo?.type === 'Submission' ? 'Open & Submit' : 'Start Quiz'}
               </button>
             </div>
           </div>
@@ -2768,7 +3174,7 @@ const StudentCourse = () => {
                 </button>
                 <div>
                   <h1 className="font-bold text-gray-900">{selectedQuiz.title}</h1>
-                  <p className="text-sm text-gray-500">{selectedQuiz.questions.length} questions Â· {selectedQuiz.totalPoints} points</p>
+                  <p className="text-sm text-gray-500">{selectedQuiz.questions.length} questions · {selectedQuiz.totalPoints} points</p>
                 </div>
               </div>
               
@@ -2897,31 +3303,14 @@ const StudentCourse = () => {
                         {selectedQuiz.questions[currentQuestion].question}
                       </h3>
 
+                      {selectedQuiz.questions[currentQuestion].description && (
+                        <p className="text-sm text-gray-500 -mt-4 mb-6">
+                          {selectedQuiz.questions[currentQuestion].description}
+                        </p>
+                      )}
+
                       <div className="space-y-3">
-                        {selectedQuiz.questions[currentQuestion].options.map((option, index) => (
-                          <button
-                            key={index}
-                            onClick={() => handleAnswerSelect(selectedQuiz.questions[currentQuestion].id, index)}
-                            className={`w-full p-4 text-left rounded-xl border-2 transition-all ${
-                              answers[selectedQuiz.questions[currentQuestion].id] === index
-                                ? 'border-orange-500 bg-orange-50'
-                                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                                answers[selectedQuiz.questions[currentQuestion].id] === index
-                                  ? 'border-orange-500 bg-orange-500'
-                                  : 'border-gray-300'
-                              }`}>
-                                {answers[selectedQuiz.questions[currentQuestion].id] === index && (
-                                  <div className="w-2 h-2 bg-white rounded-full" />
-                                )}
-                              </div>
-                              <span className="font-medium text-gray-700">{option}</span>
-                            </div>
-                          </button>
-                        ))}
+                        {renderQuestionInput(selectedQuiz.questions[currentQuestion])}
                       </div>
 
                       {/* Navigation */}
@@ -3004,42 +3393,50 @@ const StudentCourse = () => {
                     <h3 className="font-bold text-gray-900 text-lg mb-6">Review Your Answers</h3>
                     
                     <div className="space-y-4">
-                      {quizResults.questionResults.map((result, index) => (
-                        <div 
-                          key={result.id}
-                          className={`p-4 rounded-xl border-2 ${
-                            result.isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
-                          }`}
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className={`p-1 rounded-full ${result.isCorrect ? 'bg-green-500' : 'bg-red-500'}`}>
-                              {result.isCorrect ? (
-                                <CheckCircle className="w-5 h-5 text-white" />
-                              ) : (
-                                <XCircle className="w-5 h-5 text-white" />
-                              )}
-                            </div>
-                            <div className="flex-1">
-                              <p className="font-medium text-gray-900 mb-2">
-                                {index + 1}. {result.question}
-                              </p>
-                              <div className="text-sm space-y-1">
-                                <p className={result.isCorrect ? 'text-green-700' : 'text-red-700'}>
-                                  Your answer: <strong>{result.options[result.userAnswer] || 'Not answered'}</strong>
-                                </p>
-                                {!result.isCorrect && (
-                                  <p className="text-green-700">
-                                    Correct answer: <strong>{result.options[result.correctAnswer]}</strong>
-                                  </p>
+                      {quizResults.questionResults.map((result, index) => {
+                        const pending = result.autoGraded === false; // paragraph → trainer reviews
+                        const cardClass = pending
+                          ? 'border-gray-200 bg-gray-50'
+                          : result.isCorrect
+                          ? 'border-green-200 bg-green-50'
+                          : 'border-red-200 bg-red-50';
+                        const badgeClass = pending ? 'bg-gray-400' : result.isCorrect ? 'bg-green-500' : 'bg-red-500';
+                        return (
+                          <div key={result.id} className={`p-4 rounded-xl border-2 ${cardClass}`}>
+                            <div className="flex items-start gap-3">
+                              <div className={`p-1 rounded-full ${badgeClass}`}>
+                                {pending ? (
+                                  <FileText className="w-5 h-5 text-white" />
+                                ) : result.isCorrect ? (
+                                  <CheckCircle className="w-5 h-5 text-white" />
+                                ) : (
+                                  <XCircle className="w-5 h-5 text-white" />
                                 )}
                               </div>
+                              <div className="flex-1">
+                                <p className="font-medium text-gray-900 mb-2">
+                                  {index + 1}. {result.question}
+                                </p>
+                                <div className="text-sm space-y-1">
+                                  <p className={pending ? 'text-gray-700' : result.isCorrect ? 'text-green-700' : 'text-red-700'}>
+                                    Your answer: <strong>{describeAnswer(result, result.userAnswer)}</strong>
+                                  </p>
+                                  {pending ? (
+                                    <p className="text-gray-500">Your trainer will review this response.</p>
+                                  ) : !result.isCorrect ? (
+                                    <p className="text-green-700">
+                                      Correct answer: <strong>{describeCorrect(result)}</strong>
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </div>
+                              <span className={`text-sm font-medium ${pending ? 'text-gray-500' : result.isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                                {pending ? 'Review' : result.isCorrect ? `+${result.points}` : '0 pts'}
+                              </span>
                             </div>
-                            <span className={`text-sm font-medium ${result.isCorrect ? 'text-green-600' : 'text-red-600'}`}>
-                              {result.isCorrect ? `+${result.points}` : '0'} pts
-                            </span>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -3174,7 +3571,7 @@ const StudentCourse = () => {
                   )}
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900">{selectedAnnouncementDetail.author || 'Trainer'}</p>
+                  <p className="font-semibold text-gray-900">{selectedAnnouncementDetail.author || 'Trainor'}</p>
                   <p className="text-xs text-gray-500">{formatAbsoluteTime(selectedAnnouncementDetail.createdAt)}</p>
                 </div>
               </div>

@@ -178,7 +178,7 @@ const StudentWaitingRoom = ({ pendingEnrollments = [] }) => {
   };
 
   const trainerDisplayName = (trainer) =>
-    trainer.name || trainer.displayName || trainer.email || 'Trainer';
+    trainer.name || trainer.displayName || trainer.email || 'Trainor';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50 flex items-center justify-center p-4">
@@ -218,14 +218,14 @@ const StudentWaitingRoom = ({ pendingEnrollments = [] }) => {
             {/* Waiting message */}
             <div className="text-center">
               <h2 className="text-lg font-semibold text-gray-800 mb-1">
-                Wait for a Trainer to add you to their class
+                Wait for a Trainor to add you to their class
               </h2>
               <p className="text-gray-500 text-sm">
                 Once a trainer adds you (or you join with a class code), your dashboard will unlock automatically.
               </p>
             </div>
 
-            {/* Trainer picker + notify */}
+            {/* Trainor picker + notify */}
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Users className="w-5 h-5 text-gray-500" />
@@ -273,7 +273,7 @@ const StudentWaitingRoom = ({ pendingEnrollments = [] }) => {
                   >
                     <Bell className="w-4 h-4" />
                     {selectedTrainer && isOnCooldown(selectedTrainer.id)
-                      ? 'Trainer notified — please wait'
+                      ? 'Trainor notified — please wait'
                       : isNotifying
                         ? 'Notifying...'
                         : 'Notify my trainer'}

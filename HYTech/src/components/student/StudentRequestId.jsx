@@ -12,7 +12,7 @@ import {
 const TYPES = ['New', 'Lost', 'Replacement'];
 
 const STATUS_STYLE = {
-  pending: { label: 'Pending trainer approval', cls: 'bg-yellow-100 text-yellow-700', icon: Clock },
+  pending: { label: 'Pending trainor approval', cls: 'bg-yellow-100 text-yellow-700', icon: Clock },
   approved: { label: 'Approved — being produced', cls: 'bg-blue-100 text-blue-700', icon: CheckCircle },
   completed: { label: 'Ready', cls: 'bg-green-100 text-green-700', icon: CheckCircle },
   rejected: { label: 'Rejected', cls: 'bg-red-100 text-red-700', icon: XCircle },
@@ -63,7 +63,7 @@ const StudentRequestId = () => {
     setSubmitting(true);
     try {
       await createIdRequest(user.uid, {
-        studentName: user.displayName || user.name || user.email || 'Student',
+        studentName: user.displayName || user.name || user.email || 'Trainee',
         studentEmail: user.email || '',
         classId: enrollment.classId,
         className: enrollment.className,
@@ -71,7 +71,7 @@ const StudentRequestId = () => {
         type,
         notes: notes.trim(),
       });
-      addToast('ID request submitted to your trainer.', 'success');
+      addToast('ID request submitted to your trainor.', 'success');
       setNotes('');
       setType('New');
       await load();
@@ -100,7 +100,7 @@ const StudentRequestId = () => {
           </div>
           <div>
             <h2 className="text-lg font-bold text-gray-900">Request an ID</h2>
-            <p className="text-sm text-gray-500">Your trainer reviews the request, then it's sent for production.</p>
+            <p className="text-sm text-gray-500">Your trainor reviews the request, then it's sent for production.</p>
           </div>
         </div>
 
@@ -135,7 +135,7 @@ const StudentRequestId = () => {
                 rows={3}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Anything the trainer should know..."
+                placeholder="Anything the trainor should know..."
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B005C] focus:border-transparent resize-none"
               />
             </div>

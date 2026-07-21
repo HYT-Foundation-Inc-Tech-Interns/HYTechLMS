@@ -10,6 +10,13 @@ import {
   Plus,
   BookOpen,
   FolderOpen,
+  Users,
+  UserPlus,
+  Trash2,
+  DownloadCloud,
+  ToggleLeft,
+  ToggleRight,
+  Layers,
 } from 'lucide-react';
 import {
   getCourses,
@@ -17,7 +24,17 @@ import {
   createCourseTemplate,
   getSectors,
   updateCourse,
+  getTrainers,
+  getStudents,
+  getClassEnrollments,
+  adminAddStudentToClass,
+  removeEnrollment,
+  setCourseAvailability,
+  seedTesdaCatalog,
+  updateCourseTemplate,
 } from '../../utils/firestoreService';
+import { catalogTotals } from '../../data/tesdaCatalog';
+import SubjectListEditor from '../shared/SubjectListEditor';
 import { useToast } from '../../context/ToastContext';
 
 const LEVEL_OPTIONS = ['NC I', 'NC II', 'NC III', 'NC IV'];
@@ -31,7 +48,16 @@ const Classes = () => {
   const [courses, setCourses] = useState([]); // course templates (catalog)
   const [classes, setClasses] = useState([]); // running classes
   const [sectors, setSectors] = useState([]);
+  const [trainers, setTrainers] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Manage-students modal
+  const [managingClass, setManagingClass] = useState(null);
+  const [roster, setRoster] = useState([]);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [students, setStudents] = useState([]);
+  const [addStudentId, setAddStudentId] = useState('');
+  const [rosterBusy, setRosterBusy] = useState(false);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedClassId, setExpandedClassId] = useState(null);
@@ -50,6 +76,15 @@ const Classes = () => {
     status: 'Active',
   });
 
+  // Catalog import + per-program availability
+  const [seeding, setSeeding] = useState(false);
+  const [togglingId, setTogglingId] = useState(null);
+
+  // Manage-subjects modal (edit a program template's subjects)
+  const [editingSubjectsCourse, setEditingSubjectsCourse] = useState(null);
+  const [subjectDraft, setSubjectDraft] = useState([]);
+  const [savingSubjects, setSavingSubjects] = useState(false);
+
   const { addToast } = useToast();
 
   const loadAll = useCallback(async () => {
@@ -58,14 +93,16 @@ const Classes = () => {
       setError(null);
       // Load everything unfiltered and reconcile status client-side so nothing
       // is hidden by status casing (part of the admin#4 fix).
-      const [templatesData, classesData, sectorsData] = await Promise.all([
+      const [templatesData, classesData, sectorsData, trainersData] = await Promise.all([
         getCoursesTemplates({}),
         getCourses({}),
         getSectors({}),
+        getTrainers().catch(() => []),
       ]);
       setCourses(templatesData || []);
       setClasses(classesData || []);
       setSectors(sectorsData || []);
+      setTrainers(trainersData || []);
     } catch (err) {
       console.error('Error loading catalog:', err);
       setError(err.message || 'Failed to load data');
@@ -80,6 +117,78 @@ const Classes = () => {
   }, [loadAll]);
 
   const sectorName = (sectorId) => sectors.find((s) => s.id === sectorId)?.name || 'Uncategorized';
+  const trainerFor = (trainerId) => trainers.find((t) => t.id === trainerId);
+  const trainerName = (trainerId) => {
+    const t = trainerFor(trainerId);
+    return t?.name || t?.displayName || t?.email || (trainerId ? 'Unknown trainer' : 'Unassigned');
+  };
+
+  // ---- Manage students (admin) ----
+  const openManageStudents = async (cls) => {
+    setManagingClass(cls);
+    setAddStudentId('');
+    setRosterLoading(true);
+    try {
+      const [enr, studs] = await Promise.all([
+        getClassEnrollments(cls.id),
+        students.length ? Promise.resolve(students) : getStudents(),
+      ]);
+      setRoster(enr || []);
+      if (!students.length) setStudents(studs || []);
+    } catch (err) {
+      console.error('Error loading roster:', err);
+      addToast('Failed to load class roster', 'error');
+    } finally {
+      setRosterLoading(false);
+    }
+  };
+
+  const refreshRoster = async (classId) => {
+    try {
+      const enr = await getClassEnrollments(classId);
+      setRoster(enr || []);
+    } catch {
+      /* keep existing roster on failure */
+    }
+  };
+
+  const handleAddStudent = async () => {
+    if (!addStudentId) {
+      addToast('Pick a trainee to add.', 'error');
+      return;
+    }
+    const student = students.find((s) => s.id === addStudentId);
+    if (!student || !managingClass) return;
+    try {
+      setRosterBusy(true);
+      await adminAddStudentToClass(managingClass.id, {
+        id: student.id,
+        name: student.name || `${student.firstName || ''} ${student.lastName || ''}`.trim(),
+        email: student.email,
+      }, managingClass);
+      addToast('Trainee added to the class.', 'success');
+      setAddStudentId('');
+      await refreshRoster(managingClass.id);
+    } catch (err) {
+      addToast(err.message || 'Failed to add trainee', 'error');
+    } finally {
+      setRosterBusy(false);
+    }
+  };
+
+  const handleRemoveStudent = async (enrollment) => {
+    if (!window.confirm(`Remove ${enrollment.studentName || 'this trainee'} from the class?`)) return;
+    try {
+      setRosterBusy(true);
+      await removeEnrollment(enrollment.id);
+      setRoster((prev) => prev.filter((e) => e.id !== enrollment.id));
+      addToast('Trainee removed.', 'info');
+    } catch (err) {
+      addToast(err.message || 'Failed to remove trainee', 'error');
+    } finally {
+      setRosterBusy(false);
+    }
+  };
 
   const filteredCourses = courses.filter((c) => {
     const q = searchTerm.toLowerCase();
@@ -164,6 +273,81 @@ const Classes = () => {
     }
   };
 
+  const handleImportCatalog = async () => {
+    const totals = catalogTotals();
+    if (
+      !window.confirm(
+        `Import the TESDA catalog?\n\nThis adds up to ${totals.sectors} sectors and ${totals.programs} programs ` +
+          `(with ${totals.subjects} subjects). Programs start OFF — you enable each one before trainors can offer it. ` +
+          `Anything already present is skipped, so this is safe to re-run.`
+      )
+    ) {
+      return;
+    }
+    try {
+      setSeeding(true);
+      const res = await seedTesdaCatalog();
+      addToast(
+        `Catalog imported: +${res.sectorsCreated} sectors, +${res.programsCreated} programs` +
+          (res.programsSkipped ? ` (${res.programsSkipped} already existed)` : ''),
+        'success'
+      );
+      await loadAll();
+      setActiveTab('courses');
+    } catch (err) {
+      console.error('Error importing catalog:', err);
+      addToast(err.message || 'Failed to import catalog', 'error');
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleToggleAvailability = async (course) => {
+    const next = !course.available;
+    setTogglingId(course.id);
+    // Optimistic update.
+    setCourses((prev) => prev.map((c) => (c.id === course.id ? { ...c, available: next } : c)));
+    try {
+      await setCourseAvailability(course.id, next);
+      addToast(
+        next ? `“${course.name}” is now available to trainors.` : `“${course.name}” is hidden from trainors.`,
+        next ? 'success' : 'info'
+      );
+    } catch (err) {
+      // Roll back on failure.
+      setCourses((prev) => prev.map((c) => (c.id === course.id ? { ...c, available: !next } : c)));
+      addToast(err.message || 'Failed to update availability', 'error');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const openSubjectsEditor = (course) => {
+    setEditingSubjectsCourse(course);
+    setSubjectDraft(Array.isArray(course.subjects) ? [...course.subjects] : []);
+  };
+
+  const handleSaveSubjects = async () => {
+    if (!editingSubjectsCourse) return;
+    // Drop blank rows before saving.
+    const cleaned = subjectDraft.map((s) => s.trim()).filter(Boolean);
+    try {
+      setSavingSubjects(true);
+      await updateCourseTemplate(editingSubjectsCourse.id, { subjects: cleaned });
+      setCourses((prev) =>
+        prev.map((c) => (c.id === editingSubjectsCourse.id ? { ...c, subjects: cleaned } : c))
+      );
+      addToast('Subjects updated.', 'success');
+      setEditingSubjectsCourse(null);
+      setSubjectDraft([]);
+    } catch (err) {
+      console.error('Error saving subjects:', err);
+      addToast(err.message || 'Failed to save subjects', 'error');
+    } finally {
+      setSavingSubjects(false);
+    }
+  };
+
   const handleCreateCourse = async () => {
     if (!newCourse.name.trim()) {
       addToast('Give the course a name.', 'error');
@@ -221,17 +405,29 @@ const Classes = () => {
           <div>
             <h1 className="text-4xl font-bold text-gray-900">Courses &amp; Classes</h1>
             <p className="text-gray-600 mt-2">
-              <span className="font-medium">Courses</span> are the catalog (created per category).{' '}
-              <span className="font-medium">Classes</span> are the running sessions trainers open from a course.
+              <span className="font-medium">Courses</span> are the catalog (programs, per category). A program is
+              hidden from trainors until you <span className="font-medium">Make available</span>.{' '}
+              <span className="font-medium">Classes</span> are the running sessions trainors open from an available course.
             </p>
           </div>
-          <button
-            onClick={() => setShowAddCourse(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-          >
-            <Plus className="w-4 h-4" />
-            New Course
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleImportCatalog}
+              disabled={seeding}
+              className="flex items-center gap-2 px-4 py-2.5 border border-blue-200 bg-white text-blue-700 rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium disabled:opacity-50"
+              title="Import the full TESDA sector/program/subject catalog (programs start disabled)"
+            >
+              {seeding ? <Loader className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}
+              {seeding ? 'Importing…' : 'Import TESDA Catalog'}
+            </button>
+            <button
+              onClick={() => setShowAddCourse(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              <Plus className="w-4 h-4" />
+              New Course
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -308,14 +504,46 @@ const Classes = () => {
                     <div className="p-4">
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="font-semibold text-gray-900">{course.name}</h3>
-                        {statusBadge(course.status)}
+                        <span
+                          className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ${
+                            course.available ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          {course.available ? 'Available' : 'Off'}
+                        </span>
                       </div>
                       <p className="text-xs text-gray-500 uppercase tracking-wide mt-1">{sectorName(course.sectorId)}</p>
                       <p className="text-sm text-gray-600 mt-2 line-clamp-2">{course.description || 'No description'}</p>
                       <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-                        <span className="text-gray-500">Level</span>
+                        <button
+                          onClick={() => openSubjectsEditor(course)}
+                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 font-medium"
+                          title="Edit the subjects (modules) for this program"
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                          {(course.subjects?.length || 0)} subject{(course.subjects?.length || 0) === 1 ? '' : 's'} · Edit
+                        </button>
                         <span className="font-semibold text-gray-900">{course.level || 'N/A'}</span>
                       </div>
+                      <button
+                        onClick={() => handleToggleAvailability(course)}
+                        disabled={togglingId === course.id}
+                        className={`mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                          course.available
+                            ? 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
+                      >
+                        {togglingId === course.id ? (
+                          <Loader className="w-4 h-4 animate-spin" />
+                        ) : course.available ? (
+                          <ToggleRight className="w-4 h-4" />
+                        ) : (
+                          <ToggleLeft className="w-4 h-4" />
+                        )}
+                        {course.available ? 'Make unavailable' : 'Make available'}
+                      </button>
+                      <p className="mt-2 text-[10px] text-gray-400 font-mono truncate" title={course.id}>ID: {course.id}</p>
                     </div>
                   </div>
                 ))}
@@ -331,7 +559,7 @@ const Classes = () => {
               <div className="bg-white rounded-lg p-12 text-center border border-gray-200">
                 <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-600 text-lg">
-                  {searchTerm ? 'No classes match your search.' : 'No classes yet. Trainers open classes from a course.'}
+                  {searchTerm ? 'No classes match your search.' : 'No classes yet. Trainors open classes from a course.'}
                 </p>
               </div>
             ) : (
@@ -344,7 +572,15 @@ const Classes = () => {
                     >
                       <div className="flex-1 text-left">
                         <h3 className="text-lg font-semibold text-gray-900">{course.name}</h3>
-                        <p className="text-sm text-gray-600 mt-1">{course.description || 'No description'}</p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-gray-500">
+                          <span className="inline-flex items-center gap-1">
+                            <Users className="w-3.5 h-3.5" />
+                            {trainerName(course.trainerId)}
+                          </span>
+                          {course.classCode && (
+                            <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{course.classCode}</span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-4">
                         {statusBadge(course.status)}
@@ -359,7 +595,14 @@ const Classes = () => {
                     {expandedClassId === course.id && (
                       <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 space-y-4">
                         {!editingClassId && (
-                          <div className="flex justify-end">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => openManageStudents(course)}
+                              className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                            >
+                              <Users className="w-4 h-4" />
+                              Manage Trainees
+                            </button>
                             <button
                               onClick={() => startEditing(course)}
                               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
@@ -465,6 +708,14 @@ const Classes = () => {
                               <div>
                                 <p className="text-sm font-medium text-gray-700 mb-1">Class Code</p>
                                 <p className="text-gray-900 font-mono text-xs break-all">{course.classCode || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 mb-1">Trainor</p>
+                                <p className="text-gray-900">{trainerName(course.trainerId)}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 mb-1">Class ID</p>
+                                <p className="text-gray-900 font-mono text-xs break-all">{course.id}</p>
                               </div>
                               {course.sector && (
                                 <div>
@@ -593,6 +844,129 @@ const Classes = () => {
               >
                 {savingCourse ? <Loader className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 {savingCourse ? 'Creating…' : 'Create Course'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Trainees modal */}
+      {managingClass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setManagingClass(null)} />
+          <div className="relative bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Manage Trainees</h2>
+                <p className="text-sm text-gray-500">{managingClass.name} · Trainor: {trainerName(managingClass.trainerId)}</p>
+              </div>
+              <button onClick={() => setManagingClass(null)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Add student */}
+            <div className="p-4 border-b border-gray-100 flex items-center gap-2">
+              <div className="relative flex-1">
+                <select
+                  value={addStudentId}
+                  onChange={(e) => setAddStudentId(e.target.value)}
+                  className="w-full pl-3 pr-8 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm appearance-none"
+                >
+                  <option value="">Add a student…</option>
+                  {students
+                    .filter((s) => !roster.some((e) => e.studentId === s.id))
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {(s.name || `${s.firstName || ''} ${s.lastName || ''}`.trim() || s.email)} — {s.idNumber || s.email}
+                      </option>
+                    ))}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              </div>
+              <button
+                onClick={handleAddStudent}
+                disabled={rosterBusy || !addStudentId}
+                className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                <UserPlus className="w-4 h-4" />
+                Add
+              </button>
+            </div>
+
+            {/* Roster */}
+            <div className="p-4 overflow-y-auto">
+              {rosterLoading ? (
+                <div className="py-8 text-center text-gray-500 text-sm">Loading roster…</div>
+              ) : roster.length === 0 ? (
+                <div className="py-8 text-center text-gray-500 text-sm">No trainees in this class yet.</div>
+              ) : (
+                <div className="space-y-2">
+                  {roster.map((e) => (
+                    <div key={e.id} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 truncate">{e.studentName || e.studentId}</p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {e.studentEmail || '—'}
+                          <span className={`ml-2 px-1.5 py-0.5 rounded-full ${e.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                            {e.status || 'active'}
+                          </span>
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveStudent(e)}
+                        disabled={rosterBusy}
+                        className="flex-shrink-0 p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                        title="Remove from class"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Subjects modal (edit a program template's subjects) */}
+      {editingSubjectsCourse && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setEditingSubjectsCourse(null)} />
+          <div className="relative bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Edit Subjects</h2>
+                <p className="text-sm text-gray-500">{editingSubjectsCourse.name}</p>
+              </div>
+              <button onClick={() => setEditingSubjectsCourse(null)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              <SubjectListEditor
+                subjects={subjectDraft}
+                onChange={setSubjectDraft}
+                disabled={savingSubjects}
+                label="Subjects"
+                hint="These seed a class's modules when a trainor creates a class from this program. Trainors can further tweak them per class."
+              />
+            </div>
+            <div className="p-6 border-t border-gray-100 flex justify-end gap-2">
+              <button
+                onClick={() => setEditingSubjectsCourse(null)}
+                className="px-4 py-2 border border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveSubjects}
+                disabled={savingSubjects}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {savingSubjects ? <Loader className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                {savingSubjects ? 'Saving…' : 'Save Subjects'}
               </button>
             </div>
           </div>

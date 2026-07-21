@@ -69,7 +69,7 @@ const StudentArchivedCourses = () => {
             id: enrollment.id,
             name: enrollment.className || 'Graduated Class',
             courseName: courseTemplate?.name || enrollment.courseName || 'Course',
-            instructor: courseTemplate?.trainerName || 'Trainer',
+            instructor: courseTemplate?.trainerName || 'Trainor',
             completedDate: enrollment.completedAt 
               ? new Date(enrollment.completedAt.toDate?.() || enrollment.completedAt).toLocaleDateString('en-US', {
                   year: 'numeric',
@@ -198,7 +198,7 @@ const StudentArchivedCourses = () => {
                 </div>
                 <div className="flex items-center gap-1">
                   <Users className="w-4 h-4 text-gray-400" />
-                  <span>{course.students} students</span>
+                  <span>{course.students} trainees</span>
                 </div>
               </div>
 
@@ -279,7 +279,7 @@ const StudentArchivedCourses = () => {
                     <Users className="w-5 h-5 text-blue-500" />
                     <span className="text-xl font-bold text-gray-900">{selectedCourse.students}</span>
                   </div>
-                  <p className="text-sm text-gray-500">Students</p>
+                  <p className="text-sm text-gray-500">Trainees</p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-4 text-center">
                   <div className="flex items-center justify-center gap-1 mb-1">
@@ -415,7 +415,7 @@ const StudentArchivedCourses = () => {
                   <h4 className="text-2xl font-black text-[#1e3a8a] tracking-wide">CERTIFICATE OF COMPLETION</h4>
                   <p className="text-sm text-gray-500 mt-4">This certifies that</p>
                   <p className="text-3xl text-[#1e3a8a] mt-1" style={{ fontFamily: "'Pinyon Script', cursive" }}>
-                    {selectedCourse.recipientName || 'Student'}
+                    {selectedCourse.recipientName || 'Trainee'}
                   </p>
                   <p className="text-sm text-gray-500 mt-4">has successfully completed</p>
                   <p className="text-xl font-bold text-gray-900 mt-1">{selectedCourse.name}</p>
