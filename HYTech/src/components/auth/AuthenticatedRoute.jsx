@@ -34,8 +34,21 @@ const AuthenticatedRoute = ({ children }) => {
       unsubscribeUserStatus = onSnapshot(
         doc(db, 'users', user.uid),
         async (userSnap) => {
-          const status = userSnap.exists() ? (userSnap.data()?.status || 'Active') : 'Active';
+          const data = userSnap.exists() ? (userSnap.data() || {}) : {};
+          const status = data.status || 'Active';
           if (status !== 'Active') {
+            await signOut(auth);
+            setIsAuthenticated(false);
+            setIsLoading(false);
+            return;
+          }
+
+          // Backstop for the email-verification gate: block unverified
+          // self-registered sessions. Admin-created / staff accounts are exempt.
+          const roleLower = String(data.role || '').toLowerCase();
+          const isVerificationExempt =
+            data.createdBy === 'admin' || roleLower === 'admin' || roleLower === 'trainer';
+          if (!isVerificationExempt && !user.emailVerified) {
             await signOut(auth);
             setIsAuthenticated(false);
             setIsLoading(false);

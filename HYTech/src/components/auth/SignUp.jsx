@@ -5,7 +5,9 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   setPersistence,
+  signOut,
 } from 'firebase/auth';
 import { auth, firebaseInitError } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
@@ -207,7 +209,19 @@ const SignUp = () => {
         email: formData.email.trim(),
       });
 
-      addToast('Account created! Sign in, then wait for a trainor to add you to a class.', 'success');
+      // Send the email-verification link, then sign out so the user must verify
+      // before their first real sign-in (enforced at /signin).
+      try {
+        await sendEmailVerification(credential.user);
+      } catch (verifyErr) {
+        console.warn('Could not send verification email:', verifyErr?.message);
+      }
+      await signOut(auth).catch(() => {});
+
+      addToast(
+        `Account created! We sent a verification link to ${formData.email.trim()}. Verify your email, then sign in.`,
+        'success'
+      );
       localStorage.removeItem(SIGN_UP_DRAFT_KEY);
       navigate('/signin');
     } catch (error) {

@@ -50,9 +50,25 @@ const RoleProtectedRoute = ({ allowedRole, children }) => {
           async (userSnap) => {
             if (!isMounted) return;
 
-            const status = String(userSnap.exists() ? (userSnap.data()?.status || 'Active') : 'Active').toLowerCase();
+            const data = userSnap.exists() ? (userSnap.data() || {}) : {};
+            const status = String(data.status || 'Active').toLowerCase();
 
             if (status !== 'active') {
+              await signOut(auth);
+              if (isMounted) {
+                setIsAuthenticated(false);
+                setUserRole('');
+                setIsLoading(false);
+              }
+              return;
+            }
+
+            // Backstop for the email-verification gate: block unverified
+            // self-registered sessions. Admin-created / staff accounts are exempt.
+            const roleLower = String(data.role || '').toLowerCase();
+            const isVerificationExempt =
+              data.createdBy === 'admin' || roleLower === 'admin' || roleLower === 'trainer';
+            if (!isVerificationExempt && !user.emailVerified) {
               await signOut(auth);
               if (isMounted) {
                 setIsAuthenticated(false);

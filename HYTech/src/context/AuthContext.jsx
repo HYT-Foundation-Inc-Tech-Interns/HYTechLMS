@@ -26,6 +26,7 @@ export const AuthProvider = ({ children }) => {
               displayName: userData.name || firebaseUser.displayName,
               role: userData.role,
               ...userData,
+              emailVerified: firebaseUser.emailVerified,
             });
           } else {
             // Create user profile if it doesn't exist
