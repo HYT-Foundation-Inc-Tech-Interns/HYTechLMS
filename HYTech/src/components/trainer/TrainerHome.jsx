@@ -23,6 +23,7 @@ import { useAuth } from '../../context/AuthContext';
 import SubjectListEditor from '../shared/SubjectListEditor';
 import {
   getCourses,
+  getClassesForTrainer,
   getCoursesTemplates,
   getCourseApplications,
   getCourseEnrollments,
@@ -104,11 +105,8 @@ const TrainerHome = () => {
         setLoadingCourses(true);
         setErrorMessage(null);
 
-        // Load trainer's active courses (classes)
-        const coursesData = await getCourses({
-          trainerId: user.uid,
-          status: 'Active',
-        });
+        // Load classes this trainer leads OR co-trains.
+        const coursesData = await getClassesForTrainer(user.uid, { status: 'Active' });
         setCourses(coursesData || []);
 
         // Load available course templates (programs an admin has switched on)
@@ -323,12 +321,9 @@ const TrainerHome = () => {
       });
       setClassSubjects([]);
 
-      // Reload trainer's courses to show the newly created class
+      // Reload trainer's classes (led + co-trained) to show the new class
       try {
-        const coursesData = await getCourses({
-          trainerId: user.uid,
-          status: 'Active',
-        });
+        const coursesData = await getClassesForTrainer(user.uid, { status: 'Active' });
         setCourses(coursesData || []);
       } catch (reloadError) {
         console.error('Error reloading courses:', reloadError);

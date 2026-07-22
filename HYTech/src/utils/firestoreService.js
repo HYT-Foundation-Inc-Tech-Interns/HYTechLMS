@@ -19,6 +19,7 @@ import {
   Timestamp,
   onSnapshot,
   arrayUnion,
+  arrayRemove,
   deleteField,
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
@@ -30,6 +31,25 @@ import { TESDA_CATALOG, parseLevel } from '../data/tesdaCatalog';
  * Create or update user profile on signup/registration
  * Called after Firebase Auth user creation
  */
+
+// Next sequential trainee/user ID number, mirroring the admin "Add User" flow
+// (max existing numeric idNumber + 1, else a base seed). Used so self-registered
+// trainees get an ID number too — not just admin-created accounts.
+const ID_NUMBER_SEED = '5684236526';
+export const generateNextIdNumber = async () => {
+  try {
+    const snapshot = await getDocs(collection(db, 'users'));
+    const numeric = snapshot.docs
+      .map((d) => Number(d.data()?.idNumber))
+      .filter((n) => !Number.isNaN(n));
+    return numeric.length > 0 ? String(Math.max(...numeric) + 1) : ID_NUMBER_SEED;
+  } catch (error) {
+    console.warn('Could not generate next ID number:', error?.message);
+    // Fall back to a timestamp-based value so the field is never blank.
+    return String(Date.now());
+  }
+};
+
 export const createUserProfile = async (userId, userData) => {
   try {
     const userRef = doc(db, 'users', userId);
@@ -355,19 +375,23 @@ export const deleteSector = async (sectorId) => {
   }
 };
 
-const isActiveCourseStatus = (status) => String(status || 'Active').toLowerCase() === 'active';
+// A course counts toward a sector being "active" only when it is switched ON
+// for trainers (available: true). Basing this on the `status` field was
+// near-useless: the TESDA catalog import stamps every program status:'Active'
+// (they're gated by available:false), so almost every sector stayed Active.
+const isSectorActiveCourse = (course) => course?.available === true;
 
 /**
  * Recompute a single sector's status from its course templates.
- * A sector is Active iff it has at least one Active course template; otherwise Inactive.
- * Used after an explicit course change (create/edit/delete/status-toggle) so the
- * sector recovers to Active when it gains a course and drops to Inactive when emptied.
+ * A sector is Active iff it has at least one AVAILABLE (switched-on) program;
+ * otherwise Inactive. Used after an explicit course change so the sector recovers
+ * to Active when a program is enabled and drops to Inactive when none remain.
  */
 export const syncSectorStatus = async (sectorId) => {
   if (!sectorId) return null;
   try {
     const templates = await getCoursesTemplates({ sectorId });
-    const desired = templates.some((c) => isActiveCourseStatus(c.status)) ? 'Active' : 'Inactive';
+    const desired = templates.some(isSectorActiveCourse) ? 'Active' : 'Inactive';
     const sectorRef = doc(db, 'sectors', sectorId);
     const snap = await getDoc(sectorRef);
     if (snap.exists() && String(snap.data().status || '') !== desired) {
@@ -381,8 +405,8 @@ export const syncSectorStatus = async (sectorId) => {
 };
 
 /**
- * Reconcile every sector: any sector with zero Active course templates is
- * marked Inactive (auto-downgrade only — sectors that still have active courses
+ * Reconcile every sector: any sector with zero AVAILABLE programs is marked
+ * Inactive (auto-downgrade only — sectors that still have an available program
  * keep whatever status they have). Returns the sectors with their effective
  * status applied so callers can render without a second read.
  */
@@ -394,7 +418,7 @@ export const reconcileSectorStatuses = async () => {
     ]);
     const sectorsWithActive = new Set(
       templates
-        .filter((c) => isActiveCourseStatus(c.status))
+        .filter(isSectorActiveCourse)
         .map((c) => c.sectorId)
         .filter(Boolean)
     );
@@ -471,6 +495,37 @@ export const getCourses = async (filters = {}) => {
     return courses;
   } catch (error) {
     console.error('Error fetching classes:', error);
+    throw error;
+  }
+};
+
+/**
+ * All classes a trainer can teach: ones they LEAD (trainerId) plus ones they
+ * co-train (coTrainerIds array-contains). Merged unique; status filtered
+ * client-side to avoid composite indexes.
+ */
+export const getClassesForTrainer = async (trainerId, { status } = {}) => {
+  try {
+    if (!trainerId) return [];
+    const classesCollection = collection(db, 'classes');
+    const [ledSnap, coSnap] = await Promise.all([
+      getDocs(query(classesCollection, where('trainerId', '==', trainerId))),
+      getDocs(query(classesCollection, where('coTrainerIds', 'array-contains', trainerId))).catch(() => ({ docs: [] })),
+    ]);
+    const byId = new Map();
+    [...ledSnap.docs, ...coSnap.docs].forEach((d) => {
+      if (!byId.has(d.id)) byId.set(d.id, { id: d.id, ...d.data() });
+    });
+    let classes = Array.from(byId.values());
+    if (status) classes = classes.filter((c) => String(c.status || '') === status);
+    classes.sort((a, b) => {
+      const dateA = a.createdAt?.toDate?.() || new Date(0);
+      const dateB = b.createdAt?.toDate?.() || new Date(0);
+      return dateB - dateA;
+    });
+    return classes;
+  } catch (error) {
+    console.error('Error fetching trainer classes:', error);
     throw error;
   }
 };
@@ -672,6 +727,8 @@ export const createCourse = async (courseData, { sectorId = null, trainerId = nu
       ...classFields,
       sectorId: sectorId || null,
       trainerId: trainerId || null,
+      // Additional trainers who share edit rights (the lead is `trainerId`).
+      coTrainerIds: [],
       status: classFields.status || 'Active',
       currentEnrollments: 0,
       createdAt: serverTimestamp(),
@@ -680,8 +737,12 @@ export const createCourse = async (courseData, { sectorId = null, trainerId = nu
 
     const docRef = await addDoc(classesRef, newCourse);
 
-    // Seed the class's modules from the program's subjects. Each subject
-    // becomes an editable collapsible section (module) in the new class.
+    // Seed the class's TOPICS from the program's subjects. Each subject becomes
+    // a section (topic) in the Modules tab — this is what both the trainer's
+    // Modules tab and the student course view actually render (the older
+    // `modules` subcollection was never displayed, so seeded subjects appeared
+    // to "vanish"). Seeded topics are published so the standard curriculum is
+    // visible immediately; the trainer can unpublish/rename any of them.
     // A trainer-edited list is passed inline; otherwise read off the template.
     try {
       let subjects = Array.isArray(inlineSubjects) ? inlineSubjects : null;
@@ -691,24 +752,30 @@ export const createCourse = async (courseData, { sectorId = null, trainerId = nu
       }
       if (subjects && subjects.length) {
         const batch = writeBatch(db);
+        // getClassTopics orders by createdAt asc, so stamp incrementally to keep
+        // the subject order the trainer arranged in the template.
+        const baseMs = Date.now();
         subjects.forEach((subject, index) => {
           const title = (typeof subject === 'string' ? subject : subject?.title || '').trim();
           if (!title) return;
-          const moduleRef = doc(collection(db, 'classes', docRef.id, 'modules'));
-          batch.set(moduleRef, {
+          const topicRef = doc(collection(db, 'classes', docRef.id, 'topics'));
+          batch.set(topicRef, {
             title,
             description: '',
+            author: classFields.trainerName || '',
+            authorId: trainerId || '',
+            isPublished: true,
             order: index + 1,
-            createdAt: serverTimestamp(),
+            createdAt: Timestamp.fromDate(new Date(baseMs + index * 1000)),
             updatedAt: serverTimestamp(),
           });
         });
         await batch.commit();
       }
-    } catch (moduleErr) {
-      // A class with no seeded modules is still usable — the trainer can add
+    } catch (seedErr) {
+      // A class with no seeded topics is still usable — the trainer can add
       // them manually. Don't fail class creation over this.
-      console.warn('Could not seed class modules from subjects:', moduleErr?.message);
+      console.warn('Could not seed class topics from subjects:', seedErr?.message);
     }
 
     // Log activity
@@ -721,6 +788,128 @@ export const createCourse = async (courseData, { sectorId = null, trainerId = nu
     return docRef.id;
   } catch (error) {
     console.error('Error creating class:', error);
+    throw error;
+  }
+};
+
+// ---- Class engagement activity (open/close, assessment alt-tab) ----
+
+/**
+ * Record a student engagement event on a class. Best-effort: never throws so it
+ * can't disrupt the student's session. `type` is one of:
+ * 'class_open' | 'class_close' | 'assessment_blur' | 'assessment_focus'.
+ */
+export const logClassActivity = async (classId, { studentId, studentName = '', type, assessmentId = '', assessmentTitle = '' }) => {
+  try {
+    if (!classId || !studentId || !type) return;
+    await addDoc(collection(db, 'classes', classId, 'activity'), {
+      studentId,
+      studentName,
+      type,
+      assessmentId,
+      assessmentTitle,
+      at: serverTimestamp(),
+    });
+  } catch (error) {
+    // Engagement logging must never break the class/assessment experience.
+    console.debug('Could not log class activity:', error?.code || error?.message);
+  }
+};
+
+/**
+ * Fetch recent engagement events for a class (trainer/admin Logs tab), newest first.
+ */
+export const getClassActivity = async (classId, max = 300) => {
+  try {
+    if (!classId) return [];
+    const q = query(collection(db, 'classes', classId, 'activity'), orderBy('at', 'desc'), limit(max));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.error('Error fetching class activity:', error);
+    return [];
+  }
+};
+
+// ---- Co-trainers & ownership (lead trainer manages these; enforced by rules) ----
+
+/**
+ * Add a co-trainer to a class. Co-trainers get the same content/roster powers
+ * as the lead (see classTrainer() in firestore.rules). Lead-only in practice
+ * because only the lead can write the class doc.
+ */
+export const addCoTrainer = async (classId, trainerId) => {
+  try {
+    if (!classId || !trainerId) throw new Error('Missing class or trainer.');
+    await updateDoc(doc(db, 'classes', classId), {
+      coTrainerIds: arrayUnion(trainerId),
+      updatedAt: serverTimestamp(),
+    });
+    logActivity(auth?.currentUser?.uid, 'cotrainer_added', 'classes', classId, { trainerId });
+    createNotification({
+      toUid: trainerId,
+      type: 'cotrainer_added',
+      text: 'You were added as a co-trainer to a class.',
+      metadata: { classId },
+    }).catch(() => {});
+    return true;
+  } catch (error) {
+    console.error('Error adding co-trainer:', error);
+    throw error;
+  }
+};
+
+export const removeCoTrainer = async (classId, trainerId) => {
+  try {
+    if (!classId || !trainerId) throw new Error('Missing class or trainer.');
+    await updateDoc(doc(db, 'classes', classId), {
+      coTrainerIds: arrayRemove(trainerId),
+      updatedAt: serverTimestamp(),
+    });
+    logActivity(auth?.currentUser?.uid, 'cotrainer_removed', 'classes', classId, { trainerId });
+    return true;
+  } catch (error) {
+    console.error('Error removing co-trainer:', error);
+    throw error;
+  }
+};
+
+/**
+ * Transfer lead ownership of a class to another trainer. The new lead becomes
+ * `trainerId`; the previous lead is demoted to a co-trainer (and the new lead is
+ * removed from coTrainerIds). Only the current lead (or admin) may do this.
+ */
+export const transferClassOwnership = async (classId, newLeadId) => {
+  try {
+    if (!classId || !newLeadId) throw new Error('Missing class or new lead.');
+    const ref = doc(db, 'classes', classId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Class not found.');
+    const data = snap.data() || {};
+    const oldLead = data.trainerId || '';
+    if (oldLead === newLeadId) return true; // already the lead
+    const existingCo = Array.isArray(data.coTrainerIds) ? data.coTrainerIds : [];
+    // New lead leaves the co-trainer list; old lead joins it (kept on the class).
+    const nextCo = existingCo.filter((id) => id && id !== newLeadId);
+    if (oldLead && !nextCo.includes(oldLead)) nextCo.push(oldLead);
+    await updateDoc(ref, {
+      trainerId: newLeadId,
+      coTrainerIds: nextCo,
+      updatedAt: serverTimestamp(),
+    });
+    logActivity(auth?.currentUser?.uid, 'class_ownership_transferred', 'classes', classId, {
+      from: oldLead,
+      to: newLeadId,
+    });
+    createNotification({
+      toUid: newLeadId,
+      type: 'class_ownership_transferred',
+      text: 'You are now the lead trainer of a class.',
+      metadata: { classId },
+    }).catch(() => {});
+    return true;
+  } catch (error) {
+    console.error('Error transferring class ownership:', error);
     throw error;
   }
 };
@@ -778,10 +967,17 @@ export const updateCourse = async (courseId, updates) => {
  */
 export const setCourseAvailability = async (courseId, available) => {
   try {
-    await updateDoc(doc(db, 'courses', courseId), {
+    const courseRef = doc(db, 'courses', courseId);
+    await updateDoc(courseRef, {
       available: !!available,
       updatedAt: serverTimestamp(),
     });
+    // A sector is Active iff it has ≥1 available program, so re-sync its status.
+    try {
+      const snap = await getDoc(courseRef);
+      const sectorId = snap.exists() ? snap.data().sectorId : null;
+      if (sectorId) await syncSectorStatus(sectorId);
+    } catch { /* best-effort */ }
     return true;
   } catch (error) {
     console.error('Error setting course availability:', error);
@@ -2720,10 +2916,10 @@ export const getModuleMaterials = async (classId, moduleId) => {
 /**
  * Create a material (draft) for a class - visible to trainer only
  */
-export const createMaterial = async (classId, { title, description, author, authorId, attachments = [], filesBase64 = [], topicId = null }) => {
+export const createMaterial = async (classId, { title, description, author, authorId, attachments = [], filesBase64 = [], link = '', topicId = null }) => {
   try {
     const materialsRef = collection(db, 'classes', classId, 'materials');
-    
+
     const material = {
       title,
       description,
@@ -2731,6 +2927,8 @@ export const createMaterial = async (classId, { title, description, author, auth
       authorId,
       attachments: Array.isArray(attachments) ? attachments : [],
       filesBase64: Array.isArray(filesBase64) ? filesBase64 : [],
+      // Optional external link — a material can be just a link with no file.
+      link: (link || '').trim(),
       topicId: topicId || null,
       isPublished: false, // Draft by default
       createdAt: serverTimestamp(),
@@ -2835,19 +3033,20 @@ export const unpublishMaterial = async (classId, materialId) => {
 /**
  * Update a material
  */
-export const updateMaterial = async (classId, materialId, { title, description, attachments = [], filesBase64 = [] }) => {
+export const updateMaterial = async (classId, materialId, { title, description, attachments = [], filesBase64 = [], link = '' }) => {
   try {
     const materialRef = doc(db, 'classes', classId, 'materials', materialId);
-    
+
     await updateDoc(materialRef, {
       title,
       description,
       attachments: Array.isArray(attachments) ? attachments : [],
       filesBase64: Array.isArray(filesBase64) ? filesBase64 : [],
+      link: (link || '').trim(),
       updatedAt: serverTimestamp(),
     });
-    
-    return { id: materialId, title, description, attachments, filesBase64 };
+
+    return { id: materialId, title, description, attachments, filesBase64, link: (link || '').trim() };
   } catch (error) {
     console.error('Error updating material:', error);
     throw error;
@@ -2953,16 +3152,61 @@ export const subscribeToClassTopics = (classId, callback) => {
 export const updateTopic = async (classId, topicId, { title, description }) => {
   try {
     const topicRef = doc(db, 'classes', classId, 'topics', topicId);
-    
+
     await updateDoc(topicRef, {
       title,
       description,
       updatedAt: serverTimestamp(),
     });
-    
+
     return { id: topicId, title, description };
   } catch (error) {
     console.error('Error updating topic:', error);
+    throw error;
+  }
+};
+
+/**
+ * Persist a new topic order (drag-to-reorder). `orderedIds` is the full list of
+ * topic ids in their new order; each topic's `order` field is set to its index.
+ */
+export const reorderTopics = async (classId, orderedIds = []) => {
+  try {
+    if (!classId || !Array.isArray(orderedIds) || orderedIds.length === 0) return true;
+    const batch = writeBatch(db);
+    orderedIds.forEach((topicId, index) => {
+      batch.update(doc(db, 'classes', classId, 'topics', topicId), { order: index, updatedAt: serverTimestamp() });
+    });
+    await batch.commit();
+    return true;
+  } catch (error) {
+    console.error('Error reordering topics:', error);
+    throw error;
+  }
+};
+
+// Map a module item kind to its Firestore subcollection.
+const MODULE_ITEM_COLLECTIONS = {
+  material: 'materials',
+  assessment: 'assessments',
+  assignment: 'assignments', // tasks (Submission) and quiz-assignments live here
+};
+
+/**
+ * Move a material / assessment / task into a topic (or out to "unassigned" when
+ * topicId is null). Drives the drag-and-drop organiser in the Modules tab.
+ */
+export const setModuleItemTopic = async (classId, kind, itemId, topicId) => {
+  try {
+    const sub = MODULE_ITEM_COLLECTIONS[kind];
+    if (!classId || !sub || !itemId) throw new Error('Invalid module item.');
+    await updateDoc(doc(db, 'classes', classId, sub, itemId), {
+      topicId: topicId || null,
+      updatedAt: serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error moving module item:', error);
     throw error;
   }
 };
@@ -3041,7 +3285,8 @@ export const createAssessment = async (classId, {
   questions = [],
   availableDate = null,
   dueDate = null,
-  status = 'active'
+  status = 'active',
+  topicId = null
 }) => {
   try {
     // Validate required fields
@@ -3071,6 +3316,7 @@ export const createAssessment = async (classId, {
       showScores,
       showCorrectAnswers,
       questions,
+      topicId: topicId || null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       status,
@@ -3136,7 +3382,9 @@ export const createAssignment = async (classId, {
   dueDate = null,
   points = 100,
   questions = [],
-  status = 'active'
+  status = 'active',
+  allowedUploadTypes = [],
+  topicId = null
 }) => {
   try {
     const hasPublishableQuestion = Array.isArray(questions)
@@ -3169,11 +3417,15 @@ export const createAssignment = async (classId, {
       dueDate,
       points,
       questions,
+      // For Submission tasks: which upload kinds the trainee may hand in.
+      // Empty = no restriction (legacy behaviour: text + any file).
+      allowedUploadTypes: Array.isArray(allowedUploadTypes) ? allowedUploadTypes : [],
+      topicId: topicId || null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       status
     };
-    
+
     const docRef = await addDoc(assignmentsRef, assignment);
     return { id: docRef.id, ...assignment };
   } catch (error) {
@@ -3199,6 +3451,19 @@ export const getAssignments = async (classId) => {
     }));
   } catch (error) {
     console.error('Error getting assignments:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete an assignment (task / quiz-assignment).
+ */
+export const deleteAssignment = async (classId, assignmentId) => {
+  try {
+    await deleteDoc(doc(db, 'classes', classId, 'assignments', assignmentId));
+    return true;
+  } catch (error) {
+    console.error('Error deleting assignment:', error);
     throw error;
   }
 };
@@ -3240,7 +3505,7 @@ export const updateAssignment = async (classId, assignmentId, updates) => {
 export const submitAssignment = async (
   classId,
   assignmentId,
-  { studentId, studentName = '', text = '', files = [] }
+  { studentId, studentName = '', text = '', link = '', files = [] }
 ) => {
   try {
     if (!classId || !assignmentId || !studentId) {
@@ -3272,6 +3537,7 @@ export const submitAssignment = async (
       studentId,
       studentName,
       text,
+      link: (link || '').trim(),
       attachments,
       filesBase64,
       status: 'submitted',

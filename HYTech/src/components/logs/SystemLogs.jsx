@@ -23,7 +23,7 @@ import { useToast } from '../../context/ToastContext';
 
 // Map raw activity actions to a display label and severity badge
 const ACTION_DISPLAY = {
-  user_login: { label: 'User Login', type: 'info' },
+  user_login: { label: 'User Login', type: 'login' },
   user_signup: { label: 'User Sign Up', type: 'success' },
   user_created: { label: 'User Created', type: 'success' },
   user_updated: { label: 'User Updated', type: 'info' },
@@ -205,6 +205,8 @@ const SystemLogs = () => {
         return <span className="badge-warning">warning</span>;
       case 'error':
         return <span className="badge-danger">error</span>;
+      case 'login':
+        return <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-700 px-2.5 py-0.5 text-xs font-medium">login</span>;
       default:
         return <span className="badge-info">info</span>;
     }
@@ -370,6 +372,7 @@ const SystemLogs = () => {
                 aria-label="Filter by type"
               >
                 <option value="all">All types</option>
+                <option value="login">Login</option>
                 <option value="info">Info</option>
                 <option value="success">Success</option>
                 <option value="warning">Warning</option>

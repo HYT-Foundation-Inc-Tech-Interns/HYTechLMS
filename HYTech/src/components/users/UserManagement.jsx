@@ -13,7 +13,8 @@ import {
   Mail,
   User,
   Archive,
-  RotateCcw
+  RotateCcw,
+  ArrowUpDown
 } from 'lucide-react';
 import { createUserWithEmailAndPassword, getAuth, sendPasswordResetEmail } from 'firebase/auth';
 import { deleteApp, initializeApp } from 'firebase/app';
@@ -52,6 +53,7 @@ const UserManagement = () => {
   const { addToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('oldest');
   // Active vs Archived (inactive) users — kept for history.
   const [userTab, setUserTab] = useState('active');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -146,7 +148,12 @@ const UserManagement = () => {
                   return {
                     id: docSnap.id,
                     rowNumber: index + 1,
-                    name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Unnamed User',
+                    name:
+                      data.name ||
+                      `${data.firstName || ''} ${data.lastName || ''}`.trim() ||
+                      data.displayName ||
+                      (data.email ? data.email.split('@')[0] : '') ||
+                      'Unnamed User',
                     idNumber: data.idNumber || '-',
                     email: data.email || '-',
                     role: prettyRole,
@@ -199,22 +206,36 @@ const UserManagement = () => {
   const archivedCount = users.filter((u) => isArchived(u)).length;
 
   // Filter users by tab (active/archived) + search text + role.
-  const filteredUsers = users.filter((user) => {
-    const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      !q ||
-      user.name.toLowerCase().includes(q) ||
-      String(user.idNumber).includes(searchQuery) ||
-      user.role.toLowerCase().includes(q);
-    const matchesRole = roleFilter === 'all' || String(user.role).toLowerCase() === roleFilter;
-    const matchesTab = userTab === 'archived' ? isArchived(user) : !isArchived(user);
-    return matchesSearch && matchesRole && matchesTab;
-  });
+  const filteredUsers = users
+    .filter((user) => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        !q ||
+        user.name.toLowerCase().includes(q) ||
+        String(user.idNumber).includes(searchQuery) ||
+        user.role.toLowerCase().includes(q);
+      const matchesRole = roleFilter === 'all' || String(user.role).toLowerCase() === roleFilter;
+      const matchesTab = userTab === 'archived' ? isArchived(user) : !isArchived(user);
+      return matchesSearch && matchesRole && matchesTab;
+    })
+    .sort((a, b) => {
+      const byName = String(a.name || '').localeCompare(String(b.name || ''));
+      // rowNumber follows creation order (query is ordered by createdAt asc).
+      switch (sortBy) {
+        case 'name-asc': return byName;
+        case 'name-desc': return -byName;
+        case 'id': return (Number(a.idNumber) || 0) - (Number(b.idNumber) || 0);
+        case 'role': return String(a.role || '').localeCompare(String(b.role || '')) || byName;
+        case 'newest': return (b.rowNumber || 0) - (a.rowNumber || 0);
+        case 'oldest':
+        default: return (a.rowNumber || 0) - (b.rowNumber || 0);
+      }
+    });
 
-  // Any filter change resets to the first page so results aren't hidden.
+  // Any filter/sort change resets to the first page so results aren't hidden.
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, roleFilter, userTab]);
+  }, [searchQuery, roleFilter, userTab, sortBy]);
 
   // Pagination
   const totalPages = Math.ceil(filteredUsers.length / rowsPerPage);
@@ -589,6 +610,24 @@ const UserManagement = () => {
               </select>
               <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             </div>
+            {/* Sort by */}
+            <div className="relative">
+              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="pl-9 pr-8 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm appearance-none"
+                aria-label="Sort by"
+              >
+                <option value="oldest">Oldest first</option>
+                <option value="newest">Newest first</option>
+                <option value="name-asc">Name (A–Z)</option>
+                <option value="name-desc">Name (Z–A)</option>
+                <option value="id">ID number</option>
+                <option value="role">Role</option>
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
             {(roleFilter !== 'all' || searchQuery) && (
               <button
                 onClick={() => { setRoleFilter('all'); setSearchQuery(''); }}
@@ -758,7 +797,16 @@ const UserManagement = () => {
                           return;
                         }
                         const rect = e.currentTarget.getBoundingClientRect();
-                        setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                        // Flip the menu above the button when there isn't room
+                        // below (last rows were spilling off the bottom of the screen).
+                        const MENU_HEIGHT = 200;
+                        const spaceBelow = window.innerHeight - rect.bottom;
+                        const right = window.innerWidth - rect.right;
+                        setMenuPos(
+                          spaceBelow < MENU_HEIGHT
+                            ? { bottom: window.innerHeight - rect.top + 4, right }
+                            : { top: rect.bottom + 4, right }
+                        );
                         setActiveDropdown(user.id);
                       }}
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -768,7 +816,7 @@ const UserManagement = () => {
 
                     {activeDropdown === user.id && (
                       <div
-                        style={{ position: 'fixed', top: menuPos?.top, right: menuPos?.right }}
+                        style={{ position: 'fixed', top: menuPos?.top, bottom: menuPos?.bottom, right: menuPos?.right }}
                         className="bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-50 min-w-[160px] animate-slide-down"
                       >
                         <button 

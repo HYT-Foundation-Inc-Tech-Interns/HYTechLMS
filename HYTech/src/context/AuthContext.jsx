@@ -41,7 +41,11 @@ export const AuthProvider = ({ children }) => {
             };
             
             try {
-              await setDoc(userRef, newUserData);
+              // merge:true so this safety-net write can NEVER clobber a richer
+              // profile (name/firstName/…) that signup writes around the same
+              // time — a non-merge setDoc here was wiping the signup name,
+              // leaving accounts showing as "Unnamed User".
+              await setDoc(userRef, newUserData, { merge: true });
               setUser(newUserData);
             } catch (createError) {
               // If creation fails due to permissions, still set user locally

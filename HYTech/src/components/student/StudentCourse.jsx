@@ -30,7 +30,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, submitQuizAttempt, hasStudentAttempted, getStudentQuizAttempts, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments, submitAssignment, getMySubmission } from '../../utils/firestoreService';
+import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, submitQuizAttempt, hasStudentAttempted, getStudentQuizAttempts, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments, submitAssignment, getMySubmission, logClassActivity, updateEnrollmentProgress, updateStudentProgress } from '../../utils/firestoreService';
 
 // ---- Quiz question helpers (support every trainer-builder question type) ----
 // Types: multiple-choice | true-false | dropdown (single index),
@@ -134,6 +134,7 @@ const StudentCourse = () => {
   const [submissionItem, setSubmissionItem] = useState(null);
   const [mySubmission, setMySubmission] = useState(null);
   const [submissionText, setSubmissionText] = useState('');
+  const [submissionLink, setSubmissionLink] = useState('');
   const [submissionFiles, setSubmissionFiles] = useState([]);
   const [submittingWork, setSubmittingWork] = useState(false);
   
@@ -163,6 +164,8 @@ const StudentCourse = () => {
   const [firestoreAssignments, setFirestoreAssignments] = useState([]);
   const [loadingFirestoreData, setLoadingFirestoreData] = useState(false);
   const [attemptedAssessmentIds, setAttemptedAssessmentIds] = useState(new Set());
+  const [submittedTaskIds, setSubmittedTaskIds] = useState(new Set());
+  const lastProgressRef = useRef(null);
   const [editingAnnouncementId, setEditingAnnouncementId] = useState(null);
   const [editingAnnouncementText, setEditingAnnouncementText] = useState('');
   
@@ -430,10 +433,17 @@ const StudentCourse = () => {
       
       try {
         const attemptedIds = new Set();
+        const submittedIds = new Set();
         const allAttempts = [];
-        
+
         for (const item of assessableItems) {
           const itemId = String(item.id);
+          // Submission tasks are completed via a submission, not a quiz attempt.
+          if (item.type === 'Submission') {
+            const sub = await getMySubmission(courseId, itemId, user.uid).catch(() => null);
+            if (sub) submittedIds.add(itemId);
+            continue;
+          }
           const attempts = await getStudentQuizAttempts(courseId, itemId, user.uid);
           if (attempts && attempts.length > 0) {
             attemptedIds.add(itemId);
@@ -460,6 +470,7 @@ const StudentCourse = () => {
         }
         
         setAttemptedAssessmentIds(attemptedIds);
+        setSubmittedTaskIds(submittedIds);
 
         allAttempts.sort((a, b) => {
           const dateA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
@@ -1038,8 +1049,37 @@ const StudentCourse = () => {
   // Split quizzes (auto-graded assessments) from submission tasks so they live
   // under their own tabs — quizzes under "Assessments", submit-work tasks under
   // "Assignments" (Classroom/Teams style).
-  const submissionTasks = quizzes.filter((q) => q.type === 'Submission');
-  const assessmentItems = quizzes.filter((q) => q.type !== 'Submission');
+  // Never show drafts (kept-for-later items) to trainees.
+  const publishedQuizzes = quizzes.filter((q) => String(q.status || 'active') !== 'draft');
+  const submissionTasks = publishedQuizzes.filter((q) => q.type === 'Submission');
+  const assessmentItems = publishedQuizzes.filter((q) => q.type !== 'Submission');
+
+  // Keep the trainee's overall progress in sync: completion across published
+  // assessments + submission tasks. Persists to the enrollment (so the trainer's
+  // Trainees tab shows it) and to studentProgress (the trainee's own view).
+  // Previously nothing wrote progress, so it was stuck at 0% even after finishing
+  // every assessment.
+  useEffect(() => {
+    if (!enrollmentData?.id || !courseId || !user?.uid) return;
+    const assessmentIds = assessmentItems.map((a) => String(a.id));
+    const taskIds = submissionTasks.map((t) => String(t.id));
+    const total = assessmentIds.length + taskIds.length;
+    if (total === 0) return; // nothing gradable yet — leave progress untouched
+    const done =
+      assessmentIds.filter((id) => attemptedAssessmentIds.has(id)).length +
+      taskIds.filter((id) => submittedTaskIds.has(id)).length;
+    const pct = Math.round((done / total) * 100);
+    if (lastProgressRef.current === pct) return; // avoid redundant writes
+    lastProgressRef.current = pct;
+    updateEnrollmentProgress(enrollmentData.id, {
+      ...(enrollmentData.progress || {}),
+      overallProgress: pct,
+      completedItems: done,
+      totalItems: total,
+    }).catch(() => {});
+    updateStudentProgress(user.uid, courseId, { modulesCompleted: done, progressPercentage: pct }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attemptedAssessmentIds, submittedTaskIds, assessmentItems.length, submissionTasks.length, enrollmentData?.id, courseId, user?.uid]);
 
   // An assessment/task is open once its "available from" date has passed
   // (or if none is set). Trainees can't start it before then.
@@ -1108,9 +1148,28 @@ const StudentCourse = () => {
     const handleVisibilityChange = () => {
       if (document.hidden && quizStarted && !quizSubmitted) {
         setShowWarningModal(true);
+        // Record the alt-tab away for the trainer's class Logs tab.
+        if (courseId && user?.uid) {
+          logClassActivity(courseId, {
+            studentId: user.uid,
+            studentName: user.displayName || user.name || user.email || 'Trainee',
+            type: 'assessment_blur',
+            assessmentId: selectedQuiz?.id || '',
+            assessmentTitle: selectedQuiz?.title || '',
+          });
+        }
       } else if (!document.hidden && quizStarted && !quizSubmitted) {
         // When user comes back, re-enter fullscreen
         enterFullscreen();
+        if (courseId && user?.uid) {
+          logClassActivity(courseId, {
+            studentId: user.uid,
+            studentName: user.displayName || user.name || user.email || 'Trainee',
+            type: 'assessment_focus',
+            assessmentId: selectedQuiz?.id || '',
+            assessmentTitle: selectedQuiz?.title || '',
+          });
+        }
       }
     };
 
@@ -1130,6 +1189,23 @@ const StudentCourse = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [quizStarted, quizSubmitted]);
+
+  // Track when a trainee opens and closes this class (trainer Logs tab).
+  useEffect(() => {
+    if (!courseId || !user?.uid) return undefined;
+    const actor = {
+      studentId: user.uid,
+      studentName: user.displayName || user.name || user.email || 'Trainee',
+    };
+    logClassActivity(courseId, { ...actor, type: 'class_open' });
+    const handlePageHide = () => logClassActivity(courseId, { ...actor, type: 'class_close' });
+    window.addEventListener('pagehide', handlePageHide);
+    return () => {
+      window.removeEventListener('pagehide', handlePageHide);
+      logClassActivity(courseId, { ...actor, type: 'class_close' });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId, user?.uid]);
 
   const handleStartQuiz = async (quiz) => {
     if (!isAssessmentOpen(quiz)) {
@@ -1183,6 +1259,7 @@ const StudentCourse = () => {
     }
     setSubmissionItem(item);
     setSubmissionText('');
+    setSubmissionLink('');
     setSubmissionFiles([]);
     setMySubmission(null);
     setShowSubmissionModal(true);
@@ -1191,26 +1268,80 @@ const StudentCourse = () => {
       if (existing) {
         setMySubmission(existing);
         setSubmissionText(existing.text || '');
+        setSubmissionLink(existing.link || '');
       }
     }
   };
 
+  // Effective allowed submission types for a task (empty = legacy text + file).
+  const allowedSubmitTypes = Array.isArray(submissionItem?.allowedUploadTypes) && submissionItem.allowedUploadTypes.length > 0
+    ? submissionItem.allowedUploadTypes
+    : ['text', 'file'];
+  const submitTextAllowed = allowedSubmitTypes.includes('text');
+  const submitLinkAllowed = allowedSubmitTypes.includes('link');
+  const submitFileAllowed = allowedSubmitTypes.some((t) => ['pdf', 'image', 'file'].includes(t));
+  // accept attribute for the file input based on allowed kinds.
+  const submitFileAccept = allowedSubmitTypes.includes('file')
+    ? '*/*'
+    : [allowedSubmitTypes.includes('pdf') ? '.pdf,application/pdf' : '', allowedSubmitTypes.includes('image') ? 'image/*' : '']
+        .filter(Boolean)
+        .join(',');
+  const isFileAllowed = (file) => {
+    if (allowedSubmitTypes.includes('file')) return true;
+    const name = (file.name || '').toLowerCase();
+    const type = (file.type || '').toLowerCase();
+    if (allowedSubmitTypes.includes('pdf') && (type === 'application/pdf' || name.endsWith('.pdf'))) return true;
+    if (allowedSubmitTypes.includes('image') && type.startsWith('image/')) return true;
+    return false;
+  };
+
   const handleSubmitWork = async () => {
     if (!submissionItem || !courseId || !user?.uid) return;
-    if (!submissionText.trim() && submissionFiles.length === 0) {
-      addToast('Add some text or a file before submitting.', 'error');
+
+    const hasText = submitTextAllowed && submissionText.trim().length > 0;
+    const hasLink = submitLinkAllowed && submissionLink.trim().length > 0;
+    const hasFiles = submitFileAllowed && submissionFiles.length > 0;
+
+    if (!hasText && !hasLink && !hasFiles) {
+      addToast('Add your submission using one of the allowed types before submitting.', 'error');
       return;
     }
+    // Enforce link is a valid URL when links are the submission method.
+    if (hasLink) {
+      try {
+        // eslint-disable-next-line no-new
+        new URL(submissionLink.trim());
+      } catch {
+        addToast('Please enter a valid link (including https://).', 'error');
+        return;
+      }
+    }
+    // Enforce file kinds against the allowed types.
+    if (submissionFiles.length > 0) {
+      if (!submitFileAllowed) {
+        addToast('File uploads are not allowed for this task.', 'error');
+        return;
+      }
+      const bad = submissionFiles.find((f) => !isFileAllowed(f));
+      if (bad) {
+        addToast(`"${bad.name}" is not an allowed file type for this task.`, 'error');
+        return;
+      }
+    }
+
     setSubmittingWork(true);
     try {
       const saved = await submitAssignment(courseId, submissionItem.id, {
         studentId: user.uid,
         studentName: user.displayName || user.name || user.email || 'Trainee',
-        text: submissionText.trim(),
+        text: submitTextAllowed ? submissionText.trim() : '',
+        link: submitLinkAllowed ? submissionLink.trim() : '',
         files: submissionFiles,
       });
       setMySubmission(saved);
       setSubmissionFiles([]);
+      setSubmissionLink('');
+      setSubmittedTaskIds((prev) => new Set(prev).add(String(submissionItem.id)));
       addToast('Work submitted!', 'success');
     } catch (error) {
       addToast(error.message || 'Unable to submit work.', 'error');
@@ -2892,6 +3023,21 @@ const StudentCourse = () => {
                 <p className="text-gray-700 leading-relaxed">{selectedMaterial.description || 'No description provided'}</p>
               </div>
 
+              {selectedMaterial.link && (
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Link</h3>
+                  <a
+                    href={selectedMaterial.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:underline break-all"
+                  >
+                    <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                    {selectedMaterial.link}
+                  </a>
+                </div>
+              )}
+
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-4">
                   Files ({Array.isArray(selectedMaterial.attachments) ? selectedMaterial.attachments.length : 0})
@@ -3103,36 +3249,67 @@ const StudentCourse = () => {
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Your work</label>
-                <textarea
-                  rows={4}
-                  value={submissionText}
-                  onChange={(e) => setSubmissionText(e.target.value)}
-                  placeholder="Type your answer or notes here..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                />
+              {/* Allowed submission types the trainer set for this task */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-gray-500">Allowed:</span>
+                {allowedSubmitTypes.map((t) => (
+                  <span key={t} className="text-xs rounded-full bg-gray-100 text-gray-600 px-2 py-0.5 capitalize">
+                    {t === 'file' ? 'any file' : t === 'link' ? 'link' : t}
+                  </span>
+                ))}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Attach files <span className="text-gray-400">(max ~300KB each)</span>
-                </label>
-                <input
-                  type="file"
-                  multiple
-                  onChange={(e) => setSubmissionFiles(Array.from(e.target.files || []))}
-                  className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-                {submissionFiles.length > 0 && (
-                  <p className="text-xs text-gray-500 mt-1">{submissionFiles.length} file(s) selected</p>
-                )}
-                {mySubmission?.attachments?.length > 0 && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Previously submitted: {mySubmission.attachments.map((a) => a.name).join(', ')}
-                  </p>
-                )}
-              </div>
+              {submitTextAllowed && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Your work</label>
+                  <textarea
+                    rows={4}
+                    value={submissionText}
+                    onChange={(e) => setSubmissionText(e.target.value)}
+                    placeholder="Type your answer or notes here..."
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  />
+                </div>
+              )}
+
+              {submitLinkAllowed && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Link</label>
+                  <input
+                    type="url"
+                    value={submissionLink}
+                    onChange={(e) => setSubmissionLink(e.target.value)}
+                    placeholder="https://…"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  {mySubmission?.link && (
+                    <p className="text-xs text-gray-500 mt-1 break-all">Previously submitted: {mySubmission.link}</p>
+                  )}
+                </div>
+              )}
+
+              {submitFileAllowed && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Attach files <span className="text-gray-400">(max ~300KB each)</span>
+                  </label>
+                  <input
+                    type="file"
+                    multiple
+                    accept={submitFileAccept}
+                    onChange={(e) => setSubmissionFiles(Array.from(e.target.files || []))}
+                    className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                  {submissionFiles.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">{submissionFiles.length} file(s) selected</p>
+                  )}
+                  {mySubmission?.attachments?.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Previously submitted: {mySubmission.attachments.map((a) => a.name).join(', ')}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">

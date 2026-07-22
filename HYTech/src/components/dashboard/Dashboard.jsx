@@ -201,7 +201,9 @@ const Dashboard = () => {
   // Live recent activity from the real activityLogs collection.
   useEffect(() => {
     const unsubscribe = subscribeToActivityLogs(async (logs) => {
-      const top = (logs || []).slice(0, 6);
+      // Logins are high-frequency noise on this glance view — they're always
+      // available in full on the System Logs page, so keep them out of here.
+      const top = (logs || []).filter((l) => l.action !== 'user_login').slice(0, 6);
       const ids = [...new Set(top.map((l) => l.userId).filter(Boolean))];
       const nameMap = {};
       await Promise.all(

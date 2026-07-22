@@ -36,11 +36,25 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/classes/$(classId));
     }
 
-    // True when caller owns classes/{classId}.
-    function classTrainer(classId) {
+    // True when caller is the LEAD trainer of classes/{classId}.
+    function classLead(classId) {
       return isSignedIn()
         && exists(/databases/$(database)/documents/classes/$(classId))
         && get(/databases/$(database)/documents/classes/$(classId)).data.get('trainerId', '') == request.auth.uid;
+    }
+
+    // True when caller may manage classes/{classId} content: the lead trainer
+    // OR a co-trainer listed in coTrainerIds. Content writes (materials, modules,
+    // topics, assignments, assessments, grading, enrollments) use this so co-
+    // trainers get the same content powers as the lead. Managing co-trainers and
+    // transferring ownership edit the class doc itself, which stays lead-only.
+    function classTrainer(classId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/classes/$(classId))
+        && (
+          get(/databases/$(database)/documents/classes/$(classId)).data.get('trainerId', '') == request.auth.uid
+          || request.auth.uid in get(/databases/$(database)/documents/classes/$(classId)).data.get('coTrainerIds', [])
+        );
     }
 
     // Keys added/removed/changed by an update.
@@ -183,6 +197,19 @@ service cloud.firestore {
         }
       }
 
+      // Student engagement events (class opened/closed, alt-tab during an
+      // assessment). A student writes only their own events; staff read all.
+      match /activity/{eventId} {
+        allow read: if isAdmin()
+          || classTrainer(classId)
+          || (isSignedIn() && resource.data.get('studentId', '') == request.auth.uid);
+        allow create: if isSignedIn()
+          && request.resource.data.get('studentId', '') == request.auth.uid;
+        // Events are immutable; staff/admin may clean up.
+        allow update: if false;
+        allow delete: if isAdmin() || classTrainer(classId);
+      }
+
       match /assessments/{assessmentId} {
         allow read: if isSignedIn();
         allow write: if isAdmin() || classTrainer(classId);
@@ -217,7 +244,10 @@ service cloud.firestore {
             && request.resource.data.get('studentId', '') == request.auth.uid
             && request.resource.data.get('status', '') == 'pending'
             && classExists(request.resource.data.get('classId', 'none')))
-        || (isTrainer() && request.resource.data.get('trainerId', '') == request.auth.uid);
+        || (isTrainer() && request.resource.data.get('trainerId', '') == request.auth.uid)
+        // A co-trainer adds a trainee: the enrollment's trainerId is the LEAD,
+        // so authorize by class membership instead of the trainerId field.
+        || (isTrainer() && classTrainer(request.resource.data.get('classId', 'none')));
 
       // Trainer of record / class trainer / admin change status+progress.
       // Student may change ONLY their own progress field.

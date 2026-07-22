@@ -4,7 +4,7 @@ import { BookOpen, Check, Users, Save, ExternalLink, Calendar, Send, FileText, V
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
-import { getCourseByName, getCourseTemplateById, getCourseEnrollmentsWithAvatars, getSectorById, getAnnouncements, subscribeToAnnouncements, createAnnouncement, getModules, createModule, getAssessments, createAssessment, updateAnnouncement, deleteAnnouncement, updateAssessment, deleteAssessment, getClassActivityFeed, storeAnnouncementAttachment, uploadMaterial, compressAndStoreFile, addCommentToAnnouncement, getAnnouncementComments, deleteComment, subscribeToComments, downloadAttachment, createAssignment, updateAssignment, getAssignments, removeEnrollment, approveEnrollment, getUserProfile, subscribeToEnrollments, getAssessmentAttempts, createMaterial, getClassMaterials, publishMaterial, unpublishMaterial, updateMaterial, deleteMaterial, createTopic, getClassTopics, subscribeToClassTopics, updateTopic, deleteTopic, publishTopic, unpublishTopic, updateEnrollmentStatus, getAssignmentSubmissions, gradeSubmission, getClassGradebook } from '../../utils/firestoreService';
+import { getCourseByName, getCourseTemplateById, getCourseEnrollmentsWithAvatars, getSectorById, getAnnouncements, subscribeToAnnouncements, createAnnouncement, getModules, createModule, getAssessments, createAssessment, updateAnnouncement, deleteAnnouncement, updateAssessment, deleteAssessment, getClassActivityFeed, storeAnnouncementAttachment, uploadMaterial, compressAndStoreFile, addCommentToAnnouncement, getAnnouncementComments, deleteComment, subscribeToComments, downloadAttachment, createAssignment, updateAssignment, getAssignments, removeEnrollment, approveEnrollment, getUserProfile, subscribeToEnrollments, getAssessmentAttempts, createMaterial, getClassMaterials, publishMaterial, unpublishMaterial, updateMaterial, deleteMaterial, createTopic, getClassTopics, subscribeToClassTopics, updateTopic, deleteTopic, publishTopic, unpublishTopic, updateEnrollmentStatus, getAssignmentSubmissions, gradeSubmission, getClassGradebook, getStudents, adminAddStudentToClass, getTrainers, addCoTrainer, removeCoTrainer, transferClassOwnership, getClassActivity, toDate, reorderTopics, setModuleItemTopic, deleteAssignment } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
 
 const ClassDetail = () => {
@@ -33,6 +33,27 @@ const ClassDetail = () => {
   const [error, setError] = useState(null);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  // Add-existing-trainee picker
+  const [showAddTraineeModal, setShowAddTraineeModal] = useState(false);
+  const [allStudents, setAllStudents] = useState([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [addingStudentId, setAddingStudentId] = useState(null);
+  // Co-trainers & ownership
+  const [allTrainers, setAllTrainers] = useState([]);
+  const [showAddCoTrainerModal, setShowAddCoTrainerModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [coTrainerBusy, setCoTrainerBusy] = useState(false);
+  // Class engagement logs
+  const [classActivity, setClassActivity] = useState(null); // null = not loaded
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  const [activityFilter, setActivityFilter] = useState('all');
+  // Modules drag-and-drop (declared here — must stay above the early returns
+  // below so hook order is stable).
+  const dragItemRef = useRef(null); // { kind, id }
+  const dragTopicRef = useRef(null); // topicId being reordered
+  const [dragOverTopicId, setDragOverTopicId] = useState(null);
+  const [dragOverUnassigned, setDragOverUnassigned] = useState(false);
   const [announcementText, setAnnouncementText] = useState('');
   const [modalAnnouncementText, setModalAnnouncementText] = useState('');
   const [modalAnnouncementFiles, setModalAnnouncementFiles] = useState([]);
@@ -99,6 +120,7 @@ const ClassDetail = () => {
   // Material Upload States
   const [materialTitle, setMaterialTitle] = useState('');
   const [materialDescription, setMaterialDescription] = useState('');
+  const [materialLink, setMaterialLink] = useState('');
   const [materialFiles, setMaterialFiles] = useState([]);
   const [uploadingMaterial, setUploadingMaterial] = useState(false);
   const [materials, setMaterials] = useState([]);
@@ -147,6 +169,8 @@ const ClassDetail = () => {
   const [newTaskDesc, setNewTaskDesc] = useState('');
   const [newTaskDue, setNewTaskDue] = useState('');
   const [newTaskPoints, setNewTaskPoints] = useState('100');
+  // Which upload kinds a trainee may submit for this task.
+  const [newTaskUploadTypes, setNewTaskUploadTypes] = useState(['text', 'file']);
   const [creatingTask, setCreatingTask] = useState(false);
   // Gradebook
   const [gradebook, setGradebook] = useState(null);
@@ -752,6 +776,7 @@ const ClassDetail = () => {
       const materialData = {
         title: materialTitle.trim(),
         description: materialDescription.trim(),
+        link: materialLink.trim(),
         author: user?.displayName || user?.email || 'Trainor',
         authorId: user?.uid,
         attachments: [],
@@ -795,6 +820,7 @@ const ClassDetail = () => {
         await updateMaterial(classData.id, currentMaterialId, {
           title: materialData.title,
           description: materialData.description,
+          link: materialData.link,
           attachments: finalAttachments,
           filesBase64: finalFilesBase64
         });
@@ -852,6 +878,7 @@ const ClassDetail = () => {
       setShowCreateModal(false);
       setMaterialTitle('');
       setMaterialDescription('');
+      setMaterialLink('');
       setMaterialFiles([]);
       setCreateType('');
       setCurrentMaterialId(null);
@@ -1536,6 +1563,136 @@ const ClassDetail = () => {
     }
   };
 
+  // Open the "add existing trainee" picker and lazy-load the student directory.
+  const openAddTrainee = async () => {
+    setShowAddTraineeModal(true);
+    setStudentSearch('');
+    if (allStudents.length === 0) {
+      setLoadingStudents(true);
+      try {
+        const studs = await getStudents();
+        setAllStudents(studs || []);
+      } catch (err) {
+        console.error('Error loading students:', err);
+        addToast('Unable to load the trainee directory.', 'error');
+      } finally {
+        setLoadingStudents(false);
+      }
+    }
+  };
+
+  const handleAddTrainee = async (student) => {
+    if (!classData?.id) return;
+    setAddingStudentId(student.id);
+    try {
+      const enrollment = await adminAddStudentToClass(
+        classData.id,
+        {
+          id: student.id,
+          name: student.name || student.displayName || student.email,
+          email: student.email,
+        },
+        {
+          name: classData.name,
+          trainerId: classData.trainerId,
+          trainerName: classData.trainerName || user?.displayName || '',
+          courseId: classData.courseId,
+          level: classData.level,
+        }
+      );
+      setEnrollments((prev) => [...prev, enrollment]);
+      addToast(`${enrollment.studentName || 'Trainee'} added to the class.`, 'success');
+    } catch (err) {
+      addToast(err.message || 'Unable to add trainee.', 'error');
+    } finally {
+      setAddingStudentId(null);
+    }
+  };
+
+  // ---- Co-trainers & ownership (lead-only actions) ----
+  const isLead = classData?.trainerId === user?.uid;
+  const coTrainerIds = Array.isArray(classData?.coTrainerIds) ? classData.coTrainerIds : [];
+
+  const ensureTrainersLoaded = async () => {
+    if (allTrainers.length > 0) return;
+    try {
+      const list = await getTrainers();
+      setAllTrainers(list || []);
+    } catch (err) {
+      console.error('Error loading trainers:', err);
+      addToast('Unable to load the trainer directory.', 'error');
+    }
+  };
+
+  const trainerLabel = (id) => {
+    const t = allTrainers.find((x) => x.id === id);
+    return t?.name || t?.displayName || t?.email || 'Trainer';
+  };
+
+  const openAddCoTrainer = async () => {
+    await ensureTrainersLoaded();
+    setShowAddCoTrainerModal(true);
+  };
+
+  const openTransfer = async () => {
+    await ensureTrainersLoaded();
+    setShowTransferModal(true);
+  };
+
+  const handleAddCoTrainer = async (trainerId) => {
+    setCoTrainerBusy(true);
+    try {
+      await addCoTrainer(classData.id, trainerId);
+      setClassData((prev) => ({ ...prev, coTrainerIds: [...(prev.coTrainerIds || []), trainerId] }));
+      addToast('Co-trainer added.', 'success');
+      setShowAddCoTrainerModal(false);
+    } catch (err) {
+      addToast(err.message || 'Unable to add co-trainer.', 'error');
+    } finally {
+      setCoTrainerBusy(false);
+    }
+  };
+
+  const handleRemoveCoTrainer = async (trainerId) => {
+    if (!window.confirm(`Remove ${trainerLabel(trainerId)} as a co-trainer?`)) return;
+    setCoTrainerBusy(true);
+    try {
+      await removeCoTrainer(classData.id, trainerId);
+      setClassData((prev) => ({ ...prev, coTrainerIds: (prev.coTrainerIds || []).filter((id) => id !== trainerId) }));
+      addToast('Co-trainer removed.', 'success');
+    } catch (err) {
+      addToast(err.message || 'Unable to remove co-trainer.', 'error');
+    } finally {
+      setCoTrainerBusy(false);
+    }
+  };
+
+  const handleTransferOwnership = async (newLeadId) => {
+    if (!window.confirm(`Transfer lead ownership to ${trainerLabel(newLeadId)}? You will become a co-trainer.`)) return;
+    setCoTrainerBusy(true);
+    try {
+      await transferClassOwnership(classData.id, newLeadId);
+      setClassData((prev) => {
+        const oldLead = prev.trainerId;
+        const nextCo = (prev.coTrainerIds || []).filter((id) => id && id !== newLeadId);
+        if (oldLead && !nextCo.includes(oldLead)) nextCo.push(oldLead);
+        return { ...prev, trainerId: newLeadId, coTrainerIds: nextCo };
+      });
+      addToast('Ownership transferred.', 'success');
+      setShowTransferModal(false);
+    } catch (err) {
+      addToast(err.message || 'Unable to transfer ownership.', 'error');
+    } finally {
+      setCoTrainerBusy(false);
+    }
+  };
+
+  // Preload the trainer directory so lead/co-trainer names render in the panel.
+  useEffect(() => {
+    if (classData?.id) ensureTrainersLoaded();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classData?.id]);
+
   // Handle mark student as graduated
   const handleGraduateStudent = async (enrollmentId, studentName) => {
     if (window.confirm(`Are you sure you want to mark ${studentName} as graduated? They will complete the course and receive a certificate.`)) {
@@ -1668,7 +1825,7 @@ const ClassDetail = () => {
     }
   };
 
-  const handleCreateSubmissionTask = async () => {
+  const handleCreateSubmissionTask = async (publish = false) => {
     if (!classData?.id) return;
     if (!newTaskTitle.trim()) {
       addToast('Give the task a title.', 'error');
@@ -1677,6 +1834,10 @@ const ClassDetail = () => {
     if (!newTaskDesc.trim()) {
       // Submission tasks have no questions, so the instructions ARE the prompt.
       addToast('Add instructions so trainees know what to submit.', 'error');
+      return;
+    }
+    if (newTaskUploadTypes.length === 0) {
+      addToast('Pick at least one allowed submission type.', 'error');
       return;
     }
     if (newTaskDue) {
@@ -1697,21 +1858,54 @@ const ClassDetail = () => {
         dueDate: newTaskDue || null,
         points: parseInt(newTaskPoints, 10) || 100,
         questions: [],
-        status: 'active',
+        allowedUploadTypes: newTaskUploadTypes,
+        topicId: selectedTopicId || null,
+        // Draft = kept for later (hidden from trainees); Active = published.
+        status: publish ? 'active' : 'draft',
       });
       const updated = await getAssignments(classData.id);
       setAssignments(updated);
       setShowNewTaskModal(false);
+      setSelectedTopicId(null);
       setNewTaskTitle('');
       setNewTaskDesc('');
       setNewTaskDue('');
       setNewTaskPoints('100');
-      addToast('Submission task created.', 'success');
+      setNewTaskUploadTypes(['text', 'file']);
+      addToast(publish ? 'Submission task published.' : 'Submission task saved as draft.', 'success');
     } catch (error) {
       addToast(error.message || 'Unable to create task.', 'error');
     } finally {
       setCreatingTask(false);
     }
+  };
+
+  // Publish a draft assessment/assignment (task) so trainees can see it.
+  const handlePublishAssessmentItem = async (item) => {
+    if (!classData?.id || !item?.id) return;
+    try {
+      if (item._source === 'assessment') {
+        await updateAssessment(classData.id, item.id, { status: 'active' });
+        setAssessments((prev) => prev.map((a) => (a.id === item.id ? { ...a, status: 'active' } : a)));
+      } else {
+        await updateAssignment(classData.id, item.id, { status: 'active' });
+        setAssignments((prev) => prev.map((a) => (a.id === item.id ? { ...a, status: 'active' } : a)));
+      }
+      addToast('Published — trainees can now see it.', 'success');
+    } catch (error) {
+      addToast(error.message || 'Unable to publish.', 'error');
+    }
+  };
+
+  const UPLOAD_TYPE_OPTIONS = [
+    { id: 'link', label: 'Valid link (URL)' },
+    { id: 'pdf', label: 'PDF' },
+    { id: 'image', label: 'Image' },
+    { id: 'file', label: 'Any file' },
+    { id: 'text', label: 'Text answer' },
+  ];
+  const toggleTaskUploadType = (id) => {
+    setNewTaskUploadTypes((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
   };
 
   const loadGradebook = async () => {
@@ -1820,6 +2014,7 @@ const ClassDetail = () => {
       // Reset material form state for new material
       setMaterialTitle('');
       setMaterialDescription('');
+      setMaterialLink('');
       setMaterialFiles([]);
       setCurrentMaterialId(null);
       setShowCreateModal(true);
@@ -1945,8 +2140,12 @@ const ClassDetail = () => {
         await updateAssessment(classData.id, currentQuizDraftId, quizData);
         addToast('Assessment draft updated', 'success');
       } else {
-        const newDraft = await createAssessment(classData.id, quizData);
+        // Place it in the section it was created from (if any), then refresh the
+        // list so it shows in the Modules organiser / Assessments tab.
+        const newDraft = await createAssessment(classData.id, { ...quizData, topicId: selectedTopicId || null });
         setCurrentQuizDraftId(newDraft.id);
+        setSelectedTopicId(null);
+        try { setAssessments(await getAssessments(classData.id)); } catch { /* ignore */ }
         addToast('Assessment draft saved. Add questions, then publish.', 'success');
       }
     } catch (error) {
@@ -2058,6 +2257,27 @@ const ClassDetail = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, classData?.id]);
 
+  // Load engagement logs when the Logs tab is opened.
+  const loadClassActivity = async () => {
+    if (!classData?.id) return;
+    setLoadingActivity(true);
+    try {
+      const events = await getClassActivity(classData.id);
+      setClassActivity(events || []);
+    } catch {
+      setClassActivity([]);
+    } finally {
+      setLoadingActivity(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'logs' && classData?.id) {
+      loadClassActivity();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, classData?.id]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -2082,6 +2302,203 @@ const ClassDetail = () => {
     );
   }
 
+  // ---- Modules drag-and-drop (organise items into topics; reorder topics) ----
+  // Topics in their persisted order (fallback to creation time for older topics).
+  const orderedTopics = [...topics].sort((a, b) => {
+    const ao = a.order ?? 9999;
+    const bo = b.order ?? 9999;
+    if (ao !== bo) return ao - bo;
+    const at = a.createdAt?.toMillis?.() ?? (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+    const bt = b.createdAt?.toMillis?.() ?? (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+    return at - bt;
+  });
+
+  // All draggable module items tagged with their kind, so materials, assessments
+  // and tasks can all be dropped into topics.
+  const allModuleItems = [
+    ...materials.map((m) => ({ kind: 'material', item: m })),
+    ...assessments.map((a) => ({ kind: 'assessment', item: a })),
+    ...assignments.map((a) => ({ kind: 'assignment', item: a })),
+  ];
+  const moduleItemsFor = (topicId) =>
+    allModuleItems.filter(({ item }) => (topicId ? item.topicId === topicId : !item.topicId));
+
+  const onItemDragStart = (kind, id) => (e) => {
+    dragItemRef.current = { kind, id };
+    dragTopicRef.current = null;
+    e.dataTransfer.effectAllowed = 'move';
+    e.stopPropagation();
+  };
+  const onTopicDragStart = (topicId) => (e) => {
+    dragTopicRef.current = topicId;
+    dragItemRef.current = null;
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const moveItemToTopic = async (kind, id, topicId) => {
+    // Optimistic update, then persist.
+    const patch = (arr, setArr) => setArr(arr.map((x) => (x.id === id ? { ...x, topicId: topicId || null } : x)));
+    if (kind === 'material') patch(materials, setMaterials);
+    else if (kind === 'assessment') patch(assessments, setAssessments);
+    else if (kind === 'assignment') patch(assignments, setAssignments);
+    try {
+      await setModuleItemTopic(classData.id, kind, id, topicId || null);
+    } catch {
+      addToast('Could not move item. Refresh and try again.', 'error');
+    }
+  };
+
+  const reorderTopicBefore = (draggedId, targetId) => {
+    const ids = orderedTopics.map((t) => t.id);
+    const from = ids.indexOf(draggedId);
+    if (from === -1) return;
+    ids.splice(from, 1);
+    const insertAt = targetId ? ids.indexOf(targetId) : ids.length;
+    ids.splice(insertAt < 0 ? ids.length : insertAt, 0, draggedId);
+    // Optimistic order, then persist.
+    setTopics((prev) => prev.map((t) => ({ ...t, order: ids.indexOf(t.id) })));
+    reorderTopics(classData.id, ids).catch(() => addToast('Could not save the new order.', 'error'));
+  };
+
+  const onTopicDrop = (topic) => (e) => {
+    e.preventDefault();
+    setDragOverTopicId(null);
+    if (dragItemRef.current) {
+      const { kind, id } = dragItemRef.current;
+      dragItemRef.current = null;
+      moveItemToTopic(kind, id, topic.id);
+    } else if (dragTopicRef.current && dragTopicRef.current !== topic.id) {
+      const draggedId = dragTopicRef.current;
+      dragTopicRef.current = null;
+      reorderTopicBefore(draggedId, topic.id);
+    }
+  };
+  const onUnassignedDrop = (e) => {
+    e.preventDefault();
+    setDragOverUnassigned(false);
+    if (dragItemRef.current) {
+      const { kind, id } = dragItemRef.current;
+      dragItemRef.current = null;
+      moveItemToTopic(kind, id, null);
+    }
+  };
+
+  // Is a module item currently visible to trainees?
+  const isModuleItemPublished = (kind, item) =>
+    kind === 'material' ? item.isPublished === true : String(item.status || 'active') !== 'draft';
+
+  // Toggle a material / assessment / task between published and draft.
+  const toggleModuleItemPublished = async (kind, item) => {
+    const publishNow = !isModuleItemPublished(kind, item);
+    try {
+      if (kind === 'material') {
+        if (publishNow) await publishMaterial(classData.id, item.id);
+        else await unpublishMaterial(classData.id, item.id);
+        setMaterials((prev) => prev.map((m) => (m.id === item.id ? { ...m, isPublished: publishNow, publishedAt: publishNow ? new Date().toISOString() : m.publishedAt } : m)));
+      } else if (kind === 'assessment') {
+        await updateAssessment(classData.id, item.id, { status: publishNow ? 'active' : 'draft' });
+        setAssessments((prev) => prev.map((a) => (a.id === item.id ? { ...a, status: publishNow ? 'active' : 'draft' } : a)));
+      } else {
+        await updateAssignment(classData.id, item.id, { status: publishNow ? 'active' : 'draft' });
+        setAssignments((prev) => prev.map((a) => (a.id === item.id ? { ...a, status: publishNow ? 'active' : 'draft' } : a)));
+      }
+      addToast(publishNow ? 'Published — visible to trainees.' : 'Unpublished — hidden from trainees.', 'success');
+    } catch {
+      addToast('Could not update visibility.', 'error');
+    }
+  };
+
+  // Icon + label for a module item by kind.
+  const MODULE_ITEM_ICON = { material: Upload, assessment: ClipboardList, assignment: FileText };
+  const moduleItemKindLabel = (kind, item) =>
+    kind === 'material' ? 'Material' : kind === 'assessment' ? (item.type || 'Assessment') : (item.type === 'Submission' ? 'Task' : 'Assignment');
+
+  // A single draggable item row used inside topics and the unassigned tray.
+  const renderModuleItemRow = (kind, item) => {
+    const Icon = MODULE_ITEM_ICON[kind] || FileText;
+    const isDraft = String(item.status || (kind === 'material' ? (item.isPublished ? 'active' : 'draft') : 'active')) === 'draft'
+      || (kind === 'material' && item.isPublished === false);
+    return (
+      <div
+        key={`${kind}-${item.id}`}
+        draggable
+        onDragStart={onItemDragStart(kind, item.id)}
+        className="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg hover:border-blue-200 hover:shadow-sm transition-all cursor-move group"
+      >
+        <GripVertical className="w-4 h-4 text-gray-300 group-hover:text-gray-400 flex-shrink-0" />
+        <div className="p-1.5 rounded-lg bg-gray-50 flex-shrink-0">
+          <Icon className="w-4 h-4 text-gray-500" />
+        </div>
+        <div
+          className="flex-1 min-w-0 cursor-pointer"
+          onClick={() => {
+            if (kind === 'material') {
+              setSelectedMaterialForView(item);
+              setShowMaterialViewModal(true);
+            } else {
+              setSelectedAssessmentForResponses(item);
+              setActiveTab('responses');
+            }
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <p className="font-medium text-gray-900 truncate">{item.title}</p>
+            <span className="text-[10px] uppercase tracking-wide text-gray-400 border border-gray-200 rounded px-1.5 py-0.5 flex-shrink-0">{moduleItemKindLabel(kind, item)}</span>
+            {isDraft && <span className="text-[10px] font-medium text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 flex-shrink-0">Draft</span>}
+          </div>
+          {item.description && <p className="text-xs text-gray-500 truncate mt-0.5">{item.description}</p>}
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={() => toggleModuleItemPublished(kind, item)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+              isModuleItemPublished(kind, item)
+                ? 'text-orange-600 hover:bg-orange-50'
+                : 'text-green-700 bg-green-50 hover:bg-green-100'
+            }`}
+            title={isModuleItemPublished(kind, item) ? 'Unpublish (hide from trainees)' : 'Publish (show to trainees)'}
+          >
+            {isModuleItemPublished(kind, item) ? 'Unpublish' : 'Publish'}
+          </button>
+          {kind === 'material' && (
+            <button
+              className="p-1.5 hover:bg-blue-50 rounded text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={() => {
+                setMaterialTitle(item.title);
+                setMaterialDescription(item.description || '');
+                setMaterialLink(item.link || '');
+                setMaterialFiles([]);
+                setCurrentMaterialId(item.id);
+                setCreateType('material');
+                setShowCreateModal(true);
+              }}
+              title="Edit"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={async () => {
+              if (!window.confirm(`Delete "${item.title}"?`)) return;
+              try {
+                if (kind === 'material') { await deleteMaterial(classData.id, item.id); setMaterials((p) => p.filter((x) => x.id !== item.id)); }
+                else if (kind === 'assessment') { await deleteAssessment(classData.id, item.id); setAssessments((p) => p.filter((x) => x.id !== item.id)); }
+                else { await deleteAssignment(classData.id, item.id); setAssignments((p) => p.filter((x) => x.id !== item.id)); }
+                addToast('Deleted.', 'success');
+              } catch {
+                addToast('Failed to delete.', 'error');
+              }
+            }}
+            className="p-1.5 hover:bg-red-50 rounded text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Delete"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const tabs = [
     { id: 'overview', label: 'Overview', icon: BookOpen },
     { id: 'modules', label: 'Modules', icon: FileText },
@@ -2089,6 +2506,7 @@ const ClassDetail = () => {
     { id: 'responses', label: 'Responses', icon: FileText },
     { id: 'grades', label: 'Grades', icon: Award },
     { id: 'students', label: 'Trainees', icon: Users },
+    { id: 'logs', label: 'Logs', icon: Clock },
   ];
 
   const actions = [
@@ -2732,6 +3150,12 @@ const ClassDetail = () => {
                       {/* Materials Option */}
                       <button
                         onClick={() => {
+                          setSelectedTopicId(null);
+                          setMaterialTitle('');
+                          setMaterialDescription('');
+                          setMaterialLink('');
+                          setMaterialFiles([]);
+                          setCurrentMaterialId(null);
                           setCreateType('material');
                           setShowCreateDropdown(false);
                           setShowCreateModal(true);
@@ -2741,7 +3165,44 @@ const ClassDetail = () => {
                         <Upload className="w-5 h-5 text-purple-600 mt-0.5" />
                         <div>
                           <p className="font-medium text-gray-900">Materials</p>
-                          <p className="text-xs text-gray-600">Learning resource</p>
+                          <p className="text-xs text-gray-600">Learning resource {'·'} draft until published</p>
+                        </div>
+                      </button>
+
+                      {/* Assessment Option */}
+                      <button
+                        onClick={() => {
+                          setSelectedTopicId(null);
+                          setShowCreateDropdown(false);
+                          handleCreateItem('Quiz Assignment');
+                        }}
+                        className="w-full flex items-start gap-3 px-3 py-2 hover:bg-gray-50 rounded-lg transition-colors text-left mb-2"
+                      >
+                        <ClipboardList className="w-5 h-5 text-emerald-600 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-gray-900">Assessment</p>
+                          <p className="text-xs text-gray-600">Quiz / survey / form {'·'} draft or publish</p>
+                        </div>
+                      </button>
+
+                      {/* Task Option */}
+                      <button
+                        onClick={() => {
+                          setSelectedTopicId(null);
+                          setShowCreateDropdown(false);
+                          setNewTaskTitle('');
+                          setNewTaskDesc('');
+                          setNewTaskDue('');
+                          setNewTaskPoints('100');
+                          setNewTaskUploadTypes(['text', 'file']);
+                          setShowNewTaskModal(true);
+                        }}
+                        className="w-full flex items-start gap-3 px-3 py-2 hover:bg-gray-50 rounded-lg transition-colors text-left"
+                      >
+                        <FileText className="w-5 h-5 text-blue-600 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-gray-900">Task</p>
+                          <p className="text-xs text-gray-600">Trainees upload work {'·'} you set upload types</p>
                         </div>
                       </button>
                     </div>
@@ -2750,38 +3211,51 @@ const ClassDetail = () => {
               </div>
             </div>
 
-            {/* Published Materials and Topics List */}
-            {materials.length === 0 && topics.length === 0 ? (
+            {/* Modules organiser — drag items into sections, drag the handle to reorder sections */}
+            {orderedTopics.length === 0 && allModuleItems.length === 0 ? (
               <div className="text-center py-12">
                 <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-600 text-lg">No modules yet. Create your first module to get started.</p>
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Topics (Sections) with Materials inside */}
-                {topics.map((topic) => {
-                  const topicMaterials = materials.filter(m => m.isPublished && m.topicId === topic.id);
-                  const isExpanded = expandedTopics[topic.id] !== false; // Default to expanded
-                  
+                <p className="text-xs text-gray-500">
+                  Drag a material, assessment, or task onto a section to organise it. Drag the handle on a section to reorder sections.
+                </p>
+
+                {/* Sections (topics) with their items */}
+                {orderedTopics.map((topic) => {
+                  const topicItems = moduleItemsFor(topic.id);
+                  const isExpanded = expandedTopics[topic.id] !== false; // default expanded
                   return (
-                    <div key={topic.id} className="border border-blue-200 rounded-lg bg-blue-50 overflow-hidden">
-                      {/* Topic Header */}
-                      <button
-                        onClick={() => setExpandedTopics(prev => ({ ...prev, [topic.id]: !prev[topic.id] }))}
-                        className="w-full flex items-center justify-between p-4 hover:bg-blue-100 transition-colors text-left"
-                      >
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className="p-2 bg-blue-200 rounded-lg">
+                    <div
+                      key={topic.id}
+                      onDragOver={(e) => { e.preventDefault(); setDragOverTopicId(topic.id); }}
+                      onDragLeave={() => setDragOverTopicId((cur) => (cur === topic.id ? null : cur))}
+                      onDrop={onTopicDrop(topic)}
+                      className={`border rounded-lg overflow-hidden transition-colors ${dragOverTopicId === topic.id ? 'border-blue-400 ring-2 ring-blue-200 bg-blue-100' : 'border-blue-200 bg-blue-50'}`}
+                    >
+                      {/* Section header */}
+                      <div className="flex items-center gap-2 p-4">
+                        <span
+                          draggable
+                          onDragStart={onTopicDragStart(topic.id)}
+                          className="cursor-grab active:cursor-grabbing text-blue-400 hover:text-blue-600 flex-shrink-0"
+                          title="Drag to reorder section"
+                        >
+                          <GripVertical className="w-5 h-5" />
+                        </span>
+                        <button
+                          onClick={() => setExpandedTopics(prev => ({ ...prev, [topic.id]: !prev[topic.id] }))}
+                          className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                        >
+                          <div className="p-2 bg-blue-200 rounded-lg flex-shrink-0">
                             <FileText className="w-5 h-5 text-blue-600" />
                           </div>
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <h4 className="text-lg font-semibold text-blue-900">{topic.title}</h4>
-                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                                topic.isPublished 
-                                  ? 'bg-green-100 text-green-700' 
-                                  : 'bg-yellow-100 text-yellow-700'
-                              }`}>
+                              <h4 className="text-lg font-semibold text-blue-900 truncate">{topic.title}</h4>
+                              <span className={`text-xs font-medium px-2 py-1 rounded-full flex-shrink-0 ${topic.isPublished ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
                                 {topic.isPublished ? 'Published' : 'Draft'}
                               </span>
                             </div>
@@ -2789,113 +3263,13 @@ const ClassDetail = () => {
                               <p className="text-sm text-blue-700 mt-1 line-clamp-1">{topic.description}</p>
                             )}
                           </div>
-                          <span className="text-sm font-medium text-blue-700 bg-blue-200 px-3 py-1 rounded-full">
-                            {topicMaterials.length} {topicMaterials.length === 1 ? 'item' : 'items'}
+                          <span className="text-sm font-medium text-blue-700 bg-blue-200 px-3 py-1 rounded-full flex-shrink-0">
+                            {topicItems.length} {topicItems.length === 1 ? 'item' : 'items'}
                           </span>
-                        </div>
-                        <div className="p-2 text-blue-600">
-                          {isExpanded ? '▼' : '▶'}
-                        </div>
-                      </button>
-
-                      {/* Topic Materials */}
-                      {isExpanded && (
-                        <div className="border-t border-blue-200 bg-white">
-                          {topicMaterials.length === 0 ? (
-                            <div className="p-6 text-center text-blue-600">
-                              <p className="text-sm">No materials in this topic yet</p>
-                            </div>
-                          ) : (
-                            <div className="divide-y divide-blue-200">
-                              {topicMaterials.map((material) => (
-                                <div key={material.id} className="p-4 hover:bg-blue-50 transition-colors">
-                                  <div className="flex items-start justify-between">
-                                    <div 
-                                      className="flex-1 cursor-pointer"
-                                      onClick={() => {
-                                        setSelectedMaterialForView(material);
-                                        setShowMaterialViewModal(true);
-                                      }}
-                                    >
-                                      <h5 className="font-medium text-gray-900 hover:text-blue-600">{material.title}</h5>
-                                      {material.description && (
-                                        <p className="text-sm text-gray-600 mt-1 line-clamp-1">{material.description}</p>
-                                      )}
-                                      <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
-                                        <span>By {material.author}</span>
-                                        {material.attachments && material.attachments.length > 0 && (
-                                          <>
-                                            <span>•</span>
-                                            <span className="flex items-center gap-1">
-                                              <Paperclip className="w-3 h-3" />
-                                              {material.attachments.length} file{material.attachments.length !== 1 ? 's' : ''}
-                                            </span>
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 ml-4">
-                                      <button
-                                        onClick={() => {
-                                          setMaterialTitle(material.title);
-                                          setMaterialDescription(material.description || '');
-                                          setMaterialFiles([]);
-                                          setCurrentMaterialId(material.id);
-                                          setCreateType('material');
-                                          setShowCreateModal(true);
-                                        }}
-                                        className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600"
-                                        title="Edit material"
-                                      >
-                                        <Edit2 className="w-4 h-4" />
-                                      </button>
-                                      <button
-                                        onClick={async () => {
-                                          if (window.confirm('Are you sure you want to delete this material?')) {
-                                            try {
-                                              await deleteMaterial(classData.id, material.id);
-                                              setMaterials(prev => prev.filter(m => m.id !== material.id));
-                                              if (currentMaterialId === material.id) {
-                                                setCurrentMaterialId(null);
-                                              }
-                                              addToast('Material deleted successfully', 'success');
-                                            } catch (err) {
-                                              addToast('Failed to delete material', 'error');
-                                            }
-                                          }
-                                        }}
-                                        className="p-2 hover:bg-red-100 rounded-lg transition-colors text-red-600"
-                                        title="Delete material"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Topic Actions */}
-                      <div className="border-t border-blue-200 bg-blue-50 px-4 py-3 flex items-center justify-between">
-                        <button
-                          onClick={() => {
-                            setMaterialTitle('');
-                            setMaterialDescription('');
-                            setMaterialFiles([]);
-                            setCurrentMaterialId(null);
-                            setCreateType('material');
-                            setSelectedTopicId(topic.id);
-                            setShowCreateModal(true);
-                          }}
-                          className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-                        >
-                          <Plus className="w-4 h-4" />
-                          Add Material to Topic
+                          <span className="p-1 text-blue-600 flex-shrink-0">{isExpanded ? '▼' : '▶'}</span>
                         </button>
-                        <div className="flex items-center gap-2">
+                        {/* Section actions */}
+                        <div className="flex items-center gap-1 flex-shrink-0">
                           <button
                             onClick={() => {
                               setTopicTitle(topic.title);
@@ -2905,7 +3279,7 @@ const ClassDetail = () => {
                               setShowCreateModal(true);
                             }}
                             className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600"
-                            title="Edit topic"
+                            title="Edit section"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
@@ -2928,120 +3302,97 @@ const ClassDetail = () => {
                           )}
                           <button
                             onClick={async () => {
-                              if (window.confirm('Are you sure you want to delete this topic? Materials will not be deleted.')) {
+                              if (window.confirm('Delete this section? Its items are kept and moved to Unassigned.')) {
                                 try {
                                   await deleteTopic(classData.id, topic.id);
                                   setTopics(prev => prev.filter(t => t.id !== topic.id));
-                                  addToast('Topic deleted successfully', 'success');
+                                  addToast('Section deleted.', 'success');
                                 } catch (err) {
-                                  addToast('Failed to delete topic', 'error');
+                                  addToast('Failed to delete section', 'error');
                                 }
                               }
                             }}
                             className="p-2 hover:bg-red-100 rounded-lg transition-colors text-red-600"
-                            title="Delete topic"
+                            title="Delete section"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
+
+                      {/* Section items (drop zone) */}
+                      {isExpanded && (
+                        <div className="border-t border-blue-200 bg-white p-3 space-y-2 min-h-[3.5rem]">
+                          {topicItems.length === 0 ? (
+                            <p className="text-sm text-blue-500 text-center py-4">Drop materials, assessments, or tasks here</p>
+                          ) : (
+                            topicItems.map(({ kind, item }) => renderModuleItemRow(kind, item))
+                          )}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                            <button
+                              onClick={() => {
+                                setMaterialTitle('');
+                                setMaterialDescription('');
+                                setMaterialLink('');
+                                setMaterialFiles([]);
+                                setCurrentMaterialId(null);
+                                setCreateType('material');
+                                setSelectedTopicId(topic.id);
+                                setShowCreateModal(true);
+                              }}
+                              className="text-sm text-purple-600 hover:text-purple-700 font-medium flex items-center justify-center gap-1 py-2 border border-dashed border-purple-200 rounded-lg hover:bg-purple-50 transition-colors"
+                            >
+                              <Plus className="w-4 h-4" /> Material
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedTopicId(topic.id);
+                                handleCreateItem('Quiz Assignment');
+                              }}
+                              className="text-sm text-emerald-600 hover:text-emerald-700 font-medium flex items-center justify-center gap-1 py-2 border border-dashed border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
+                            >
+                              <Plus className="w-4 h-4" /> Assessment
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedTopicId(topic.id);
+                                setNewTaskTitle('');
+                                setNewTaskDesc('');
+                                setNewTaskDue('');
+                                setNewTaskPoints('100');
+                                setNewTaskUploadTypes(['text', 'file']);
+                                setShowNewTaskModal(true);
+                              }}
+                              className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center justify-center gap-1 py-2 border border-dashed border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+                            >
+                              <Plus className="w-4 h-4" /> Task
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
 
-                {/* Standalone Materials (not in any topic) */}
-                {materials
-                  .filter(material => material.isPublished && !material.topicId)
-                  .map((material) => (
-                    <div key={material.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-                      <div className="flex items-start justify-between">
-                        <div 
-                          className="flex-1 cursor-pointer"
-                          onClick={() => {
-                            setSelectedMaterialForView(material);
-                            setShowMaterialViewModal(true);
-                          }}
-                        >
-                          <h4 className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors">{material.title}</h4>
-                          {material.description && (
-                            <p className="text-gray-600 mt-2 line-clamp-2">{material.description}</p>
-                          )}
-                          <div className="flex items-center gap-4 mt-4 text-sm text-gray-500 flex-wrap">
-                            <span>By {material.author}</span>
-                            <span>•</span>
-                            <span>
-                              {material.publishedAt ? (() => {
-                                try {
-                                  let date;
-                                  if (typeof material.publishedAt === 'string') {
-                                    date = new Date(material.publishedAt);
-                                  } else if (material.publishedAt.toDate) {
-                                    date = material.publishedAt.toDate();
-                                  } else if (typeof material.publishedAt === 'number') {
-                                    date = new Date(material.publishedAt);
-                                  } else {
-                                    return 'Date unavailable';
-                                  }
-                                  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-                                } catch {
-                                  return 'Date unavailable';
-                                }
-                              })() : 'Date not available'}
-                            </span>
-                            {material.attachments && material.attachments.length > 0 && (
-                              <>
-                                <span>•</span>
-                                <span className="flex items-center gap-1 truncate max-w-xs">
-                                  <Paperclip className="w-4 h-4 flex-shrink-0" />
-                                  <span className="truncate">{material.attachments.length} file{material.attachments.length !== 1 ? 's' : ''}</span>
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 ml-4 flex-shrink-0">
-                          <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium flex items-center gap-1">
-                            <Eye className="w-3 h-3" />
-                            Published
-                          </span>
-                          <button
-                            onClick={() => {
-                              setMaterialTitle(material.title);
-                              setMaterialDescription(material.description || '');
-                              setMaterialFiles([]);
-                              setCurrentMaterialId(material.id);
-                              setCreateType('material');
-                              setShowCreateModal(true);
-                            }}
-                            className="p-2 hover:bg-blue-50 rounded-lg transition-colors text-blue-600"
-                            title="Edit material"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={async () => {
-                              if (window.confirm('Are you sure you want to delete this material?')) {
-                                try {
-                                  await deleteMaterial(classData.id, material.id);
-                                  setMaterials(prev => prev.filter(m => m.id !== material.id));
-                                  if (currentMaterialId === material.id) {
-                                    setCurrentMaterialId(null);
-                                  }
-                                  addToast('Material deleted successfully', 'success');
-                                } catch (err) {
-                                  addToast('Failed to delete material', 'error');
-                                }
-                              }
-                            }}
-                            className="p-2 hover:bg-red-50 rounded-lg transition-colors text-red-600"
-                            title="Delete material"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
+                {/* Unassigned tray (drop here to remove an item from a section) */}
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragOverUnassigned(true); }}
+                  onDragLeave={() => setDragOverUnassigned(false)}
+                  onDrop={onUnassignedDrop}
+                  className={`border rounded-lg p-3 transition-colors ${dragOverUnassigned ? 'border-blue-400 ring-2 ring-blue-200 bg-blue-50' : 'border-dashed border-gray-300 bg-gray-50'}`}
+                >
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <h4 className="text-sm font-semibold text-gray-600">Unassigned</h4>
+                    <span className="text-xs text-gray-400">{moduleItemsFor(null).length} item{moduleItemsFor(null).length === 1 ? '' : 's'}</span>
+                  </div>
+                  {moduleItemsFor(null).length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-4">No unassigned items. Drag an item here to remove it from a section.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {moduleItemsFor(null).map(({ kind, item }) => renderModuleItemRow(kind, item))}
                     </div>
-                  ))}
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -3077,6 +3428,22 @@ const ClassDetail = () => {
                   <div>
                     <h3 className="text-sm font-semibold text-gray-900 mb-2">Description</h3>
                     <p className="text-gray-600 whitespace-pre-wrap">{selectedMaterialForView.description}</p>
+                  </div>
+                )}
+
+                {/* Link */}
+                {selectedMaterialForView.link && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 mb-2">Link</h3>
+                    <a
+                      href={selectedMaterialForView.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:underline break-all"
+                    >
+                      <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                      {selectedMaterialForView.link}
+                    </a>
                   </div>
                 )}
 
@@ -3183,7 +3550,9 @@ const ClassDetail = () => {
                     </div>
                     <div>
                       <p className="text-gray-600">Status</p>
-                      <p className="font-medium text-green-600">Published</p>
+                      <p className={`font-medium ${selectedMaterialForView.isPublished ? 'text-green-600' : 'text-amber-600'}`}>
+                        {selectedMaterialForView.isPublished ? 'Published' : 'Draft (unpublished)'}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -3198,6 +3567,7 @@ const ClassDetail = () => {
                     setSelectedMaterialForView(null);
                     setMaterialTitle(selectedMaterialForView.title);
                     setMaterialDescription(selectedMaterialForView.description || '');
+                    setMaterialLink(selectedMaterialForView.link || '');
                     setMaterialFiles([]);
                     setCurrentMaterialId(selectedMaterialForView.id);
                     setCreateType('material');
@@ -3338,10 +3708,10 @@ const ClassDetail = () => {
               </div>
               <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm">
                 <p className="text-gray-500 text-sm">Trainors</p>
-                <div className="mt-2 text-4xl font-bold text-gray-900">1</div>
+                <div className="mt-2 text-4xl font-bold text-gray-900">{1 + coTrainerIds.length}</div>
                 <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-purple-50 px-3 py-2 text-sm text-purple-700">
                   <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-purple-100">T</span>
-                  Lead trainer
+                  {coTrainerIds.length > 0 ? `Lead + ${coTrainerIds.length} co-trainer${coTrainerIds.length > 1 ? 's' : ''}` : 'Lead trainer'}
                 </div>
               </div>
               <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm">
@@ -3373,13 +3743,95 @@ const ClassDetail = () => {
               </div>
             </div>
 
+            {/* Trainers panel: lead + co-trainers (lead manages roles) */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="font-bold text-gray-900 text-lg">Trainers</h3>
+                  <p className="text-sm text-gray-500 mt-1">Lead trainer and co-trainers for this class.</p>
+                </div>
+                {isLead && (
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={openAddCoTrainer}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Co-trainer
+                    </button>
+                    <button
+                      onClick={openTransfer}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700 transition-colors"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      Transfer Ownership
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                {/* Lead */}
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-purple-100 bg-purple-50/50 p-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-purple-100 text-purple-700 font-bold flex-shrink-0">
+                      {(trainerLabel(classData?.trainerId)[0] || 'T').toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 truncate">
+                        {trainerLabel(classData?.trainerId)}
+                        {classData?.trainerId === user?.uid ? ' (You)' : ''}
+                      </p>
+                      <p className="text-xs text-gray-500">Lead trainer</p>
+                    </div>
+                  </div>
+                  <span className="flex-shrink-0 rounded-full bg-purple-100 text-purple-700 px-2.5 py-1 text-xs font-medium">Lead</span>
+                </div>
+                {/* Co-trainers */}
+                {coTrainerIds.length === 0 ? (
+                  <p className="text-sm text-gray-400 px-1 py-2">No co-trainers yet.</p>
+                ) : (
+                  coTrainerIds.map((id) => (
+                    <div key={id} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-700 font-bold flex-shrink-0">
+                          {(trainerLabel(id)[0] || 'T').toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 truncate">
+                            {trainerLabel(id)}{id === user?.uid ? ' (You)' : ''}
+                          </p>
+                          <p className="text-xs text-gray-500">Co-trainer</p>
+                        </div>
+                      </div>
+                      {isLead && (
+                        <button
+                          onClick={() => handleRemoveCoTrainer(id)}
+                          disabled={coTrainerBusy}
+                          className="flex-shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
             <div className="gap-6">
               <div className="lg:col-span-3 bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-                <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                <div className="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
                   <div>
                     <h3 className="font-bold text-gray-900 text-lg">Trainees ({enrollments.filter((e) => e.status !== 'pending').length})</h3>
                     <p className="text-sm text-gray-500 mt-1">All trainees including graduated ones in this class</p>
                   </div>
+                  <button
+                    onClick={openAddTrainee}
+                    className="flex-shrink-0 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Trainee
+                  </button>
                 </div>
 
                 <div className="p-5">
@@ -3529,6 +3981,78 @@ const ClassDetail = () => {
           </div>
         )}
 
+        {/* Logs Tab — student engagement (open/close, assessment alt-tab) */}
+        {activeTab === 'logs' && (
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="p-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Class Activity Logs</h3>
+                <p className="text-sm text-gray-500 mt-1">When trainees open/close the class, and alt-tab during an assessment.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={activityFilter}
+                  onChange={(e) => setActivityFilter(e.target.value)}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All events</option>
+                  <option value="class_open">Opened class</option>
+                  <option value="class_close">Closed class</option>
+                  <option value="assessment_blur">Alt-tab (assessment)</option>
+                  <option value="assessment_focus">Returned (assessment)</option>
+                </select>
+                <button onClick={loadClassActivity} className="px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+                  Refresh
+                </button>
+              </div>
+            </div>
+            {loadingActivity || classActivity === null ? (
+              <div className="py-16 text-center text-gray-500 text-sm">Loading logs…</div>
+            ) : (() => {
+              const EVENT_META = {
+                class_open: { label: 'Opened class', cls: 'bg-green-100 text-green-700' },
+                class_close: { label: 'Closed class', cls: 'bg-gray-100 text-gray-600' },
+                assessment_blur: { label: 'Alt-tabbed away', cls: 'bg-red-100 text-red-700' },
+                assessment_focus: { label: 'Returned', cls: 'bg-blue-100 text-blue-700' },
+              };
+              const rows = classActivity.filter((e) => activityFilter === 'all' || e.type === activityFilter);
+              if (rows.length === 0) {
+                return <div className="py-16 text-center text-gray-500 text-sm">No activity recorded yet.</div>;
+              }
+              return (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead className="bg-gray-50 border-b border-gray-100">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Trainee</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Event</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Assessment</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {rows.map((e) => {
+                        const meta = EVENT_META[e.type] || { label: e.type, cls: 'bg-gray-100 text-gray-600' };
+                        const when = toDate(e.at);
+                        return (
+                          <tr key={e.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-3 text-sm font-medium text-gray-800">{e.studentName || e.studentId}</td>
+                            <td className="px-6 py-3">
+                              <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${meta.cls}`}>{meta.label}</span>
+                            </td>
+                            <td className="px-6 py-3 text-sm text-gray-600">{e.assessmentTitle || (e.type.startsWith('assessment') ? '(assessment)' : '—')}</td>
+                            <td className="px-6 py-3 text-sm text-gray-500">{when ? when.toLocaleString() : '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         {/* Assessments Tab */}
         {activeTab === 'assessments' && (
           <div className="bg-white rounded-lg p-8 border border-gray-200">
@@ -3546,7 +4070,10 @@ const ClassDetail = () => {
 
               {/* Combined assessments and assignments */}
               {(() => {
-                const allAssessments = [...(assessments || []), ...(assignments || [])];
+                const allAssessments = [
+                  ...(assessments || []).map((a) => ({ ...a, _source: 'assessment' })),
+                  ...(assignments || []).map((a) => ({ ...a, _source: 'assignment' })),
+                ];
                 return (
                   <>
                     {/* Stats Cards */}
@@ -3579,6 +4106,7 @@ const ClassDetail = () => {
                             <tr className="border-b-2 border-gray-200 bg-gray-50">
                               <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Title</th>
                               <th className="px-6 py-3 text-center text-sm font-semibold text-gray-900">Type</th>
+                              <th className="px-6 py-3 text-center text-sm font-semibold text-gray-900">Status</th>
                               <th className="px-6 py-3 text-center text-sm font-semibold text-gray-900">Points</th>
                               <th className="px-6 py-3 text-center text-sm font-semibold text-gray-900">Duration</th>
                               <th className="px-6 py-3 text-center text-sm font-semibold text-gray-900">Questions</th>
@@ -3601,6 +4129,13 @@ const ClassDetail = () => {
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 text-center">
+                                  {String(assessment.status || 'active') === 'draft' ? (
+                                    <span className="inline-block px-3 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-700">Draft</span>
+                                  ) : (
+                                    <span className="inline-block px-3 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700">Published</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 text-center">
                                   <span className="font-semibold text-gray-900">{assessment.totalPoints || assessment.points || 0}</span>
                                 </td>
                                 <td className="px-6 py-4 text-center">
@@ -3617,15 +4152,23 @@ const ClassDetail = () => {
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                  <button
-                                    onClick={() => {
-                                      setSelectedAssessmentForResponses(assessment);
-                                      setActiveTab('responses');
-                                    }}
-                                    className="text-blue-600 hover:text-blue-700 font-medium text-sm"
-                                  >
-                                    View Responses
-                                  </button>
+                                  <div className="flex items-center justify-center gap-3">
+                                    <button
+                                      onClick={() => toggleModuleItemPublished(assessment._source === 'assessment' ? 'assessment' : 'assignment', assessment)}
+                                      className={`font-medium text-sm ${String(assessment.status || 'active') === 'draft' ? 'text-green-600 hover:text-green-700' : 'text-orange-600 hover:text-orange-700'}`}
+                                    >
+                                      {String(assessment.status || 'active') === 'draft' ? 'Publish' : 'Unpublish'}
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setSelectedAssessmentForResponses(assessment);
+                                        setActiveTab('responses');
+                                      }}
+                                      className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                    >
+                                      View Responses
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -4116,7 +4659,7 @@ const ClassDetail = () => {
                     </div>
                     <div className="space-y-3">
                       <label className="block text-sm font-medium text-gray-900">Description</label>
-                      <textarea 
+                      <textarea
                         rows={4}
                         placeholder="Add a description for this material..."
                         value={materialDescription}
@@ -4124,9 +4667,20 @@ const ClassDetail = () => {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-all"
                       />
                     </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-900">Link <span className="font-normal text-gray-400">(optional)</span></label>
+                      <input
+                        type="url"
+                        placeholder="https://example.com/resource"
+                        value={materialLink}
+                        onChange={(e) => setMaterialLink(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      />
+                      <p className="text-xs text-gray-500">Share a link (video, doc, website) — no file upload required.</p>
+                    </div>
                     <div className="space-y-3">
-                      <label className="block text-sm font-medium text-gray-900">Upload Files</label>
-                      
+                      <label className="block text-sm font-medium text-gray-900">Upload Files <span className="font-normal text-gray-400">(optional)</span></label>
+
                       {/* Current attachments (when editing) */}
                       {currentMaterialId && materials.find(m => m.id === currentMaterialId)?.attachments && materials.find(m => m.id === currentMaterialId).attachments.length > 0 && materialFiles.length === 0 && (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
@@ -5112,12 +5666,37 @@ const ClassDetail = () => {
                   <input type="number" value={newTaskPoints} onChange={(e) => setNewTaskPoints(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Allowed submission types <span className="text-red-500">*</span></label>
+                <div className="grid grid-cols-2 gap-2">
+                  {UPLOAD_TYPE_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.id}
+                      className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer transition-colors ${
+                        newTaskUploadTypes.includes(opt.id) ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={newTaskUploadTypes.includes(opt.id)}
+                        onChange={() => toggleTaskUploadType(opt.id)}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Trainees can only submit the types you allow.</p>
+              </div>
             </div>
             <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
               <button onClick={() => setShowNewTaskModal(false)} className="px-5 py-2.5 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition-colors">Cancel</button>
-              <button onClick={handleCreateSubmissionTask} disabled={creatingTask} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50">
+              <button onClick={() => handleCreateSubmissionTask(false)} disabled={creatingTask} className="px-5 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors disabled:opacity-50">
+                {creatingTask ? 'Saving…' : 'Save as draft'}
+              </button>
+              <button onClick={() => handleCreateSubmissionTask(true)} disabled={creatingTask} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50">
                 <Plus className="w-4 h-4" />
-                {creatingTask ? 'Creating...' : 'Create Task'}
+                {creatingTask ? 'Publishing…' : 'Publish'}
               </button>
             </div>
           </div>
@@ -5125,6 +5704,179 @@ const ClassDetail = () => {
       )}
 
       {/* Invite Trainees Modal */}
+      {/* Add co-trainer modal (lead only) */}
+      {showAddCoTrainerModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-slide-up flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900">Add Co-trainer</h2>
+              <button onClick={() => setShowAddCoTrainerModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto">
+              {(() => {
+                const taken = new Set([classData?.trainerId, ...coTrainerIds]);
+                const available = allTrainers.filter((t) => !taken.has(t.id));
+                if (available.length === 0) {
+                  return <div className="py-8 text-center text-gray-500 text-sm">No other trainers available to add.</div>;
+                }
+                return (
+                  <div className="space-y-2">
+                    {available.map((t) => (
+                      <div key={t.id} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{t.name || t.displayName || t.email}</p>
+                          <p className="text-xs text-gray-500 truncate">{t.email || '—'}</p>
+                        </div>
+                        <button
+                          onClick={() => handleAddCoTrainer(t.id)}
+                          disabled={coTrainerBusy}
+                          className="flex-shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer ownership modal (lead only) */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-slide-up flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Transfer Ownership</h2>
+                <p className="text-sm text-gray-500 mt-0.5">The chosen trainer becomes lead; you become a co-trainer.</p>
+              </div>
+              <button onClick={() => setShowTransferModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto">
+              {(() => {
+                // Co-trainers first, then any other trainer (never the current lead).
+                const candidates = allTrainers.filter((t) => t.id !== classData?.trainerId);
+                candidates.sort((a, b) => (coTrainerIds.includes(b.id) ? 1 : 0) - (coTrainerIds.includes(a.id) ? 1 : 0));
+                if (candidates.length === 0) {
+                  return <div className="py-8 text-center text-gray-500 text-sm">No other trainers to transfer to.</div>;
+                }
+                return (
+                  <div className="space-y-2">
+                    {candidates.map((t) => (
+                      <div key={t.id} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 truncate">
+                            {t.name || t.displayName || t.email}
+                            {coTrainerIds.includes(t.id) ? <span className="ml-2 text-xs text-blue-600">co-trainer</span> : ''}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">{t.email || '—'}</p>
+                        </div>
+                        <button
+                          onClick={() => handleTransferOwnership(t.id)}
+                          disabled={coTrainerBusy}
+                          className="flex-shrink-0 rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700 transition-colors disabled:opacity-50"
+                        >
+                          Make lead
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add existing trainee modal */}
+      {showAddTraineeModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-slide-up flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Add Trainee</h2>
+                <p className="text-sm text-gray-500 mt-0.5">Add an existing trainee directly to this class.</p>
+              </div>
+              <button
+                onClick={() => setShowAddTraineeModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-4 border-b border-gray-100">
+              <input
+                type="text"
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+                placeholder="Search by name or email…"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="p-4 overflow-y-auto">
+              {loadingStudents ? (
+                <div className="py-10 text-center text-gray-500 text-sm">Loading trainees…</div>
+              ) : (() => {
+                const enrolledIds = new Set(enrollments.map((e) => e.studentId));
+                const q = studentSearch.trim().toLowerCase();
+                const available = allStudents.filter((s) => {
+                  if (enrolledIds.has(s.id)) return false;
+                  if (!q) return true;
+                  const name = (s.name || s.displayName || '').toLowerCase();
+                  const email = (s.email || '').toLowerCase();
+                  return name.includes(q) || email.includes(q);
+                });
+                if (available.length === 0) {
+                  return (
+                    <div className="py-10 text-center text-gray-500 text-sm">
+                      {allStudents.length === 0 ? 'No trainees found in the directory.' : 'No matching trainees available to add.'}
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-2">
+                    {available.map((s) => {
+                      const displayName = s.name || s.displayName || s.email || 'Trainee';
+                      return (
+                        <div key={s.id} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-3">
+                          <div className="min-w-0">
+                            <p className="font-medium text-gray-900 truncate">{displayName}</p>
+                            <p className="text-xs text-gray-500 truncate">{s.email || '—'}{s.idNumber ? ` · ID ${s.idNumber}` : ''}</p>
+                          </div>
+                          <button
+                            onClick={() => handleAddTrainee(s)}
+                            disabled={addingStudentId === s.id}
+                            className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                          >
+                            <Plus className="w-4 h-4" />
+                            {addingStudentId === s.id ? 'Adding…' : 'Add'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+            <div className="p-4 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => setShowAddTraineeModal(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-slide-up">

@@ -10,7 +10,7 @@ import {
 } from 'firebase/auth';
 import { auth, firebaseInitError } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
-import { createUserProfile, saveUserPrivateProfile, logActivity } from '../../utils/firestoreService';
+import { createUserProfile, saveUserPrivateProfile, logActivity, generateNextIdNumber } from '../../utils/firestoreService';
 import { normalizePhMobile, isValidPhMobile, toStoredPhMobile } from '../../utils/phone';
 
 const SignUp = () => {
@@ -199,6 +199,8 @@ const SignUp = () => {
       // the org-wide users read. These are best-effort: if they fail, the
       // sign-in flow backfills the users doc, so we don't block verification.
       const fullName = `${formData.firstName.trim()} ${formData.middleName.trim()} ${formData.lastName.trim()}${formData.nameExtension.trim() ? ` ${formData.nameExtension.trim()}` : ''}`.replace(/\s+/g, ' ').trim();
+      // Self-registered trainees get an ID number too (admin-created ones already do).
+      const idNumber = await generateNextIdNumber();
       await createUserProfile(credential.user.uid, {
         email: formData.email.trim(),
         displayName: fullName,
@@ -206,6 +208,7 @@ const SignUp = () => {
         // Management (which reads `name`/`firstName`/`lastName`) shows the
         // trainee correctly from the moment they sign up — not "Unnamed User".
         name: fullName,
+        idNumber,
         firstName: formData.firstName.trim(),
         middleName: formData.middleName.trim(),
         lastName: formData.lastName.trim(),
