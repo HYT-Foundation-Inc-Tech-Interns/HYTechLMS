@@ -36,13 +36,6 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/classes/$(classId));
     }
 
-    // True when caller is the LEAD trainer of classes/{classId}.
-    function classLead(classId) {
-      return isSignedIn()
-        && exists(/databases/$(database)/documents/classes/$(classId))
-        && get(/databases/$(database)/documents/classes/$(classId)).data.get('trainerId', '') == request.auth.uid;
-    }
-
     // True when caller may manage classes/{classId} content: the lead trainer
     // OR a co-trainer listed in coTrainerIds. Content writes (materials, modules,
     // topics, assignments, assessments, grading, enrollments) use this so co-
