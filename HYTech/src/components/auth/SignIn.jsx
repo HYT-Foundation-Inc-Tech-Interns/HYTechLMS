@@ -29,8 +29,6 @@ const SignIn = () => {
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [isResettingPassword, setIsResettingPassword] = useState(false);
-  const [needsVerification, setNeedsVerification] = useState(false);
-  const [isResendingVerification, setIsResendingVerification] = useState(false);
   const [rememberMe, setRememberMe] = useState(() => {
     try {
       const saved = localStorage.getItem(SIGN_IN_DRAFT_KEY);
@@ -96,38 +94,6 @@ const SignIn = () => {
     }
   };
 
-  const handleResendVerification = async () => {
-    if (!formData.email.trim() || !formData.password) {
-      addToast('Enter your email and password, then resend.', 'info');
-      return;
-    }
-    setIsResendingVerification(true);
-    try {
-      const credential = await signInWithEmailAndPassword(
-        auth,
-        formData.email.trim().toLowerCase(),
-        formData.password
-      );
-      if (credential.user.emailVerified) {
-        addToast('Your email is already verified — you can sign in now.', 'success');
-        setNeedsVerification(false);
-      } else {
-        await sendEmailVerification(credential.user);
-        addToast(`Verification link sent to ${credential.user.email}. Check your inbox and spam folder.`, 'success');
-      }
-      await signOut(auth);
-    } catch (error) {
-      const errorMessages = {
-        'auth/invalid-credential': 'Invalid email or password.',
-        'auth/wrong-password': 'Invalid email or password.',
-        'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.',
-      };
-      addToast(errorMessages[error?.code] || 'Could not resend the verification email. Please try again.', 'error');
-    } finally {
-      setIsResendingVerification(false);
-    }
-  };
-
   const ensureUserProfileDocument = async (firebaseUser) => {
     const normalizedEmail = String(firebaseUser?.email || '').trim().toLowerCase();
     const profileRef = doc(db, 'users', firebaseUser.uid);
@@ -158,7 +124,6 @@ const SignIn = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setNeedsVerification(false);
 
     try {
       if (!auth || !db) {
@@ -203,17 +168,23 @@ const SignIn = () => {
         userData.createdBy === 'admin' || roleLower === 'admin' || roleLower === 'trainer';
 
       if (!isVerificationExempt && !credential.user.emailVerified) {
+        // Send a fresh link (best-effort) and hand off to the shared
+        // /verify-email screen. Keep the (unverified) session alive so that
+        // page can resend and poll without asking for the password again.
+        let emailSent = true;
         try {
           await sendEmailVerification(credential.user);
         } catch (verifyErr) {
+          emailSent = false;
           console.warn('Could not resend verification email:', verifyErr?.message);
         }
-        await signOut(auth);
-        setNeedsVerification(true);
         addToast(
-          `Please verify your email before signing in. We sent a new verification link to ${normalizedEmail}.`,
+          emailSent
+            ? `Please verify your email before signing in. We sent a new link to ${normalizedEmail}.`
+            : 'Please verify your email before signing in. You can resend the link on the next screen.',
           'warning'
         );
+        navigate('/verify-email', { state: { email: normalizedEmail, emailSent } });
         return;
       }
 
@@ -410,23 +381,6 @@ const SignIn = () => {
               )}
             </button>
 
-            {/* Email verification notice (shown after a blocked sign-in) */}
-            {needsVerification && (
-              <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50/70 p-4 animate-fade-in">
-                <p className="text-sm text-gray-700">
-                  Your email isn't verified yet. Check your inbox (and spam) for the verification link,
-                  then sign in.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleResendVerification}
-                  disabled={isResendingVerification}
-                  className="mt-2 text-sm font-semibold text-orange-600 hover:text-orange-700 hover:underline disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {isResendingVerification ? 'Sending…' : 'Resend verification email'}
-                </button>
-              </div>
-            )}
           </form>
           </div>
 

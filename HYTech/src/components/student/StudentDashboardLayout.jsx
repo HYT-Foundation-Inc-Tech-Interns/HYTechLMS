@@ -77,6 +77,9 @@ const StudentDashboardLayout = () => {
     if (path === '/student/calendar') {
       return { title: 'Calendar', subtitle: 'View your schedule and upcoming events.' };
     }
+    if (path === '/student/enroll') {
+      return { title: 'Enroll', subtitle: 'Browse courses and apply to enroll.' };
+    }
     if (path.includes('/student/') && classname) {
       const decodedClassname = decodeURIComponent(classname);
       const formattedTitle = decodedClassname;

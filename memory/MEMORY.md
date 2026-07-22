@@ -1,0 +1,1 @@
+- [TESDA catalog model](tesda-catalog-model.md) — how Sector/Program/Subject maps onto sectors/courses/classes + the availability workflow

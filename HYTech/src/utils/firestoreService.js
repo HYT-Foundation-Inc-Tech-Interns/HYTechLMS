@@ -347,11 +347,80 @@ export const deleteSector = async (sectorId) => {
     
     const sectorRef = doc(db, 'sectors', sectorId);
     await deleteDoc(sectorRef);
-    
+
     return true;
   } catch (error) {
     console.error('Error deleting sector:', error);
     throw error;
+  }
+};
+
+const isActiveCourseStatus = (status) => String(status || 'Active').toLowerCase() === 'active';
+
+/**
+ * Recompute a single sector's status from its course templates.
+ * A sector is Active iff it has at least one Active course template; otherwise Inactive.
+ * Used after an explicit course change (create/edit/delete/status-toggle) so the
+ * sector recovers to Active when it gains a course and drops to Inactive when emptied.
+ */
+export const syncSectorStatus = async (sectorId) => {
+  if (!sectorId) return null;
+  try {
+    const templates = await getCoursesTemplates({ sectorId });
+    const desired = templates.some((c) => isActiveCourseStatus(c.status)) ? 'Active' : 'Inactive';
+    const sectorRef = doc(db, 'sectors', sectorId);
+    const snap = await getDoc(sectorRef);
+    if (snap.exists() && String(snap.data().status || '') !== desired) {
+      await updateDoc(sectorRef, { status: desired, updatedAt: serverTimestamp() });
+    }
+    return desired;
+  } catch (error) {
+    console.error('Error syncing sector status:', error);
+    return null;
+  }
+};
+
+/**
+ * Reconcile every sector: any sector with zero Active course templates is
+ * marked Inactive (auto-downgrade only — sectors that still have active courses
+ * keep whatever status they have). Returns the sectors with their effective
+ * status applied so callers can render without a second read.
+ */
+export const reconcileSectorStatuses = async () => {
+  try {
+    const [sectors, templates] = await Promise.all([
+      getSectors({}),
+      getCoursesTemplates({}),
+    ]);
+    const sectorsWithActive = new Set(
+      templates
+        .filter((c) => isActiveCourseStatus(c.status))
+        .map((c) => c.sectorId)
+        .filter(Boolean)
+    );
+    const toDeactivate = sectors.filter(
+      (s) => !sectorsWithActive.has(s.id) && String(s.status || '') !== 'Inactive'
+    );
+    // Persisting requires admin write access (see firestore.rules). Non-admins
+    // (e.g. a trainer opening the create-class flow) still get the derived list
+    // below for correct filtering, even though the write is skipped/denied.
+    if (toDeactivate.length) {
+      try {
+        const batch = writeBatch(db);
+        toDeactivate.forEach((s) =>
+          batch.update(doc(db, 'sectors', s.id), { status: 'Inactive', updatedAt: serverTimestamp() })
+        );
+        await batch.commit();
+      } catch (writeErr) {
+        console.warn('Could not persist sector status reconciliation:', writeErr?.message);
+      }
+    }
+    return sectors.map((s) =>
+      sectorsWithActive.has(s.id) ? s : { ...s, status: 'Inactive' }
+    );
+  } catch (error) {
+    console.error('Error reconciling sector statuses:', error);
+    return null;
   }
 };
 
@@ -571,13 +640,16 @@ export const createCourseTemplate = async (courseData, { sectorId = null } = {})
     };
     
     const docRef = await addDoc(coursesRef, newCourse);
-    
+
     // Log activity
     await logActivity('admin', 'create_course', 'courses', docRef.id, {
       courseName: courseData.name,
       sectorId: sectorId,
     });
-    
+
+    // Keep the sector's Active/Inactive status in sync with its courses.
+    if (sectorId) await syncSectorStatus(sectorId);
+
     return docRef.id;
   } catch (error) {
     console.error('Error creating course template:', error);
@@ -659,12 +731,21 @@ export const createCourse = async (courseData, { sectorId = null, trainerId = nu
 export const updateCourseTemplate = async (courseId, updates) => {
   try {
     const courseRef = doc(db, 'courses', courseId);
-    
+
+    // Resolve the sector before writing so a status change re-syncs the sector.
+    let sectorId = updates.sectorId;
+    if (sectorId === undefined) {
+      const existing = await getDoc(courseRef).catch(() => null);
+      sectorId = existing?.exists() ? existing.data().sectorId : null;
+    }
+
     await setDoc(courseRef, {
       ...updates,
       updatedAt: serverTimestamp(),
     }, { merge: true });
-    
+
+    if (sectorId) await syncSectorStatus(sectorId);
+
     return true;
   } catch (error) {
     console.error('Error updating course template:', error);
@@ -791,13 +872,19 @@ export const seedTesdaCatalog = async () => {
 export const deleteCourse = async (courseId) => {
   try {
     const courseRef = doc(db, 'courses', courseId);
+    // Capture the sector before deleting so we can re-sync its status after.
+    const existing = await getDoc(courseRef).catch(() => null);
+    const sectorId = existing?.exists() ? existing.data().sectorId : null;
+
     await deleteDoc(courseRef);
-    
+
     // Log activity
     await logActivity('admin', 'delete_course', 'courses', courseId, {
       courseId: courseId,
     });
-    
+
+    if (sectorId) await syncSectorStatus(sectorId);
+
     return true;
   } catch (error) {
     console.error('Error deleting course:', error);
@@ -1209,6 +1296,51 @@ export const updateIncidentStatus = async (incidentId, status, reviewerUid = '')
     return true;
   } catch (error) {
     console.error('Error updating incident status:', error);
+    throw error;
+  }
+};
+
+export const updateIncidentForm = async (incidentId, fields = {}) => {
+  try {
+    const allowed = ['type', 'severity', 'date', 'involvedStudentName', 'description'];
+    const payload = {};
+    allowed.forEach((key) => {
+      if (fields[key] !== undefined) payload[key] = fields[key];
+    });
+    if (payload.description !== undefined) {
+      payload.description = String(payload.description).trim();
+      if (!payload.description) throw new Error('Description is required.');
+    }
+    if (Object.keys(payload).length === 0) return true;
+    payload.updatedAt = serverTimestamp();
+    await updateDoc(doc(db, 'incidentForms', incidentId), payload);
+    return true;
+  } catch (error) {
+    console.error('Error updating incident form:', error);
+    throw error;
+  }
+};
+
+export const deleteIncidentForm = async (incidentId) => {
+  try {
+    await deleteDoc(doc(db, 'incidentForms', incidentId));
+    return true;
+  } catch (error) {
+    console.error('Error deleting incident form:', error);
+    throw error;
+  }
+};
+
+export const deleteIncidentForms = async (incidentIds = []) => {
+  try {
+    const ids = incidentIds.filter(Boolean);
+    if (ids.length === 0) return true;
+    const batch = writeBatch(db);
+    ids.forEach((id) => batch.delete(doc(db, 'incidentForms', id)));
+    await batch.commit();
+    return true;
+  } catch (error) {
+    console.error('Error deleting incident forms:', error);
     throw error;
   }
 };

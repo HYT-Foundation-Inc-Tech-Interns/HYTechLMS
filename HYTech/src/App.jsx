@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import LandingPage from './components/landing/LandingPage';
 import SignUp from './components/auth/SignUp';
 import SignIn from './components/auth/SignIn';
+import VerifyEmail from './components/auth/VerifyEmail';
 import RoleProtectedRoute from './components/auth/RoleProtectedRoute';
 import PublicOnlyRoute from './components/auth/PublicOnlyRoute';
 import AuthenticatedRoute from './components/auth/AuthenticatedRoute';
@@ -33,6 +34,7 @@ import TrainerSettings from './components/trainer/TrainerSettings';
 // Trainee imports
 import StudentDashboardLayout from './components/student/StudentDashboardLayout';
 import StudentHome from './components/student/StudentHome';
+import StudentEnroll from './components/student/StudentEnroll';
 import StudentCourse from './components/student/StudentCourse';
 import StudentTasks from './components/student/StudentTasks';
 import StudentCertificates from './components/student/StudentCertificates';
@@ -74,6 +76,10 @@ function App() {
             </PublicOnlyRoute>
           )}
         />
+        {/* Bare public route: the user arrives here signed in but unverified,
+            so it must NOT be wrapped by PublicOnlyRoute (which would redirect
+            them into a dashboard the verification gate immediately bounces). */}
+        <Route path="/verify-email" element={<VerifyEmail />} />
 
         {/* Admin Dashboard Routes */}
         <Route
@@ -124,6 +130,7 @@ function App() {
           )}
         >
           <Route index element={<StudentHome />} />
+          <Route path="enroll" element={<StudentEnroll />} />
           <Route path="calendar" element={<StudentCalendar />} />
           <Route path="request-id" element={<StudentRequestId />} />
           <Route path="incident-form" element={<IncidentForms scope="own" />} />

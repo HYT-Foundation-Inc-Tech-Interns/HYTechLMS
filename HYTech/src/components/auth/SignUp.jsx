@@ -7,7 +7,6 @@ import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
   setPersistence,
-  signOut,
 } from 'firebase/auth';
 import { auth, firebaseInitError } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
@@ -185,12 +184,32 @@ const SignUp = () => {
         formData.password
       );
 
+      // Send the verification link FIRST, before any Firestore writes — a
+      // profile-write hiccup must never be the reason no email goes out.
+      let emailSent = true;
+      try {
+        await sendEmailVerification(credential.user);
+      } catch (verifyErr) {
+        emailSent = false;
+        console.warn('Could not send verification email:', verifyErr?.message);
+      }
+
       // Public profile (name/email) on the users doc. Sensitive PII (phone,
       // birth date) goes to the private subcollection so it is not exposed by
-      // the org-wide users read.
+      // the org-wide users read. These are best-effort: if they fail, the
+      // sign-in flow backfills the users doc, so we don't block verification.
+      const fullName = `${formData.firstName.trim()} ${formData.middleName.trim()} ${formData.lastName.trim()}${formData.nameExtension.trim() ? ` ${formData.nameExtension.trim()}` : ''}`.replace(/\s+/g, ' ').trim();
       await createUserProfile(credential.user.uid, {
         email: formData.email.trim(),
-        displayName: `${formData.firstName.trim()} ${formData.middleName.trim()} ${formData.lastName.trim()}${formData.nameExtension.trim() ? ` ${formData.nameExtension.trim()}` : ''}`.replace(/\s+/g, ' ').trim(),
+        displayName: fullName,
+        // Top-level name fields mirror what Settings saves, so admin User
+        // Management (which reads `name`/`firstName`/`lastName`) shows the
+        // trainee correctly from the moment they sign up — not "Unnamed User".
+        name: fullName,
+        firstName: formData.firstName.trim(),
+        middleName: formData.middleName.trim(),
+        lastName: formData.lastName.trim(),
+        nameExtension: formData.nameExtension.trim(),
         profile: {
           firstName: formData.firstName.trim(),
           middleName: formData.middleName.trim(),
@@ -198,7 +217,7 @@ const SignUp = () => {
           nameExtension: formData.nameExtension.trim(),
         },
         role: 'student',
-      });
+      }).catch((err) => console.warn('Could not save public profile at signup:', err?.message));
 
       await saveUserPrivateProfile(credential.user.uid, {
         phone: toStoredPhMobile(formData.phone),
@@ -209,21 +228,16 @@ const SignUp = () => {
         email: formData.email.trim(),
       });
 
-      // Send the email-verification link, then sign out so the user must verify
-      // before their first real sign-in (enforced at /signin).
-      try {
-        await sendEmailVerification(credential.user);
-      } catch (verifyErr) {
-        console.warn('Could not send verification email:', verifyErr?.message);
-      }
-      await signOut(auth).catch(() => {});
-
+      // Keep the (unverified) session so the verify page can resend without
+      // asking for the password again. Protected routes still block it.
       addToast(
-        `Account created! We sent a verification link to ${formData.email.trim()}. Verify your email, then sign in.`,
-        'success'
+        emailSent
+          ? `Account created! We sent a verification link to ${formData.email.trim()}.`
+          : `Account created, but we couldn't send the verification email automatically. You can resend it on the next screen.`,
+        emailSent ? 'success' : 'warning'
       );
       localStorage.removeItem(SIGN_UP_DRAFT_KEY);
-      navigate('/signin');
+      navigate('/verify-email', { state: { email: formData.email.trim(), emailSent } });
     } catch (error) {
       const errorMessages = {
         'auth/invalid-api-key': 'Invalid Firebase API key. Check your VITE_FIREBASE_API_KEY value.',

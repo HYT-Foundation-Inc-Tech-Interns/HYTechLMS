@@ -17,6 +17,8 @@ import {
   ToggleLeft,
   ToggleRight,
   Layers,
+  Filter,
+  ArrowUpDown,
 } from 'lucide-react';
 import {
   getCourses,
@@ -60,6 +62,11 @@ const Classes = () => {
   const [rosterBusy, setRosterBusy] = useState(false);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  // Filter + sort controls (adapt to the active tab).
+  const [sectorFilter, setSectorFilter] = useState('all'); // courses tab
+  const [availFilter, setAvailFilter] = useState('all'); // courses tab
+  const [classStatusFilter, setClassStatusFilter] = useState('all'); // classes tab
+  const [sortBy, setSortBy] = useState('name-asc');
   const [expandedClassId, setExpandedClassId] = useState(null);
   const [editingClassId, setEditingClassId] = useState(null);
   const [editFormData, setEditFormData] = useState({});
@@ -190,20 +197,52 @@ const Classes = () => {
     }
   };
 
-  const filteredCourses = courses.filter((c) => {
-    const q = searchTerm.toLowerCase();
-    return (
-      (c.name || '').toLowerCase().includes(q) ||
-      (c.description || '').toLowerCase().includes(q) ||
-      sectorName(c.sectorId).toLowerCase().includes(q)
-    );
-  });
+  const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''));
+  const toMs = (v) => (v?.toMillis ? v.toMillis() : v?.seconds ? v.seconds * 1000 : (v ? new Date(v).getTime() || 0 : 0));
 
-  const filteredClasses = classes.filter(
-    (course) =>
-      (course.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (course.description || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredCourses = courses
+    .filter((c) => {
+      const q = searchTerm.toLowerCase();
+      const matchesSearch =
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.description || '').toLowerCase().includes(q) ||
+        sectorName(c.sectorId).toLowerCase().includes(q);
+      const matchesSector = sectorFilter === 'all' || c.sectorId === sectorFilter;
+      const matchesAvail =
+        availFilter === 'all' ||
+        (availFilter === 'available' ? !!c.available : !c.available);
+      return matchesSearch && matchesSector && matchesAvail;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'name-desc': return byName(b, a);
+        case 'newest': return toMs(b.createdAt) - toMs(a.createdAt);
+        case 'oldest': return toMs(a.createdAt) - toMs(b.createdAt);
+        case 'name-asc':
+        default: return byName(a, b);
+      }
+    });
+
+  const filteredClasses = classes
+    .filter((course) => {
+      const q = searchTerm.toLowerCase();
+      const matchesSearch =
+        (course.name || '').toLowerCase().includes(q) ||
+        (course.description || '').toLowerCase().includes(q);
+      const matchesStatus =
+        classStatusFilter === 'all' ||
+        String(course.status || 'Active').toLowerCase() === classStatusFilter.toLowerCase();
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'name-desc': return byName(b, a);
+        case 'newest': return toMs(b.createdAt) - toMs(a.createdAt);
+        case 'oldest': return toMs(a.createdAt) - toMs(b.createdAt);
+        case 'name-asc':
+        default: return byName(a, b);
+      }
+    });
 
   const formatDate = (dateValue) => {
     if (!dateValue) return 'Not available';
@@ -456,9 +495,9 @@ const Classes = () => {
           </button>
         </div>
 
-        {/* Search Bar */}
-        <div className="mb-6">
-          <div className="relative">
+        {/* Search + filter + sort */}
+        <div className="mb-6 flex flex-col lg:flex-row lg:items-center gap-3">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
@@ -467,6 +506,72 @@ const Classes = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+
+          {activeTab === 'courses' ? (
+            <>
+              <div className="relative">
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <select
+                  value={sectorFilter}
+                  onChange={(e) => setSectorFilter(e.target.value)}
+                  className="pl-9 pr-8 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm appearance-none"
+                  aria-label="Filter by sector"
+                >
+                  <option value="all">All sectors</option>
+                  {sectors.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              </div>
+              <div className="relative">
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <select
+                  value={availFilter}
+                  onChange={(e) => setAvailFilter(e.target.value)}
+                  className="pl-9 pr-8 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm appearance-none"
+                  aria-label="Filter by availability"
+                >
+                  <option value="all">All availability</option>
+                  <option value="available">Available</option>
+                  <option value="off">Off</option>
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              </div>
+            </>
+          ) : (
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <select
+                value={classStatusFilter}
+                onChange={(e) => setClassStatusFilter(e.target.value)}
+                className="pl-9 pr-8 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm appearance-none"
+                aria-label="Filter by status"
+              >
+                <option value="all">All status</option>
+                <option value="Active">Active</option>
+                <option value="Archived">Archived</option>
+                <option value="Draft">Draft</option>
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
+          )}
+
+          <div className="relative">
+            <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="pl-9 pr-8 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm appearance-none"
+              aria-label="Sort by"
+            >
+              <option value="name-asc">Name (A–Z)</option>
+              <option value="name-desc">Name (Z–A)</option>
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           </div>
         </div>
 

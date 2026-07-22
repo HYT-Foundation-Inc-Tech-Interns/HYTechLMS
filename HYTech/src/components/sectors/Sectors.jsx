@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Eye, 
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Eye,
   Trash2,
   X,
   Plus,
@@ -8,11 +8,15 @@ import {
   AlertCircle,
   MoreVertical,
   Edit,
-  Upload
+  Upload,
+  Search,
+  Filter,
+  ArrowUpDown,
+  ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { getSectors, createSector, updateSector, deleteSector, getCourses, getCoursesTemplates, createCourseTemplate, updateCourseTemplate, updateCourse, deleteCourse } from '../../utils/firestoreService';
+import { getSectors, createSector, updateSector, deleteSector, getCourses, getCoursesTemplates, createCourseTemplate, updateCourseTemplate, updateCourse, deleteCourse, reconcileSectorStatuses } from '../../utils/firestoreService';
 
 const Sectors = () => {
   // Helper function to convert Tailwind gradient classes to inline CSS
@@ -69,6 +73,9 @@ const Sectors = () => {
 
   // State Management
   const [sectors, setSectors] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('name-asc');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(null);
@@ -112,7 +119,8 @@ const Sectors = () => {
       try {
         setLoading(true);
         setError(null);
-        const data = await getSectors();
+        // Reconcile first so sectors with no active course are persisted Inactive.
+        const data = (await reconcileSectorStatuses()) || (await getSectors());
         if (isMounted) {
           setSectors(data || []);
           setLoading(false);
@@ -137,7 +145,7 @@ const Sectors = () => {
   // Refresh sectors data
   const reloadSectors = async () => {
     try {
-      const data = await getSectors();
+      const data = (await reconcileSectorStatuses()) || (await getSectors());
       setSectors(data || []);
     } catch (err) {
       console.error('Error reloading sectors:', err);
@@ -246,6 +254,8 @@ const Sectors = () => {
       addToast('Course created successfully!', 'success');
       setNewCourse({ name: '', description: '', level: 'NC I', status: 'Active', bgImage: '' });
       setShowAddCourseModal(false);
+      reloadSectors(); // sector may have flipped Active now that it has a course
+
     } catch (err) {
       console.error('Error creating course:', err);
       addToast(err.message || 'Failed to create course', 'error');
@@ -305,6 +315,8 @@ const Sectors = () => {
       addToast('Course updated successfully!', 'success');
       setShowEditCourseModal(false);
       setSelectedCourse(null);
+      reloadSectors(); // course status change may flip the sector's status
+
     } catch (err) {
       console.error('Error updating course:', err);
       addToast('Failed to update course', 'error');
@@ -327,6 +339,8 @@ const Sectors = () => {
       addToast('Course deleted successfully!', 'success');
       setShowDeleteCourseModal(false);
       setSelectedCourse(null);
+      reloadSectors(); // sector may drop to Inactive if that was its last active course
+
     } catch (err) {
       console.error('Error deleting course:', err);
       addToast('Failed to delete course', 'error');
@@ -361,6 +375,34 @@ const Sectors = () => {
       reader.readAsDataURL(file);
     }
   };
+
+  // Apply search + status filter + sort to the sectors list.
+  const visibleSectors = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    let list = sectors.filter((s) => {
+      const matchesSearch =
+        !q ||
+        String(s.name || '').toLowerCase().includes(q) ||
+        String(s.description || '').toLowerCase().includes(q);
+      const matchesStatus =
+        statusFilter === 'all' || String(s.status || 'Active') === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''));
+    const toMs = (v) => (v?.toMillis ? v.toMillis() : v?.seconds ? v.seconds * 1000 : 0);
+    list = [...list].sort((a, b) => {
+      switch (sortBy) {
+        case 'name-desc': return byName(b, a);
+        case 'status': return String(a.status || '').localeCompare(String(b.status || '')) || byName(a, b);
+        case 'newest': return toMs(b.createdAt) - toMs(a.createdAt);
+        case 'oldest': return toMs(a.createdAt) - toMs(b.createdAt);
+        case 'name-asc':
+        default: return byName(a, b);
+      }
+    });
+    return list;
+  }, [sectors, searchQuery, statusFilter, sortBy]);
 
   if (loading) {
     return (
@@ -402,14 +444,62 @@ const Sectors = () => {
         )}
       </div>
 
+      {/* Search / filter / sort controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="relative flex-1 min-w-[12rem]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search sectors..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B005C] bg-white"
+          />
+        </div>
+        <div className="relative">
+          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="pl-9 pr-8 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B005C] bg-white text-sm appearance-none"
+            aria-label="Filter by status"
+          >
+            <option value="all">All status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        </div>
+        <div className="relative">
+          <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="pl-9 pr-8 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B005C] bg-white text-sm appearance-none"
+            aria-label="Sort by"
+          >
+            <option value="name-asc">Name (A–Z)</option>
+            <option value="name-desc">Name (Z–A)</option>
+            <option value="status">Status</option>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        </div>
+      </div>
+
       {/* Sectors Grid */}
       {sectors.length === 0 ? (
         <div className="text-center py-16 bg-gray-50 rounded-lg">
           <p className="text-gray-600">No sectors found. Create one to get started.</p>
         </div>
+      ) : visibleSectors.length === 0 ? (
+        <div className="text-center py-16 bg-gray-50 rounded-lg">
+          <p className="text-gray-600">No sectors match your search or filter.</p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sectors.map((sector) => (
+          {visibleSectors.map((sector) => (
             <div
               key={sector.id}
               className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden flex flex-col h-full relative"

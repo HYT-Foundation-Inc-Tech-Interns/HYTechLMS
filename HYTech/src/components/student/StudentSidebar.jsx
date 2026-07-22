@@ -14,7 +14,8 @@ import {
   Calendar,
   Award,
   CreditCard,
-  AlertTriangle
+  AlertTriangle,
+  GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { subscribeToStudentEnrollments, getCourseByName } from '../../utils/firestoreService';
@@ -121,10 +122,11 @@ const StudentSidebar = () => {
     return (words[0][0] + (words[1]?.[0] || '')).toUpperCase();
   };
 
-  const isCoursePath = location.pathname.includes('/student/') && location.pathname !== '/student' && location.pathname !== '/student/calendar' && !location.pathname.includes('/settings') && !location.pathname.includes('/certificates') && !location.pathname.includes('/archived') && !location.pathname.includes('/tasks') && !location.pathname.includes('/request-id') && !location.pathname.includes('/incident-form');
+  const isCoursePath = location.pathname.includes('/student/') && location.pathname !== '/student' && location.pathname !== '/student/calendar' && location.pathname !== '/student/enroll' && !location.pathname.includes('/settings') && !location.pathname.includes('/certificates') && !location.pathname.includes('/archived') && !location.pathname.includes('/tasks') && !location.pathname.includes('/request-id') && !location.pathname.includes('/incident-form');
 
   const mainNavItems = [
     { path: '/student', icon: Home, label: 'Home', exact: true },
+    { path: '/student/enroll', icon: GraduationCap, label: 'Enroll' },
     { path: '/student/calendar', icon: Calendar, label: 'Calendar' },
   ];
 

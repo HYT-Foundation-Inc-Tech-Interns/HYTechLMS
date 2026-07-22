@@ -33,6 +33,7 @@ import {
   getSectors,
   getSectorById,
   createCourse,
+  reconcileSectorStatuses,
 } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
 
@@ -231,12 +232,16 @@ const TrainerHome = () => {
     setSectorClasses([]);
     setSelectedClassDetails(null);
     
-    // Load sectors in background
+    // Load sectors in background. Reconcile first so sectors with no active
+    // course are marked Inactive, then only offer Active sectors for a new class.
     const loadSectors = async () => {
       try {
         setLoadingSectors(true);
-        const sectorsData = await getSectors();
-        setSectors(sectorsData || []);
+        const reconciled = (await reconcileSectorStatuses()) || (await getSectors());
+        const activeSectors = (reconciled || []).filter(
+          (s) => String(s.status || 'Active').toLowerCase() === 'active'
+        );
+        setSectors(activeSectors);
       } catch (error) {
         console.error('Error loading sectors:', error);
         addToast('Failed to load sectors', 'error');
@@ -244,7 +249,7 @@ const TrainerHome = () => {
         setLoadingSectors(false);
       }
     };
-    
+
     loadSectors();
   };
 

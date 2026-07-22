@@ -11,7 +11,9 @@ import {
   ChevronRight,
   ChevronDown,
   Mail,
-  User
+  User,
+  Archive,
+  RotateCcw
 } from 'lucide-react';
 import { createUserWithEmailAndPassword, getAuth, sendPasswordResetEmail } from 'firebase/auth';
 import { deleteApp, initializeApp } from 'firebase/app';
@@ -26,6 +28,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import { auth, db, firebaseConfig, firebaseInitError, hasValidFirebaseConfig } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
@@ -69,6 +72,10 @@ const UserManagement = () => {
 
   const [users, setUsers] = useState([]);
   const [userAvatars, setUserAvatars] = useState({});
+
+  // Multi-select for bulk archive/restore.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [isBulkWorking, setIsBulkWorking] = useState(false);
 
   // Form state for adding new user
   const [newUser, setNewUser] = useState({
@@ -213,6 +220,62 @@ const UserManagement = () => {
   const totalPages = Math.ceil(filteredUsers.length / rowsPerPage);
   const startIndex = (currentPage - 1) * rowsPerPage;
   const paginatedUsers = filteredUsers.slice(startIndex, startIndex + rowsPerPage);
+
+  // Reset selection whenever the visible set of rows changes.
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [searchQuery, roleFilter, userTab, currentPage, rowsPerPage]);
+
+  const toggleSelectUser = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allPageSelected = paginatedUsers.length > 0 && paginatedUsers.every((u) => selectedIds.has(u.id));
+
+  const toggleSelectAllPage = () => {
+    setSelectedIds((prev) => {
+      if (paginatedUsers.length > 0 && paginatedUsers.every((u) => prev.has(u.id))) {
+        return new Set();
+      }
+      return new Set(paginatedUsers.map((u) => u.id));
+    });
+  };
+
+  // Bulk archive (active tab) or restore (archived tab) for the selected users.
+  const handleBulkStatus = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0 || !db) return;
+    const newStatus = userTab === 'archived' ? 'Active' : 'Inactive';
+    const verb = newStatus === 'Active' ? 'Restore' : 'Archive';
+    if (!window.confirm(`${verb} ${ids.length} user${ids.length > 1 ? 's' : ''}?`)) return;
+
+    setIsBulkWorking(true);
+    try {
+      const batch = writeBatch(db);
+      ids.forEach((id) => {
+        batch.update(doc(db, 'users', id), { status: newStatus, updatedAt: serverTimestamp() });
+      });
+      await batch.commit();
+      ids.forEach((id) => {
+        const u = users.find((x) => x.id === id);
+        logActivity(auth?.currentUser?.uid, 'user_status_updated', 'users', id, {
+          email: u?.email || '',
+          newStatus,
+        });
+      });
+      addToast(`${ids.length} user${ids.length > 1 ? 's' : ''} marked ${newStatus}.`, 'success');
+      setSelectedIds(new Set());
+    } catch {
+      addToast('Unable to update selected users.', 'error');
+    } finally {
+      setIsBulkWorking(false);
+    }
+  };
 
   const handleAddUser = async (e) => {
     e.preventDefault();
@@ -570,12 +633,54 @@ const UserManagement = () => {
         </button>
       </div>
 
+      {/* Bulk actions bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-lg">
+          <span className="text-sm font-medium text-blue-800">
+            {selectedIds.size} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              Clear
+            </button>
+            <button
+              onClick={handleBulkStatus}
+              disabled={isBulkWorking}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 ${
+                userTab === 'archived'
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                  : 'bg-red-100 text-red-700 hover:bg-red-200'
+              }`}
+            >
+              {userTab === 'archived' ? <RotateCcw className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+              {isBulkWorking
+                ? 'Working…'
+                : userTab === 'archived'
+                  ? `Restore ${selectedIds.size}`
+                  : `Archive ${selectedIds.size}`}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
+                <th className="table-header w-10">
+                  <input
+                    type="checkbox"
+                    checked={allPageSelected}
+                    onChange={toggleSelectAllPage}
+                    aria-label="Select all on this page"
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 align-middle"
+                  />
+                </th>
                 <th className="table-header w-12">#</th>
                 <th className="table-header w-28">ID NO.</th>
                 <th className="table-header">NAME</th>
@@ -587,20 +692,29 @@ const UserManagement = () => {
             <tbody className="divide-y divide-gray-100">
               {isLoadingUsers && (
                 <tr>
-                  <td className="table-cell text-center text-gray-500" colSpan={6}>Loading users...</td>
+                  <td className="table-cell text-center text-gray-500" colSpan={7}>Loading users...</td>
                 </tr>
               )}
               {!isLoadingUsers && paginatedUsers.length === 0 && (
                 <tr>
-                  <td className="table-cell text-center text-gray-500" colSpan={6}>No users found.</td>
+                  <td className="table-cell text-center text-gray-500" colSpan={7}>No users found.</td>
                 </tr>
               )}
               {paginatedUsers.map((user, index) => (
                 <tr 
                   key={user.id}
-                  className="hover:bg-gray-50:bg-gray-700 transition-colors animate-fade-in"
+                  className={`transition-colors animate-fade-in ${selectedIds.has(user.id) ? 'bg-blue-50/60' : 'hover:bg-gray-50:bg-gray-700'}`}
                   style={{ animationDelay: `${index * 0.05}s` }}
                 >
+                  <td className="table-cell">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(user.id)}
+                      onChange={() => toggleSelectUser(user.id)}
+                      aria-label={`Select ${user.name}`}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 align-middle"
+                    />
+                  </td>
                   <td className="table-cell text-gray-500">{startIndex + index + 1}</td>
                   <td className="table-cell">
                     <span className="font-mono text-sm text-gray-700">{user.idNumber}</span>
