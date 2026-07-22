@@ -483,6 +483,7 @@ const StudentCalendar = () => {
                 <input
                   type="date"
                   value={newEvent.date}
+                  min={new Date().toISOString().split('T')[0]}
                   onChange={(e) => setNewEvent({...newEvent, date: e.target.value})}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />

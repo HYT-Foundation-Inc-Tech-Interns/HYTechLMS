@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import HytBot from '../hytbot/HytBot';
 import { getCourseByName, getCourseTemplateById } from '../../utils/firestoreService';
+import { formatCertification } from '../../utils/courseLabel';
 
 const TRAINER_COURSE_TITLES = {
   1: 'AUTOMOTIVE SERVICES NCII',
@@ -75,19 +76,15 @@ const DashboardLayout = () => {
       return { title: 'Notifications', subtitle: 'View all trainor notifications and updates.' };
     }
     if (params.className) {
-      // ClassDetail route - show class name as title and course name + level as subtitle
+      // ClassDetail route - show class name as title and the spelled-out
+      // certification as subtitle (e.g., "National Certificate II"). The class
+      // name already carries the qualification, so repeating "NC II" here was
+      // both redundant and doubled up (e.g., "BARISTA NC II NC II").
       const decodedClassName = decodeURIComponent(params.className);
-      
-      // Format subtitle as "COURSE NAME LEVEL" (e.g., "BARISTA NC II")
-      let courseSubtitle = decodedClassName;
-      
-      if (courseData && courseData.name && courseData.level) {
-        courseSubtitle = `${courseData.name} ${courseData.level}`.toUpperCase();
-      } else if (classData && classData.level) {
-        // Fallback to class level if course data not available yet
-        courseSubtitle = `${decodedClassName.replace(/\s*\(\d{4}-\d{4}\)/, '')} ${classData.level}`.toUpperCase();
-      }
-      
+
+      const level = courseData?.level || classData?.level || '';
+      const courseSubtitle = formatCertification(level);
+
       return { title: decodedClassName, subtitle: courseSubtitle };
     }
     return { title: '', subtitle: '' };

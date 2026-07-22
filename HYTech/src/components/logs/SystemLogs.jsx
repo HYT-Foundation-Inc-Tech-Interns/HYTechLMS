@@ -8,8 +8,17 @@ import {
   Download,
   Trash2,
   ChevronDown,
+  X,
+  Calendar,
+  AlertTriangle,
 } from 'lucide-react';
-import { subscribeToActivityLogs, getUserProfile, toDate, purgeActivityLogs } from '../../utils/firestoreService';
+import {
+  subscribeToActivityLogs,
+  getUserProfile,
+  toDate,
+  purgeActivityLogs,
+  getActivityLogsByDateRange,
+} from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
 
 // Map raw activity actions to a display label and severity badge
@@ -48,6 +57,27 @@ const formatTimestamp = (value) => {
   });
 };
 
+const CSV_HEADERS = ['Log ID', 'Type', 'Action', 'Name', 'Email', 'Role', 'Entity Type', 'Linked ID', 'Timestamp'];
+const csvEscape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
+// Trigger a browser download for a CSV string.
+const downloadCsv = (csv, filename) => {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+// Purge presets: how far back the range starts, measured from "now".
+const PURGE_PRESETS = [
+  { id: '1m', label: 'Past month', months: 1 },
+  { id: '6m', label: 'Past 6 months', months: 6 },
+  { id: '12m', label: 'Past 12 months', months: 12 },
+];
+
 const SystemLogs = () => {
   const { addToast } = useToast();
   const [logs, setLogs] = useState(null); // null = loading
@@ -59,6 +89,12 @@ const SystemLogs = () => {
   const [sortField, setSortField] = useState('timestamp');
   const [sortDirection, setSortDirection] = useState('desc');
   const [purging, setPurging] = useState(false);
+
+  // Export & purge modal
+  const [showPurgeModal, setShowPurgeModal] = useState(false);
+  const [rangePreset, setRangePreset] = useState('1m');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
   useEffect(() => {
     const unsubscribe = subscribeToActivityLogs((items) => setLogs(items));
@@ -189,36 +225,106 @@ const SystemLogs = () => {
       addToast('Nothing to export.', 'info');
       return;
     }
-    const headers = ['Log ID', 'Type', 'Action', 'Name', 'Email', 'Role', 'Entity Type', 'Linked ID', 'Timestamp'];
-    const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const rows = filteredLogs.map((l) =>
-      [l.logId, l.type, l.action, l.name, l.email, l.role, l.entityType, l.linkedId, l.timestamp].map(escape).join(',')
+      [l.logId, l.type, l.action, l.name, l.email, l.role, l.entityType, l.linkedId, l.timestamp]
+        .map(csvEscape)
+        .join(',')
     );
-    const csv = [headers.map(escape).join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `system-logs-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const csv = [CSV_HEADERS.map(csvEscape).join(','), ...rows].join('\n');
+    downloadCsv(csv, `system-logs-${new Date().toISOString().slice(0, 10)}.csv`);
     addToast(`Exported ${filteredLogs.length} log(s).`, 'success');
   };
 
-  // Permanently delete every activity log.
-  const handlePurge = async () => {
-    if ((logs?.length || 0) === 0) {
-      addToast('There are no logs to purge.', 'info');
-      return;
+  // Resolve the selected [from, to] Date range from preset or custom inputs.
+  // Returns null (with a toast) if a custom range is missing/invalid.
+  const resolveRange = () => {
+    const to = new Date();
+    if (rangePreset === 'custom') {
+      if (!customFrom || !customTo) {
+        addToast('Please pick both a start and end date.', 'info');
+        return null;
+      }
+      const from = new Date(`${customFrom}T00:00:00`);
+      const customEnd = new Date(`${customTo}T23:59:59.999`);
+      if (from > customEnd) {
+        addToast('Start date must be before the end date.', 'error');
+        return null;
+      }
+      return { from, to: customEnd };
     }
-    if (!window.confirm('Permanently delete ALL system logs? This cannot be undone.')) return;
+    const preset = PURGE_PRESETS.find((p) => p.id === rangePreset) || PURGE_PRESETS[0];
+    const from = new Date(to);
+    from.setMonth(from.getMonth() - preset.months);
+    return { from, to };
+  };
+
+  // Build a CSV string from raw Firestore log docs, resolving user names as needed.
+  const buildCsvFromRawLogs = async (rawLogs) => {
+    const cache = { ...userCache };
+    const missingIds = [...new Set(rawLogs.map((l) => l.userId).filter(Boolean))].filter(
+      (id) => !(id in cache)
+    );
+    await Promise.all(
+      missingIds.map(async (id) => {
+        try {
+          const profile = await getUserProfile(id);
+          cache[id] = profile
+            ? {
+                name: profile.name || profile.displayName || profile.email || 'Unknown User',
+                email: profile.email || '',
+                role: profile.role || '',
+              }
+            : { name: 'Deleted User', email: '', role: '' };
+        } catch {
+          cache[id] = { name: 'Unknown User', email: '', role: '' };
+        }
+      })
+    );
+
+    const rows = rawLogs.map((log) => {
+      const u = cache[log.userId] || { name: '', email: '', role: '' };
+      return [
+        log.id,
+        ACTION_DISPLAY[log.action]?.type || 'info',
+        formatAction(log.action),
+        u.name,
+        log.metadata?.email || u.email,
+        log.metadata?.role || u.role,
+        log.entityType || '',
+        log.entityId || '',
+        formatTimestamp(log.timestamp),
+      ]
+        .map(csvEscape)
+        .join(',');
+    });
+    return [CSV_HEADERS.map(csvEscape).join(','), ...rows].join('\n');
+  };
+
+  // Combined flow: export the selected date range to CSV, then permanently purge it.
+  const handleExportAndPurge = async () => {
+    const range = resolveRange();
+    if (!range) return;
+
     try {
       setPurging(true);
-      const count = await purgeActivityLogs();
-      addToast(`Purged ${count} log(s).`, 'success');
+      const rawLogs = await getActivityLogsByDateRange(range.from, range.to);
+      if (rawLogs.length === 0) {
+        addToast('No logs found in the selected date range.', 'info');
+        setPurging(false);
+        return;
+      }
+
+      // Export first so there is always a CSV backup before anything is deleted.
+      const csv = await buildCsvFromRawLogs(rawLogs);
+      const stamp = `${range.from.toISOString().slice(0, 10)}_to_${range.to.toISOString().slice(0, 10)}`;
+      downloadCsv(csv, `system-logs-${stamp}.csv`);
+
+      const count = await purgeActivityLogs(rawLogs.map((l) => l.id));
+      addToast(`Exported and purged ${count} log(s).`, 'success');
+      setShowPurgeModal(false);
     } catch (err) {
-      console.error('Purge failed:', err);
-      addToast('Failed to purge logs. Check your permissions.', 'error');
+      console.error('Export & purge failed:', err);
+      addToast('Failed to export & purge logs. Check your permissions.', 'error');
     } finally {
       setPurging(false);
     }
@@ -282,12 +388,12 @@ const SystemLogs = () => {
               Export CSV
             </button>
             <button
-              onClick={handlePurge}
+              onClick={() => setShowPurgeModal(true)}
               disabled={purging}
               className="flex items-center gap-2 px-3 py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50 transition-colors disabled:opacity-50"
             >
               <Trash2 className="w-4 h-4" />
-              {purging ? 'Purging…' : 'Purge'}
+              Export &amp; Purge
             </button>
           </div>
         </div>
@@ -424,6 +530,131 @@ const SystemLogs = () => {
               ? 'Try adjusting your search or filter.'
               : 'System events like logins, sign-ups, and role changes will appear here.'}
           </p>
+        </div>
+      )}
+
+      {/* Export & Purge Modal */}
+      {showPurgeModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => !purging && setShowPurgeModal(false)}
+        >
+          <div
+            className="card w-full max-w-lg p-6 animate-fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800">Export &amp; Purge Logs</h3>
+                  <p className="text-sm text-gray-500">Download a CSV backup, then permanently delete the range.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => !purging && setShowPurgeModal(false)}
+                className="p-1 rounded hover:bg-gray-100 transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Presets */}
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date range</label>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {PURGE_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  onClick={() => setRangePreset(preset.id)}
+                  className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
+                    rangePreset === preset.id
+                      ? 'border-[#0B005C] bg-[#0B005C]/5 text-[#0B005C] font-medium'
+                      : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+              <button
+                onClick={() => setRangePreset('custom')}
+                className={`px-3 py-2 rounded-lg border text-sm transition-colors flex items-center justify-center gap-1.5 ${
+                  rangePreset === 'custom'
+                    ? 'border-[#0B005C] bg-[#0B005C]/5 text-[#0B005C] font-medium'
+                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+                Custom
+              </button>
+            </div>
+
+            {/* Custom date inputs */}
+            {rangePreset === 'custom' && (
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">From</label>
+                  <input
+                    type="date"
+                    value={customFrom}
+                    max={customTo || new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">To</label>
+                  <input
+                    type="date"
+                    value={customTo}
+                    min={customFrom || undefined}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Warning */}
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-100 mb-5">
+              <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-red-700">
+                All logs in this range will be exported to a CSV file and then{' '}
+                <span className="font-semibold">permanently deleted</span>. This cannot be undone.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowPurgeModal(false)}
+                disabled={purging}
+                className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExportAndPurge}
+                disabled={purging}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {purging ? (
+                  <>
+                    <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                    Processing…
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Export &amp; Purge
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

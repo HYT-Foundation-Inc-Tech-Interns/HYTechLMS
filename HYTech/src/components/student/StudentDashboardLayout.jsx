@@ -10,6 +10,7 @@ import {
   getCourseTemplateById,
   subscribeToStudentEnrollments,
 } from '../../utils/firestoreService';
+import { formatCertification } from '../../utils/courseLabel';
 
 const StudentDashboardLayout = () => {
   const location = useLocation();
@@ -79,14 +80,11 @@ const StudentDashboardLayout = () => {
     if (path.includes('/student/') && classname) {
       const decodedClassname = decodeURIComponent(classname);
       const formattedTitle = decodedClassname;
-      let subtitle = '';
-      
-      if (courseInfo?.courseTemplate) {
-        const courseName = courseInfo.courseTemplate.name || 'Course';
-        const level = courseInfo.courseTemplate.level || 'N/A';
-        subtitle = `${courseName.toUpperCase()} ${level}`;
-      }
-      
+      // The class name already carries the qualification, so show the spelled-out
+      // certification (e.g., "National Certificate II") instead of repeating
+      // "COURSE NAME NC II", which was redundant and doubled the "NC II".
+      const subtitle = formatCertification(courseInfo?.courseTemplate?.level || '');
+
       return { title: formattedTitle, subtitle };
     }
     if (path === '/student/tasks') {

@@ -1930,6 +1930,27 @@ export const adminAddStudentToClass = async (classId, student, classData = {}) =
  * Purge activity logs. Pass a list of ids to delete a subset, or omit to purge
  * everything currently loaded. Admin-only (enforced by security rules).
  */
+/**
+ * Fetch activity logs whose timestamp falls within [fromDate, toDate] (inclusive).
+ * Ordered newest-first. Uses a single-field range so no composite index is required.
+ */
+export const getActivityLogsByDateRange = async (fromDate, toDate) => {
+  try {
+    const logsRef = collection(db, 'activityLogs');
+    const q = query(
+      logsRef,
+      where('timestamp', '>=', Timestamp.fromDate(fromDate)),
+      where('timestamp', '<=', Timestamp.fromDate(toDate)),
+      orderBy('timestamp', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.error('Error fetching activity logs by date range:', error);
+    throw error;
+  }
+};
+
 export const purgeActivityLogs = async (logIds = null) => {
   try {
     let ids = logIds;
@@ -3873,6 +3894,7 @@ export default {
   
   // Activity
   logActivity,
+  getActivityLogsByDateRange,
   purgeActivityLogs,
 
   // Class Announcements

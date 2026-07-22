@@ -129,7 +129,9 @@ function App() {
           <Route path="incident-form" element={<IncidentForms scope="own" />} />
           <Route path=":classname" element={<StudentCourse />} />
           <Route path="tasks" element={<StudentTasks />} />
-          <Route path="certificates" element={<StudentCertificates />} />
+          {/* Certificates feature hidden for now — redirect to home instead of
+              rendering the page. Restore <StudentCertificates /> to re-enable. */}
+          <Route path="certificates" element={<Navigate to="/student" replace />} />
           <Route path="archived" element={<StudentArchivedCourses />} />
           <Route path="settings" element={<StudentSettings />} />
           <Route path="notifications" element={<NotificationsPage role="student" />} />

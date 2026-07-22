@@ -18,6 +18,7 @@ import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { getUserPrivateProfile, saveUserPrivateProfile } from '../../utils/firestoreService';
+import { normalizePhMobile, toStoredPhMobile } from '../../utils/phone';
 
 
 const StudentSettings = () => {
@@ -103,7 +104,7 @@ const StudentSettings = () => {
           nameExtension: data.nameExtension || p.nameExtension || prev.nameExtension,
           birthDate: priv.birthDate || data.birthDate || p.dateOfBirth || prev.birthDate,
           email: auth?.currentUser?.email || data.email || prev.email,
-          phone: priv.phone || data.phone || p.phoneNumber || prev.phone,
+          phone: normalizePhMobile(priv.phone || data.phone || p.phoneNumber || prev.phone),
           address: priv.address || data.address || prev.address,
         }));
         profileHydratedRef.current = true;
@@ -168,7 +169,7 @@ const StudentSettings = () => {
         );
         // Sensitive PII goes to the owner/admin-only private subcollection.
         await saveUserPrivateProfile(uid, {
-          phone: profileForm.phone.trim(),
+          phone: toStoredPhMobile(profileForm.phone),
           address: profileForm.address.trim(),
           birthDate: profileForm.birthDate,
         });
@@ -330,6 +331,8 @@ const StudentSettings = () => {
             type="date"
             value={profileForm.birthDate}
             onChange={(e) => setProfileForm((prev) => ({ ...prev, birthDate: e.target.value }))}
+            min="1920-01-01"
+            max={new Date().toISOString().split('T')[0]}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
@@ -349,13 +352,19 @@ const StudentSettings = () => {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
           <div className="relative">
-            <Phone className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
+              <Phone className="w-4 h-4 text-gray-400" />
+              <span className="text-sm font-medium text-gray-500">+63</span>
+            </div>
             <input
               type="tel"
+              inputMode="numeric"
+              maxLength={10}
+              placeholder="9XX XXX XXXX"
               value={profileForm.phone}
-              onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
+              onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: normalizePhMobile(e.target.value) }))}
               autoComplete="off"
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 bg-white"
+              className="w-full pl-[4.25rem] pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 bg-white"
             />
           </div>
         </div>

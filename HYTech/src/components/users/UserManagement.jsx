@@ -31,6 +31,20 @@ import { auth, db, firebaseConfig, firebaseInitError, hasValidFirebaseConfig } f
 import { useToast } from '../../context/ToastContext';
 import { createNotification, logActivity } from '../../utils/firestoreService';
 
+// Build the temporary password from a last name + birth date.
+// Strips spaces/punctuation so names like "De la Cruz" yield a clean,
+// space-free password (e.g. "delacruz_hytech_1998").
+const buildTempPassword = (lastName, birthDate) => {
+  const cleanLast = String(lastName || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // strip accents (e.g. é -> e)
+    .replace(/[^a-z0-9]/g, ''); // drop spaces, hyphens, apostrophes, etc.
+  const year = birthDate ? new Date(`${birthDate}T00:00:00`).getFullYear() : '';
+  if (!cleanLast || !year || Number.isNaN(year)) return '';
+  return `${cleanLast}_hytech_${year}`;
+};
+
 const UserManagement = () => {
   const { addToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
@@ -209,6 +223,14 @@ const UserManagement = () => {
 
     if (!newUser.birthDate) {
       addToast('Please select a birth date to generate the temporary password.', 'error');
+      return;
+    }
+
+    const birth = new Date(`${newUser.birthDate}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (Number.isNaN(birth.getTime()) || birth > today || birth.getFullYear() < 1920) {
+      addToast('Please enter a valid birth date (not in the future).', 'error');
       return;
     }
 
@@ -774,7 +796,14 @@ const UserManagement = () => {
                 <input
                   type="text"
                   value={newUser.lastName}
-                  onChange={(e) => setNewUser({ ...newUser, lastName: e.target.value })}
+                  onChange={(e) => {
+                    const lastName = e.target.value;
+                    setNewUser((prev) => ({
+                      ...prev,
+                      lastName,
+                      password: buildTempPassword(lastName, prev.birthDate),
+                    }));
+                  }}
                   className="input-field"
                   required
                 />
@@ -798,15 +827,15 @@ const UserManagement = () => {
                 <input
                   type="date"
                   value={newUser.birthDate}
+                  min="1920-01-01"
+                  max={new Date().toISOString().split('T')[0]}
                   onChange={(e) => {
                     const birthDate = e.target.value;
-                    setNewUser({ ...newUser, birthDate });
-                    // Auto-generate password
-                    if (birthDate && newUser.lastName) {
-                      const birthYear = new Date(birthDate).getFullYear();
-                      const generatedPassword = `${newUser.lastName.toLowerCase()}_hytech_${birthYear}`;
-                      setNewUser(prev => ({ ...prev, password: generatedPassword }));
-                    }
+                    setNewUser((prev) => ({
+                      ...prev,
+                      birthDate,
+                      password: buildTempPassword(prev.lastName, birthDate),
+                    }));
                   }}
                   className="input-field"
                   required

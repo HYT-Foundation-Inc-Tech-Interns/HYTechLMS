@@ -10,6 +10,7 @@ import {
 import { auth, firebaseInitError } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
 import { createUserProfile, saveUserPrivateProfile, logActivity } from '../../utils/firestoreService';
+import { normalizePhMobile, isValidPhMobile, toStoredPhMobile } from '../../utils/phone';
 
 const SignUp = () => {
   const SIGN_UP_DRAFT_KEY = 'hyt:signup:draft';
@@ -104,7 +105,12 @@ const SignUp = () => {
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === 'phone') {
+      setFormData((prev) => ({ ...prev, phone: normalizePhMobile(value) }));
+      return;
+    }
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleNextStep = () => {
@@ -119,6 +125,17 @@ const SignUp = () => {
     }
     if (!formData.birthDate) {
       addToast('Please enter your birth date.', 'error');
+      return;
+    }
+    const birth = new Date(`${formData.birthDate}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (Number.isNaN(birth.getTime()) || birth > today) {
+      addToast('Birth date cannot be in the future.', 'error');
+      return;
+    }
+    if (birth.getFullYear() < 1920) {
+      addToast('Please enter a valid birth date.', 'error');
       return;
     }
     // Move to step 2
@@ -146,8 +163,8 @@ const SignUp = () => {
         addToast('Please enter your email address.', 'error');
         return;
       }
-      if (!formData.phone.trim()) {
-        addToast('Please enter your phone number.', 'error');
+      if (!isValidPhMobile(formData.phone)) {
+        addToast('Enter a valid mobile number: 10 digits starting with 9 (e.g. 9XX XXX XXXX).', 'error');
         return;
       }
       if (formData.password.length < 8) {
@@ -182,7 +199,7 @@ const SignUp = () => {
       });
 
       await saveUserPrivateProfile(credential.user.uid, {
-        phone: formData.phone.trim(),
+        phone: toStoredPhMobile(formData.phone),
         birthDate: formData.birthDate,
       }).catch((err) => console.warn('Could not save private profile at signup:', err?.message));
 
@@ -420,6 +437,8 @@ const SignUp = () => {
                   name="birthDate"
                   value={formData.birthDate}
                   onChange={handleChange}
+                  min="1920-01-01"
+                  max={new Date().toISOString().split('T')[0]}
                   className="input-field text-sm sm:text-base focus:ring-2 focus:ring-orange-400 focus:scale-105 transition-transform duration-200"
                   required
                 />
@@ -458,19 +477,25 @@ const SignUp = () => {
                 Phone <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none z-10">
+                <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none z-10">
                   <Phone className="w-4 sm:w-5 h-4 sm:h-5" />
+                  <span className="text-sm sm:text-base font-medium text-gray-600">+63</span>
                 </div>
                 <input
                   type="tel"
+                  inputMode="numeric"
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  placeholder="Enter phone"
-                  className="input-field pl-10 sm:pl-12 text-sm sm:text-base focus:ring-2 focus:ring-orange-400 focus:scale-105 transition-transform duration-200 group-focus-within:bg-orange-50/50"
+                  placeholder="9XX XXX XXXX"
+                  maxLength={10}
+                  className="input-field pl-16 sm:pl-20 text-sm sm:text-base focus:ring-2 focus:ring-orange-400 focus:scale-105 transition-transform duration-200 group-focus-within:bg-orange-50/50"
                   required
                 />
               </div>
+              <p className="mt-1 text-[11px] sm:text-xs text-gray-400">
+                Enter your 10-digit number starting with 9. You can also paste 09XX XXX XXXX — we'll format it.
+              </p>
             </div>
 
             {/* Password Input */}

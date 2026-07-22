@@ -8,10 +8,118 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getStudentEnrollments } from '../../utils/firestoreService';
+import { getStudentEnrollments, toDate } from '../../utils/firestoreService';
+import { useToast } from '../../context/ToastContext';
+
+// Format any Firestore timestamp / Date / string into a readable date, or a fallback.
+const formatIssuedDate = (value, fallback = 'Date TBD') => {
+  const date = toDate(value);
+  if (!date || Number.isNaN(date.getTime())) return fallback;
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
+// Wrap text onto multiple centered lines within maxWidth; returns the next y.
+const drawWrappedText = (ctx, text, centerX, y, maxWidth, lineHeight) => {
+  const words = String(text || '').split(/\s+/);
+  const lines = [];
+  let current = '';
+  words.forEach((word) => {
+    const test = current ? `${current} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = test;
+    }
+  });
+  if (current) lines.push(current);
+  lines.forEach((line, i) => ctx.fillText(line, centerX, y + i * lineHeight));
+  return y + lines.length * lineHeight;
+};
+
+// Render the certificate to a canvas so it can be downloaded as a real image.
+const renderCertificateCanvas = (cert) => {
+  const W = 1200;
+  const H = 850;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const navy = '#0B005C';
+  const gray = '#4b5563';
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  // Double border
+  ctx.strokeStyle = navy;
+  ctx.lineWidth = 10;
+  ctx.strokeRect(30, 30, W - 60, H - 60);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(55, 55, W - 110, H - 110);
+
+  ctx.textAlign = 'center';
+
+  // Title
+  ctx.fillStyle = navy;
+  ctx.font = 'bold 66px Georgia, serif';
+  ctx.fillText('Certificate', W / 2, 190);
+  ctx.font = '600 30px Georgia, serif';
+  ctx.fillText('of Completion', W / 2, 235);
+
+  // Recipient
+  ctx.fillStyle = gray;
+  ctx.font = '22px Georgia, serif';
+  ctx.fillText('This is to certify that', W / 2, 330);
+
+  ctx.fillStyle = navy;
+  ctx.font = 'bold 42px Georgia, serif';
+  ctx.fillText(cert.recipientName, W / 2, 395);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(W / 2 - 260, 415);
+  ctx.lineTo(W / 2 + 260, 415);
+  ctx.stroke();
+
+  // Course
+  ctx.fillStyle = gray;
+  ctx.font = '22px Georgia, serif';
+  ctx.fillText('has successfully completed the course', W / 2, 470);
+
+  ctx.fillStyle = navy;
+  ctx.font = 'bold 30px Georgia, serif';
+  const afterCourse = drawWrappedText(ctx, cert.course, W / 2, 515, W - 320, 40);
+
+  // Date
+  ctx.fillStyle = gray;
+  ctx.font = '20px Georgia, serif';
+  ctx.fillText(`On ${cert.dateIssued}`, W / 2, Math.max(afterCourse + 20, 590));
+
+  // Signature lines
+  ctx.strokeStyle = navy;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(W / 2 - 320, 700);
+  ctx.lineTo(W / 2 - 120, 700);
+  ctx.moveTo(W / 2 + 120, 700);
+  ctx.lineTo(W / 2 + 320, 700);
+  ctx.stroke();
+  ctx.fillStyle = gray;
+  ctx.font = '16px Georgia, serif';
+  ctx.fillText('Authorized Signature', W / 2 - 220, 725);
+  ctx.fillText('Date', W / 2 + 220, 725);
+
+  // Credential ID
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '15px Georgia, serif';
+  ctx.fillText(`Credential ID: ${cert.credentialId}`, W / 2, 775);
+
+  return canvas;
+};
 
 const StudentCertificates = () => {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [earnedCertificates, setEarnedCertificates] = useState([]);
@@ -37,20 +145,17 @@ const StudentCertificates = () => {
       const completed = enrollments.filter(e => e.status === 'completed');
       const inProgress = enrollments.filter(e => e.status === 'ongoing');
 
+      const recipientName =
+        user.displayName || user.name || user.email?.split('@')[0] || 'Trainee';
+
       // Map to certificate format
       const certs = completed.map((enrollment) => ({
         id: enrollment.id,
         course: enrollment.courseName || 'Course',
-        dateIssued: enrollment.completedAt 
-          ? new Date(enrollment.completedAt.toDate?.() || enrollment.completedAt).toLocaleDateString('en-US', { 
-              year: 'numeric', 
-              month: 'short', 
-              day: 'numeric' 
-            })
-          : 'Date TBD',
+        dateIssued: formatIssuedDate(enrollment.completedAt),
         finalGrade: enrollment.finalGrade || 'Pass',
         credentialId: enrollment.certificateId || `CERT-${enrollment.id.substring(0, 8).toUpperCase()}`,
-        recipientName: user.displayName || 'Trainee',
+        recipientName,
         enrollmentId: enrollment.id,
       }));
 
@@ -60,13 +165,7 @@ const StudentCertificates = () => {
       const courses = inProgress.map((enrollment) => ({
         id: enrollment.id,
         course: enrollment.courseName || 'Course',
-        estCompletion: enrollment.expectedCompletionDate
-          ? new Date(enrollment.expectedCompletionDate.toDate?.() || enrollment.expectedCompletionDate).toLocaleDateString('en-US', { 
-              year: 'numeric', 
-              month: 'short', 
-              day: 'numeric' 
-            })
-          : 'TBD',
+        estCompletion: formatIssuedDate(enrollment.expectedCompletionDate, 'TBD'),
         progress: enrollment.progress?.percentage || 0,
         enrollmentId: enrollment.id,
       }));
@@ -81,8 +180,29 @@ const StudentCertificates = () => {
   };
 
   const handleDownload = (certificate) => {
-    // Note: Actual PDF generation would be done via Cloud Function
-    alert(`Downloading certificate: ${certificate.course} - ${certificate.credentialId}`);
+    try {
+      const canvas = renderCertificateCanvas(certificate);
+      const safeName = `${certificate.course}-${certificate.credentialId}`
+        .replace(/[^a-z0-9]+/gi, '-')
+        .replace(/^-+|-+$/g, '')
+        .toLowerCase();
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          addToast('Could not generate the certificate image.', 'error');
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `certificate-${safeName}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+        addToast('Certificate downloaded.', 'success');
+      }, 'image/png');
+    } catch (err) {
+      console.error('Certificate download failed:', err);
+      addToast('Failed to download the certificate.', 'error');
+    }
   };
 
   const handleView = (certificate) => {

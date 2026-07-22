@@ -9,6 +9,7 @@ import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { getUserPrivateProfile, saveUserPrivateProfile } from '../../utils/firestoreService';
+import { normalizePhMobile, toStoredPhMobile } from '../../utils/phone';
 
 const TrainerSettings = () => {
   const [activeTab, setActiveTab] = useState('profile');
@@ -109,7 +110,7 @@ useEffect(() => {
         nameExtension: data.nameExtension || p.nameExtension || prev.nameExtension,
         birthDate: priv.birthDate || data.birthDate || p.dateOfBirth || prev.birthDate,
         email: auth?.currentUser?.email || data.email || prev.email,
-        phone: priv.phone || data.phone || p.phoneNumber || prev.phone,
+        phone: normalizePhMobile(priv.phone || data.phone || p.phoneNumber || prev.phone),
         bio: data.bio || prev.bio,
       }));
       profileHydratedRef.current = true;
@@ -190,7 +191,7 @@ const handleSave = async () => {
       );
       // Sensitive PII to the owner/admin-only private subcollection.
       await saveUserPrivateProfile(uid, {
-        phone: profileForm.phone.trim(),
+        phone: toStoredPhMobile(profileForm.phone),
         birthDate: profileForm.birthDate,
       });
     }
@@ -343,9 +344,11 @@ const handleSave = async () => {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Birth Date <span className="text-red-500">*</span></label>
           <input 
-            type="date" 
+            type="date"
             value={profileForm.birthDate}
             onChange={(e) => setProfileForm((prev) => ({ ...prev, birthDate: e.target.value }))}
+            min="1920-01-01"
+            max={new Date().toISOString().split('T')[0]}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
@@ -361,12 +364,18 @@ const handleSave = async () => {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-          <input 
-            type="tel" 
-            value={profileForm.phone}
-            onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 bg-white"
-          />
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-500 pointer-events-none">+63</span>
+            <input
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
+              placeholder="9XX XXX XXXX"
+              value={profileForm.phone}
+              onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: normalizePhMobile(e.target.value) }))}
+              className="w-full pl-12 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 bg-white"
+            />
+          </div>
         </div>
       </div>
 

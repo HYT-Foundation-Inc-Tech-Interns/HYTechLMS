@@ -3,6 +3,7 @@ import { MessageCircle, Send, Loader, X } from 'lucide-react';
 import { auth, db } from '../../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { useToast } from '../../context/ToastContext';
+import FlappyBirdGame from '../shared/FlappyBirdGame';
 
 const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_FALLBACK_MODEL = import.meta.env.VITE_GEMINI_FALLBACK_MODEL || 'gemini-flash-latest';
@@ -89,7 +90,7 @@ const buildLocalFallbackReply = (userMessage, currentRole = 'guest') => {
       return 'Trainee course navigation:\n1. Open My Courses from the sidebar.\n2. Select your enrolled course.\n3. Use Tasks and Calendar tabs to track deadlines.';
     }
     if (includesAny(text, ['certificate', 'certificates'])) {
-      return 'Certificates are in the Trainee sidebar under Certificates. Completed courses with requirements met will appear there.';
+      return 'Certificates are not available yet — this feature is being finalized and will be enabled soon.';
     }
     if (includesAny(text, ['task', 'assignment', 'deadline'])) {
       return 'Use Trainee > Tasks to view pending assignments and deadlines. You can also check Calendar for schedule-based reminders.';
@@ -126,6 +127,7 @@ const HytBot = ({ embedded = false }) => {
   const [isPanelOpen, setIsPanelOpen] = useState(!embedded);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [role, setRole] = useState('guest');
+  const [showFlappy, setShowFlappy] = useState(false);
   const scrollRef = useRef(null);
   const warnedMissingGeminiKeyRef = useRef(false);
   const rateLimitedUntilRef = useRef(0);
@@ -285,6 +287,20 @@ const HytBot = ({ embedded = false }) => {
     const userMessage = input.trim();
     setMessages((m) => [...m, { role: 'user', text: userMessage }]);
     setInput('');
+
+    // 🐤 Easter egg: chat "flappy bird" to launch a hidden mini-game.
+    if (/\bflappy\s*bird\b/i.test(userMessage)) {
+      setMessages((m) => [
+        ...m,
+        {
+          role: 'assistant',
+          text: '🐤 Secret unlocked! Launching Flappy Bird — tap the bird or press Space to flap. Press Esc to close. Good luck!',
+        },
+      ]);
+      setShowFlappy(true);
+      return;
+    }
+
     setIsSending(true);
 
     try {
@@ -382,6 +398,7 @@ const HytBot = ({ embedded = false }) => {
   if (embedded) {
     return (
       <>
+        {showFlappy && <FlappyBirdGame onClose={() => setShowFlappy(false)} />}
         {!isPanelOpen && (
           <div className={`fixed z-50 bottom-6 right-4 sm:right-6 lg:right-auto lg:bottom-20 ${isSidebarCollapsed ? 'lg:left-3' : 'lg:left-6'}`}>
             <button
@@ -425,7 +442,9 @@ const HytBot = ({ embedded = false }) => {
   }
 
   return (
-    <div className="p-6 lg:p-8">
+    <>
+      {showFlappy && <FlappyBirdGame onClose={() => setShowFlappy(false)} />}
+      <div className="p-6 lg:p-8">
       <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow border border-gray-100 overflow-hidden">
         <div className="flex items-center gap-3 px-6 py-4 border-b">
           <MessageCircle className="w-6 h-6 text-indigo-600" />
@@ -437,7 +456,8 @@ const HytBot = ({ embedded = false }) => {
 
         {renderChatBody('h-96 overflow-y-auto p-6 space-y-4 bg-gray-50')}
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

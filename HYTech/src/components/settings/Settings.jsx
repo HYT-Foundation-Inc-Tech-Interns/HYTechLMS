@@ -17,6 +17,7 @@ import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
 import { compressAvatarImageToBase64 } from '../../utils/avatarStorage';
+import { normalizePhMobile, toStoredPhMobile } from '../../utils/phone';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
@@ -163,7 +164,7 @@ const Settings = () => {
           nameExtension: data.nameExtension || p.nameExtension || prev.nameExtension,
           birthDate: data.birthDate || p.dateOfBirth || prev.birthDate,
           fullAddress: data.address || prev.fullAddress,
-          contactNumber: data.phone || p.phoneNumber || prev.contactNumber,
+          contactNumber: normalizePhMobile(data.phone || p.phoneNumber || prev.contactNumber),
           email: emailValue,
           emailAddress: emailValue,
         }));
@@ -287,7 +288,7 @@ const Settings = () => {
             birthDate: accountForm.birthDate,
             name: fullName,
             email: auth?.currentUser?.email || accountForm.email,
-            phone: accountForm.contactNumber.trim(),
+            phone: toStoredPhMobile(accountForm.contactNumber),
             address: accountForm.fullAddress.trim(),
             updatedAt: serverTimestamp(),
             avatarBase64: avatarBase64 || null,
@@ -421,6 +422,8 @@ const Settings = () => {
               type="date"
               value={accountForm.birthDate}
               onChange={(e) => setAccountForm({ ...accountForm, birthDate: e.target.value })}
+              min="1920-01-01"
+              max={new Date().toISOString().split('T')[0]}
               className="input-field"
               required
             />
@@ -446,12 +449,18 @@ const Settings = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Contact Number:</label>
-            <input
-              type="text"
-              value={accountForm.contactNumber}
-              onChange={(e) => setAccountForm({ ...accountForm, contactNumber: e.target.value })}
-              className="input-field"
-            />
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-500 pointer-events-none z-10">+63</span>
+              <input
+                type="tel"
+                inputMode="numeric"
+                maxLength={10}
+                placeholder="9XX XXX XXXX"
+                value={accountForm.contactNumber}
+                onChange={(e) => setAccountForm({ ...accountForm, contactNumber: normalizePhMobile(e.target.value) })}
+                className="input-field pl-12"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Email Address:</label>

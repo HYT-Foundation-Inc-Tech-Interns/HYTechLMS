@@ -352,13 +352,14 @@ const StudentArchivedCourses = () => {
                   <p className="text-sm text-green-600 font-medium">Completion Date</p>
                   <p className="text-lg font-bold text-green-700">{selectedCourse.completedDate}</p>
                 </div>
-                <button
+                {/* Certificates feature hidden for now — restore this button to re-enable. */}
+                {/* <button
                   onClick={() => setShowCertificateModal(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-[#0D4291] text-white rounded-xl font-medium hover:bg-[#0a3577] transition-colors"
                 >
                   <Award className="w-4 h-4" />
                   View Certificate
-                </button>
+                </button> */}
               </div>
 
               <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">

@@ -130,7 +130,8 @@ const StudentSidebar = () => {
 
   const bottomNavItems = [
     { path: '/student/tasks', icon: ClipboardList, label: 'Tasks' },
-    { path: '/student/certificates', icon: Award, label: 'Certificates' },
+    // Certificates feature hidden for now — restore this entry to re-enable.
+    // { path: '/student/certificates', icon: Award, label: 'Certificates' },
     { path: '/student/request-id', icon: CreditCard, label: 'Request ID' },
     { path: '/student/incident-form', icon: AlertTriangle, label: 'Incident Report' },
     { path: '/student/archived', icon: Archive, label: 'Archived Courses' },
