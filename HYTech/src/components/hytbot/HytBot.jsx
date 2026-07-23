@@ -17,6 +17,7 @@ const GEMINI_API_KEY = ALLOW_CLIENT_GEMINI_KEY ? import.meta.env.VITE_GEMINI_API
 const HYTBOT_API_URL = import.meta.env.VITE_HYTBOT_API_URL;
 const MAX_GEMINI_RETRIES = 2;
 const BASE_RETRY_DELAY_MS = 1200;
+const LAUNCHER_POSITION_KEY = 'hyt:hytbot-launcher-position';
 
 const GENERAL_SYSTEM_PROMPT =
   'You are HYTrix, a helpful general-purpose AI assistant. You can answer questions on any topic, not just HYTech LMS. When the user asks about HYTech LMS, provide practical app-specific guidance. Keep responses accurate, clear, and concise.';
@@ -129,6 +130,20 @@ const HytBot = ({ embedded = false }) => {
   const [role, setRole] = useState('guest');
   const [showFlappy, setShowFlappy] = useState(false);
   const scrollRef = useRef(null);
+  const launcherRef = useRef(null);
+  const launcherDragRef = useRef(null);
+  const suppressLauncherClickRef = useRef(false);
+  const [launcherPosition, setLauncherPosition] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = JSON.parse(localStorage.getItem(LAUNCHER_POSITION_KEY) || 'null');
+      return Number.isFinite(saved?.x) && Number.isFinite(saved?.y)
+        ? { x: saved.x, y: saved.y }
+        : null;
+    } catch {
+      return null;
+    }
+  });
   const warnedMissingGeminiKeyRef = useRef(false);
   const rateLimitedUntilRef = useRef(0);
   const { addToast } = useToast();
@@ -173,6 +188,93 @@ const HytBot = ({ embedded = false }) => {
     if (!scrollRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
+
+  useEffect(() => {
+    if (!embedded || isPanelOpen || typeof window === 'undefined') return undefined;
+
+    const keepLauncherOnScreen = () => {
+      setLauncherPosition((previous) => {
+        if (!previous) return previous;
+        const width = launcherRef.current?.offsetWidth || 120;
+        const height = launcherRef.current?.offsetHeight || 48;
+        const margin = 8;
+        const minTop = 72;
+        const next = {
+          x: Math.min(Math.max(previous.x, margin), Math.max(margin, window.innerWidth - width - margin)),
+          y: Math.min(Math.max(previous.y, minTop), Math.max(minTop, window.innerHeight - height - margin)),
+        };
+        if (next.x === previous.x && next.y === previous.y) return previous;
+        localStorage.setItem(LAUNCHER_POSITION_KEY, JSON.stringify(next));
+        return next;
+      });
+    };
+
+    const frame = window.requestAnimationFrame(keepLauncherOnScreen);
+    window.addEventListener('resize', keepLauncherOnScreen);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', keepLauncherOnScreen);
+    };
+  }, [embedded, isPanelOpen]);
+
+  const clampLauncherPosition = (x, y) => {
+    const width = launcherRef.current?.offsetWidth || 120;
+    const height = launcherRef.current?.offsetHeight || 48;
+    const margin = 8;
+    const minTop = 72;
+    return {
+      x: Math.min(Math.max(x, margin), Math.max(margin, window.innerWidth - width - margin)),
+      y: Math.min(Math.max(y, minTop), Math.max(minTop, window.innerHeight - height - margin)),
+    };
+  };
+
+  const handleLauncherPointerDown = (event) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const rect = launcherRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    launcherDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      left: rect.left,
+      top: rect.top,
+      moved: false,
+      lastPosition: { x: rect.left, y: rect.top },
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handleLauncherPointerMove = (event) => {
+    const drag = launcherDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(deltaX, deltaY) < 5) return;
+    drag.moved = true;
+    event.preventDefault();
+    const next = clampLauncherPosition(drag.left + deltaX, drag.top + deltaY);
+    drag.lastPosition = next;
+    setLauncherPosition(next);
+  };
+
+  const finishLauncherDrag = (event) => {
+    const drag = launcherDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    launcherDragRef.current = null;
+    if (drag.moved) {
+      suppressLauncherClickRef.current = true;
+      localStorage.setItem(LAUNCHER_POSITION_KEY, JSON.stringify(drag.lastPosition));
+    }
+  };
+
+  const handleLauncherClick = () => {
+    if (suppressLauncherClickRef.current) {
+      suppressLauncherClickRef.current = false;
+      return;
+    }
+    setIsPanelOpen(true);
+  };
 
   const offlineFallbackMessage =
     'Live AI is currently unavailable, so I am using built-in HYTech guidance.';
@@ -400,11 +502,21 @@ const HytBot = ({ embedded = false }) => {
       <>
         {showFlappy && <FlappyBirdGame onClose={() => setShowFlappy(false)} />}
         {!isPanelOpen && (
-          <div className={`fixed z-50 bottom-6 right-4 sm:right-6 lg:right-auto lg:bottom-20 ${isSidebarCollapsed ? 'lg:left-3' : 'lg:left-6'}`}>
+          <div
+            ref={launcherRef}
+            style={launcherPosition ? { left: launcherPosition.x, top: launcherPosition.y } : undefined}
+            className={`fixed z-50 ${launcherPosition ? '' : `bottom-6 right-4 sm:right-6 lg:right-auto lg:bottom-20 ${isSidebarCollapsed ? 'lg:left-3' : 'lg:left-6'}`}`}
+          >
             <button
               type="button"
-              onClick={() => setIsPanelOpen(true)}
-              className={`inline-flex items-center gap-2 bg-[#0B005C] text-white rounded-full shadow-lg hover:bg-[#13007a] transition-colors ${isSidebarCollapsed ? 'lg:px-3 lg:py-3 px-4 py-3' : 'px-4 py-3'}`}
+              onClick={handleLauncherClick}
+              onPointerDown={handleLauncherPointerDown}
+              onPointerMove={handleLauncherPointerMove}
+              onPointerUp={finishLauncherDrag}
+              onPointerCancel={finishLauncherDrag}
+              className={`inline-flex touch-none select-none items-center gap-2 bg-[#0B005C] text-white rounded-full shadow-lg hover:bg-[#13007a] transition-colors cursor-grab active:cursor-grabbing ${isSidebarCollapsed ? 'lg:px-3 lg:py-3 px-4 py-3' : 'px-4 py-3'}`}
+              aria-label="Open HYTrix. Drag to move."
+              title="Drag to move HYTrix"
             >
               <MessageCircle className="w-5 h-5" />
               <span className={`font-medium ${isSidebarCollapsed ? 'lg:hidden' : ''}`}>HYTrix</span>

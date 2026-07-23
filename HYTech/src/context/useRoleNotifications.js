@@ -6,6 +6,7 @@ import {
   subscribeToNotifications,
   deleteNotification,
   clearAllNotifications,
+  getUserProfile,
   toDate,
 } from '../utils/firestoreService';
 
@@ -40,16 +41,60 @@ export const useRoleNotifications = () => {
       return undefined;
     }
 
+    let active = true;
+    let enrichmentRun = 0;
+
     const unsubscribe = subscribeToNotifications(uid, (items) => {
-      setNotifications(
-        items.map((item) => ({
-          ...item,
-          time: formatTimeAgo(item.createdAt),
-        }))
-      );
+      const run = ++enrichmentRun;
+      const baseItems = items.map((item) => ({
+        ...item,
+        displayText: item.text,
+        time: formatTimeAgo(item.createdAt),
+      }));
+      setNotifications(baseItems);
+
+      const senderIds = [...new Set(items.map((item) => item.fromUid).filter(Boolean))];
+      if (senderIds.length === 0) return;
+
+      Promise.all(
+        senderIds.map(async (senderId) => [senderId, await getUserProfile(senderId)])
+      )
+        .then((profiles) => {
+          if (!active || run !== enrichmentRun) return;
+          const profileById = new Map(profiles);
+          setNotifications(
+            baseItems.map((item) => {
+              const profile = profileById.get(item.fromUid) || {};
+              const structuredName = [
+                profile.firstName || profile.profile?.firstName,
+                profile.middleName || profile.profile?.middleName,
+                profile.lastName || profile.profile?.lastName,
+                profile.nameExtension || profile.profile?.nameExtension,
+              ].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+              const currentSenderName =
+                structuredName || profile.displayName || profile.name || item.fromName || '';
+
+              if (item.type === 'join_request' && currentSenderName) {
+                const className = item.metadata?.className || 'your class';
+                return {
+                  ...item,
+                  fromName: currentSenderName,
+                  displayText: `${currentSenderName} requested to join ${className}. Approve them in the class roster.`,
+                };
+              }
+              return { ...item, fromName: currentSenderName || item.fromName };
+            })
+          );
+        })
+        .catch(() => {
+          // Keep the stored notification text if a profile cannot be resolved.
+        });
     });
 
-    return unsubscribe;
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [uid]);
 
   const unreadCount = notifications.filter((notification) => notification.unread).length;

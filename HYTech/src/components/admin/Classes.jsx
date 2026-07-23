@@ -442,18 +442,18 @@ const Classes = () => {
         {/* Header */}
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900">Courses &amp; Classes</h1>
+            <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl">Courses &amp; Classes</h1>
             <p className="text-gray-600 mt-2">
               <span className="font-medium">Courses</span> are the catalog (programs, per category). A program is
               hidden from trainors until you <span className="font-medium">Make available</span>.{' '}
               <span className="font-medium">Classes</span> are the running sessions trainors open from an available course.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <button
               onClick={handleImportCatalog}
               disabled={seeding}
-              className="flex items-center gap-2 px-4 py-2.5 border border-blue-200 bg-white text-blue-700 rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-2 px-4 py-2.5 border border-blue-200 bg-white text-blue-700 rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium disabled:opacity-50 sm:flex-none"
               title="Import the full TESDA sector/program/subject catalog (programs start disabled)"
             >
               {seeding ? <Loader className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}
@@ -461,7 +461,7 @@ const Classes = () => {
             </button>
             <button
               onClick={() => setShowAddCourse(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              className="flex flex-1 items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium sm:flex-none"
             >
               <Plus className="w-4 h-4" />
               New Course
@@ -470,10 +470,10 @@ const Classes = () => {
         </div>
 
         {/* Tabs */}
-        <div className="mb-6 flex gap-2 border-b border-gray-200">
+        <div className="mb-6 flex gap-2 overflow-x-auto border-b border-gray-200">
           <button
             onClick={() => setActiveTab('courses')}
-            className={`flex items-center gap-2 px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors ${
+            className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'courses'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-blue-600'
@@ -484,7 +484,7 @@ const Classes = () => {
           </button>
           <button
             onClick={() => setActiveTab('classes')}
-            className={`flex items-center gap-2 px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors ${
+            className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'classes'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-blue-600'
@@ -863,16 +863,16 @@ const Classes = () => {
 
       {/* New Course modal */}
       {showAddCourse && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAddCourse(false)} />
-          <div className="relative bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+          <div className="relative bg-white rounded-2xl w-full max-w-lg max-h-[calc(100dvh-1rem)] shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900">New Course</h2>
               <button onClick={() => setShowAddCourse(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Course Name <span className="text-red-500">*</span></label>
                 <input
@@ -899,7 +899,7 @@ const Classes = () => {
                   <p className="text-xs text-amber-600 mt-1">No categories yet — create one on the Sectors page first.</p>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Level</label>
                   <select
@@ -935,7 +935,7 @@ const Classes = () => {
                 />
               </div>
             </div>
-            <div className="p-6 border-t border-gray-100 flex justify-end gap-2">
+            <div className="p-4 sm:p-6 border-t border-gray-100 flex flex-col-reverse justify-end gap-2 sm:flex-row">
               <button
                 onClick={() => setShowAddCourse(false)}
                 className="px-4 py-2 border border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"

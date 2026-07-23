@@ -108,7 +108,7 @@ const VerifyEmail = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden p-4">
+    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center relative overflow-hidden p-4">
       {/* Animated background (matches the auth screens) */}
       <div className="absolute inset-0 -z-10 bg-gradient-to-br from-blue-50 via-white to-orange-50" />
       <div className="absolute inset-0 -z-10 overflow-hidden">

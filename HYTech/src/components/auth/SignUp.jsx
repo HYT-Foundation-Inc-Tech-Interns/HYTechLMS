@@ -5,13 +5,20 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   createUserWithEmailAndPassword,
+  deleteUser,
   sendEmailVerification,
   setPersistence,
+  updateProfile,
 } from 'firebase/auth';
 import { auth, firebaseInitError } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
-import { createUserProfile, saveUserPrivateProfile, logActivity, generateNextIdNumber } from '../../utils/firestoreService';
+import {
+  createRegisteredUserProfile,
+  generateNextIdNumber,
+  logActivity,
+} from '../../utils/firestoreService';
 import { normalizePhMobile, isValidPhMobile, toStoredPhMobile } from '../../utils/phone';
+import { buildFullName, normalizeNameFields } from '../../utils/nameFormat';
 
 const SignUp = () => {
   const SIGN_UP_DRAFT_KEY = 'hyt:signup:draft';
@@ -153,6 +160,8 @@ const SignUp = () => {
     }
 
     setIsLoading(true);
+    let credential = null;
+    let profileSaved = false;
 
     try {
       if (!auth) {
@@ -173,19 +182,45 @@ const SignUp = () => {
         return;
       }
 
+      const normalizedName = normalizeNameFields(formData);
+      const fullName = buildFullName(normalizedName);
+      const normalizedEmail = formData.email.trim().toLowerCase();
+
       await setPersistence(
         auth,
         rememberMe ? browserLocalPersistence : browserSessionPersistence
       );
 
-      const credential = await createUserWithEmailAndPassword(
+      credential = await createUserWithEmailAndPassword(
         auth,
-        formData.email.trim(),
+        normalizedEmail,
         formData.password
       );
+      await updateProfile(credential.user, { displayName: fullName });
 
-      // Send the verification link FIRST, before any Firestore writes — a
-      // profile-write hiccup must never be the reason no email goes out.
+      // Public profile (name/email) on the users doc. Sensitive PII (phone,
+      // birth date) goes to the private subcollection so it is not exposed by
+      // the org-wide users read. All required records are committed together.
+      const idNumber = await generateNextIdNumber();
+      await createRegisteredUserProfile(
+        credential.user.uid,
+        {
+          email: normalizedEmail,
+          displayName: fullName,
+          name: fullName,
+          idNumber,
+          firstName: normalizedName.firstName,
+          middleName: normalizedName.middleName,
+          lastName: normalizedName.lastName,
+          nameExtension: normalizedName.nameExtension,
+        },
+        {
+          phone: toStoredPhMobile(formData.phone),
+          birthDate: formData.birthDate,
+        }
+      );
+      profileSaved = true;
+
       let emailSent = true;
       try {
         await sendEmailVerification(credential.user);
@@ -194,54 +229,31 @@ const SignUp = () => {
         console.warn('Could not send verification email:', verifyErr?.message);
       }
 
-      // Public profile (name/email) on the users doc. Sensitive PII (phone,
-      // birth date) goes to the private subcollection so it is not exposed by
-      // the org-wide users read. These are best-effort: if they fail, the
-      // sign-in flow backfills the users doc, so we don't block verification.
-      const fullName = `${formData.firstName.trim()} ${formData.middleName.trim()} ${formData.lastName.trim()}${formData.nameExtension.trim() ? ` ${formData.nameExtension.trim()}` : ''}`.replace(/\s+/g, ' ').trim();
-      // Self-registered trainees get an ID number too (admin-created ones already do).
-      const idNumber = await generateNextIdNumber();
-      await createUserProfile(credential.user.uid, {
-        email: formData.email.trim(),
-        displayName: fullName,
-        // Top-level name fields mirror what Settings saves, so admin User
-        // Management (which reads `name`/`firstName`/`lastName`) shows the
-        // trainee correctly from the moment they sign up — not "Unnamed User".
-        name: fullName,
-        idNumber,
-        firstName: formData.firstName.trim(),
-        middleName: formData.middleName.trim(),
-        lastName: formData.lastName.trim(),
-        nameExtension: formData.nameExtension.trim(),
-        profile: {
-          firstName: formData.firstName.trim(),
-          middleName: formData.middleName.trim(),
-          lastName: formData.lastName.trim(),
-          nameExtension: formData.nameExtension.trim(),
-        },
-        role: 'student',
-      }).catch((err) => console.warn('Could not save public profile at signup:', err?.message));
-
-      await saveUserPrivateProfile(credential.user.uid, {
-        phone: toStoredPhMobile(formData.phone),
-        birthDate: formData.birthDate,
-      }).catch((err) => console.warn('Could not save private profile at signup:', err?.message));
-
       logActivity(credential.user.uid, 'user_signup', 'users', credential.user.uid, {
-        email: formData.email.trim(),
+        email: normalizedEmail,
       });
 
       // Keep the (unverified) session so the verify page can resend without
       // asking for the password again. Protected routes still block it.
       addToast(
         emailSent
-          ? `Account created! We sent a verification link to ${formData.email.trim()}.`
+          ? `Account created! We sent a verification link to ${normalizedEmail}.`
           : `Account created, but we couldn't send the verification email automatically. You can resend it on the next screen.`,
         emailSent ? 'success' : 'warning'
       );
       localStorage.removeItem(SIGN_UP_DRAFT_KEY);
-      navigate('/verify-email', { state: { email: formData.email.trim(), emailSent } });
+      navigate('/verify-email', { state: { email: normalizedEmail, emailSent } });
     } catch (error) {
+      // Roll back a brand-new Auth account when its required profile bundle
+      // could not be persisted, allowing a clean retry with the same email.
+      if (credential?.user && !profileSaved) {
+        try {
+          await deleteUser(credential.user);
+        } catch (rollbackError) {
+          console.error('Could not roll back incomplete signup:', rollbackError);
+        }
+      }
+
       const errorMessages = {
         'auth/invalid-api-key': 'Invalid Firebase API key. Check your VITE_FIREBASE_API_KEY value.',
         'auth/email-already-in-use': 'This email is already registered.',
@@ -252,6 +264,7 @@ const SignUp = () => {
         'auth/network-request-failed': 'Network error. Please check your internet connection.',
         'auth/unauthorized-domain': 'This domain is not authorized in Firebase Auth settings.',
         'auth/admin-restricted-operation': 'Signup is restricted by project settings.',
+        'permission-denied': 'Your account details could not be saved. Please contact an administrator.',
       };
 
       const fallbackMessage = error?.code
@@ -265,7 +278,7 @@ const SignUp = () => {
   };
 
   return (
-    <div className="min-h-screen flex relative overflow-hidden">
+    <div className="min-h-screen min-h-[100dvh] flex relative overflow-hidden">
       {/* Animated Background Layers */}
       <div className="absolute inset-0 -z-10 bg-gradient-to-br from-blue-50 via-white to-orange-50" />
       <div className="absolute inset-0 -z-10 overflow-hidden">

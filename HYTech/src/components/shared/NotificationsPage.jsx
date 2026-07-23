@@ -1,8 +1,10 @@
 import React, { useMemo } from 'react';
 import { Bell, CheckCircle2, Clock, Dot } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useRoleNotifications } from '../../context/useRoleNotifications';
 import { useToast } from '../../context/ToastContext';
 import { toDate } from '../../utils/firestoreService';
+import { getNotificationDestination } from '../../utils/notificationNavigation';
 
 const ROLE_LABELS = {
   admin: 'Admin',
@@ -33,8 +35,9 @@ const bucketFor = (createdAt) => {
 };
 
 const NotificationsPage = ({ role = 'student' }) => {
-  const { notifications, unreadCount, markAllAsRead } = useRoleNotifications(role);
+  const { notifications, unreadCount, markAllAsRead, markAsRead } = useRoleNotifications(role);
   const { addToast } = useToast();
+  const navigate = useNavigate();
 
   const roleLabel = ROLE_LABELS[role] || 'User';
 
@@ -58,10 +61,15 @@ const NotificationsPage = ({ role = 'student' }) => {
     addToast('All notifications marked as read.', 'success');
   };
 
+  const handleNotificationClick = (notification) => {
+    if (notification.unread) markAsRead(notification.id);
+    navigate(getNotificationDestination(notification, role));
+  };
+
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="bg-white border border-gray-100 rounded-2xl p-6">
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <Bell className="w-6 h-6 text-[#0B005C]" />
@@ -98,7 +106,16 @@ const NotificationsPage = ({ role = 'student' }) => {
                   {group.items.map((notification) => (
                     <div
                       key={notification.id}
-                      className={`p-5 border-b last:border-b-0 border-gray-100 ${notification.unread ? 'bg-blue-50/50' : 'bg-white'}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleNotificationClick(notification)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleNotificationClick(notification);
+                        }
+                      }}
+                      className={`p-4 sm:p-5 border-b last:border-b-0 border-gray-100 cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 ${notification.unread ? 'bg-blue-50/50' : 'bg-white'}`}
                     >
                       <div className="flex items-start gap-3">
                         <div className="pt-1">
@@ -109,7 +126,7 @@ const NotificationsPage = ({ role = 'student' }) => {
                           )}
                         </div>
                         <div className="flex-1">
-                          <p className="text-gray-800 font-medium">{notification.text}</p>
+                          <p className="text-gray-800 font-medium">{notification.displayText || notification.text}</p>
                           <div className="mt-1 flex items-center gap-1 text-gray-400 text-sm">
                             <Clock className="w-3.5 h-3.5" />
                             <span>{notification.time}</span>

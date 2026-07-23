@@ -3,6 +3,7 @@ import { Bell, X, Check, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useRoleNotifications } from '../../context/useRoleNotifications';
 import { useToast } from '../../context/ToastContext';
+import { getNotificationDestination } from '../../utils/notificationNavigation';
 
 const NotificationDropdown = ({ role = 'student' }) => {
   const [showNotifications, setShowNotifications] = useState(false);
@@ -54,44 +55,13 @@ const NotificationDropdown = ({ role = 'student' }) => {
     navigate(`${basePath}/notifications`);
   };
 
-  // Route a notification to the most relevant existing page for its type.
-  const destinationFor = (notification) => {
-    const meta = notification?.metadata || {};
-    if (meta.link) return meta.link;
-    switch (notification?.type) {
-      case 'id_request':
-      case 'id_request_approved':
-      case 'id_request_rejected':
-      case 'id_request_completed':
-        return role === 'admin' ? '/admin/id-requests' : `${basePath}/request-id`;
-      case 'incident_filed':
-        return `${basePath}/incident-forms`;
-      case 'join_request':
-        // Open the specific class on its Trainees tab, where the trainer
-        // approves pending join requests. Fall back to home if we lack the name.
-        return role === 'trainer' && meta.className
-          ? `${basePath}/${encodeURIComponent(meta.className)}?tab=students`
-          : basePath;
-      case 'student_waiting':
-      case 'notify_trainer':
-      case 'join_class':
-        // Trainor roster / home is where students get added to / approved for a class.
-        return basePath;
-      case 'join_approved':
-        // Trainee's dashboard is now unlocked.
-        return basePath;
-      default:
-        return `${basePath}/notifications`;
-    }
-  };
-
   const handleNotificationClick = (notification) => {
     if (notification.unread) {
       markAsRead(notification.id);
     }
     setShowNotifications(false);
     setIsViewingAll(false);
-    navigate(destinationFor(notification));
+    navigate(getNotificationDestination(notification, role));
   };
 
   // Close dropdown when clicking outside
@@ -184,7 +154,7 @@ const NotificationDropdown = ({ role = 'student' }) => {
                       
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-700 leading-relaxed">{notification.text}</p>
+                        <p className="text-sm text-gray-700 leading-relaxed">{notification.displayText || notification.text}</p>
                         <div className="flex items-center gap-1 mt-1.5">
                           <Clock className="w-3 h-3 text-gray-400" />
                           <p className="text-xs text-gray-400">{notification.time}</p>

@@ -76,7 +76,7 @@ const AdminSidebar = () => {
       {/* Mobile Overlay */}
       {isMobileOpen && (
         <div 
-          className="lg:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-30"
+          className="fixed inset-x-0 bottom-0 top-16 z-30 bg-black/50 backdrop-blur-sm lg:hidden"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
@@ -84,12 +84,12 @@ const AdminSidebar = () => {
       {/* Sidebar */}
       <aside
         className={`
-          fixed lg:relative inset-y-0 left-0 z-40
-          ${isCollapsed ? 'w-20' : 'w-72'}
+          fixed bottom-0 left-0 top-16 z-40 lg:relative lg:inset-y-0
+          w-[min(88vw,18rem)] ${isCollapsed ? 'lg:w-20' : 'lg:w-72'}
           ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           bg-white border-r border-gray-100 shadow-xl lg:shadow-none
           transition-all duration-300 ease-in-out
-          flex flex-col h-full flex-shrink-0
+          flex h-[calc(100dvh-4rem)] flex-col flex-shrink-0 lg:h-full
         `}
       >
         {/* Navigation */}

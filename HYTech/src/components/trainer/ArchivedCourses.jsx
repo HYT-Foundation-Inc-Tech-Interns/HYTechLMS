@@ -101,22 +101,22 @@ const ArchivedCourses = () => {
   }
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       {/* Search */}
       <div className="flex justify-end mb-6">
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search archived courses..."
+            placeholder="Search archived classes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 pr-4 py-2.5 w-64 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:border-gray-300 sm:w-64"
           />
         </div>
       </div>
 
-      {/* Archived Courses List */}
+      {/* Archived Classes List */}
       {filteredCourses.length > 0 ? (
         <div className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-100">
           {filteredCourses.map(course => (
@@ -124,8 +124,8 @@ const ArchivedCourses = () => {
               key={course.id}
               className="p-5 hover:bg-gray-50 transition-all duration-200 cursor-pointer group"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                   <div className="w-20 h-14 bg-gradient-to-br from-blue-500 to-blue-700 rounded-lg overflow-hidden flex-shrink-0">
                     {course.image && (
                       <img
@@ -178,12 +178,12 @@ const ArchivedCourses = () => {
             <Archive className="w-10 h-10 text-gray-400" />
           </div>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            {searchQuery ? 'No courses found' : 'No archived courses'}
+            {searchQuery ? 'No classes found' : 'No archived classes'}
           </h3>
           <p className="text-gray-500 max-w-md mx-auto">
             {searchQuery
-              ? `No archived courses match "${searchQuery}"`
-              : 'When you archive a course, it will appear here. Archived courses can be restored or permanently deleted.'
+              ? `No archived classes match "${searchQuery}"`
+              : 'When you archive a class, it will appear here. Archived classes can be restored or permanently deleted.'
             }
           </p>
         </div>
@@ -197,9 +197,9 @@ const ArchivedCourses = () => {
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <RefreshCcw className="w-8 h-8 text-blue-600" />
               </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Restore Course?</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Restore Class?</h2>
               <p className="text-gray-500">
-                Are you sure you want to restore <strong>"{selectedCourse.name}"</strong>? The course will be moved back to your active courses.
+                Are you sure you want to restore <strong>"{selectedCourse.name}"</strong>? The class will be moved back to your active classes.
               </p>
             </div>
             <div className="p-6 border-t border-gray-100 flex justify-end gap-3">

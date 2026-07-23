@@ -83,7 +83,7 @@ const Navbar = ({ title, subtitle }) => {
 
   return (
     <>
-    <header className="text-white h-16 px-3 sm:px-4 md:px-6 flex items-center justify-between shadow-lg relative z-50 flex-shrink-0" style={{ backgroundColor: '#0B005C' }}>
+    <header className="text-white h-16 pl-16 pr-3 sm:pr-4 lg:px-6 flex items-center justify-between shadow-lg relative z-50 flex-shrink-0" style={{ backgroundColor: '#0B005C' }}>
       {/* Left Side - Breadcrumb */}
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 pr-2">
         <img 
@@ -97,13 +97,13 @@ const Navbar = ({ title, subtitle }) => {
           title="Go to home"
         />
         <span
-          className="font-semibold text-base md:text-lg whitespace-nowrap cursor-pointer select-none"
+          className="hidden sm:inline font-semibold text-base md:text-lg whitespace-nowrap cursor-pointer select-none"
           onClick={handleEasterEgg}
         >
           HYTech
         </span>
         {title && (
-          <div className="min-w-0 ml-2 sm:ml-4 md:ml-9 lg:ml-32 xl:ml-32 pl-3 sm:pl-4 md:pl-5">
+          <div className="min-w-0 ml-1 sm:ml-4 lg:ml-16 xl:ml-24 pl-2 sm:pl-4">
               <h1 className="font-semibold text-base md:text-lg leading-tight truncate">{title}</h1>
               {subtitle && (
                 <p className="text-[11px] md:text-xs text-white/70 hidden sm:block truncate">{subtitle}</p>

@@ -7,6 +7,21 @@ import { useAuth } from '../../context/AuthContext';
 import { getCourseByName, getCourseTemplateById, getCourseEnrollmentsWithAvatars, getSectorById, getAnnouncements, subscribeToAnnouncements, createAnnouncement, getModules, createModule, getAssessments, createAssessment, updateAnnouncement, deleteAnnouncement, updateAssessment, deleteAssessment, getClassActivityFeed, storeAnnouncementAttachment, uploadMaterial, compressAndStoreFile, addCommentToAnnouncement, getAnnouncementComments, deleteComment, subscribeToComments, downloadAttachment, createAssignment, updateAssignment, getAssignments, removeEnrollment, approveEnrollment, getUserProfile, subscribeToEnrollments, getAssessmentAttempts, createMaterial, getClassMaterials, publishMaterial, unpublishMaterial, updateMaterial, deleteMaterial, createTopic, getClassTopics, subscribeToClassTopics, updateTopic, deleteTopic, publishTopic, unpublishTopic, updateEnrollmentStatus, getAssignmentSubmissions, gradeSubmission, getClassGradebook, getStudents, adminAddStudentToClass, getTrainers, addCoTrainer, removeCoTrainer, transferClassOwnership, getClassActivity, toDate, reorderTopics, setModuleItemTopic, deleteAssignment } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
 
+const FORM_QUESTION_TYPES = [
+  { type: 'short-answer', label: 'Short answer', icon: 'Aa', desc: 'Brief text response' },
+  { type: 'paragraph', label: 'Paragraph', icon: '¶', desc: 'Long text response' },
+  { type: 'multiple-choice', label: 'Multiple choice', icon: '●', desc: 'Pick one option' },
+  { type: 'checkboxes', label: 'Checkboxes', icon: '☑', desc: 'Pick multiple options' },
+  { type: 'dropdown', label: 'Dropdown', icon: '▼', desc: 'Choose from list' },
+  { type: 'file-upload', label: 'File upload', icon: '↥', desc: 'Upload files' },
+  { type: 'linear-scale', label: 'Linear scale', icon: '—', desc: 'Rate on a scale' },
+  { type: 'rating', label: 'Rating', icon: '★', desc: 'Star rating' },
+  { type: 'multiple-grid', label: 'Multiple choice grid', icon: '▦', desc: 'Grid of options' },
+  { type: 'checkbox-grid', label: 'Checkbox grid', icon: '▨', desc: 'Grid multi-select' },
+  { type: 'date', label: 'Date', icon: 'D', desc: 'Pick a date' },
+  { type: 'time', label: 'Time', icon: 'T', desc: 'Pick a time' },
+];
+
 const ClassDetail = () => {
   const { className } = useParams();
   const decodedClassName = decodeURIComponent(className);
@@ -16,6 +31,11 @@ const ClassDetail = () => {
   const { addToast } = useToast();
   // Honor a ?tab= hint (e.g. a join-request notification deep-links to Trainees).
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'overview');
+
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab');
+    if (requestedTab) setActiveTab(requestedTab);
+  }, [searchParams]);
 
   // Due/available date pickers are capped at one year from today (no far-future
   // 2099 picks). getMaxDate() returns a fresh Date so validation tracks "now".
@@ -108,6 +128,7 @@ const ClassDetail = () => {
   const [assessmentType, setAssessmentType] = useState('quiz'); // quiz, survey, form
   const [quizTitle, setQuizTitle] = useState('');
   const [quizDescription, setQuizDescription] = useState('');
+  const [quizHasTimeLimit, setQuizHasTimeLimit] = useState(false);
   const [quizTimeLimit, setQuizTimeLimit] = useState('');
   const [quizPoints, setQuizPoints] = useState('100');
   const [quizAvailableDate, setQuizAvailableDate] = useState('');
@@ -115,6 +136,7 @@ const ClassDetail = () => {
   const [isSubmittingQuiz, setIsSubmittingQuiz] = useState(false);
   const [isPublishingQuiz, setIsPublishingQuiz] = useState(false);
   const [currentQuizDraftId, setCurrentQuizDraftId] = useState(null);
+  const [currentQuizStatus, setCurrentQuizStatus] = useState('draft');
   const [quizQuestions, setQuizQuestions] = useState([]);
   const [currentQuestionType, setCurrentQuestionType] = useState('multiple-choice');
   // Material Upload States
@@ -304,7 +326,7 @@ const ClassDetail = () => {
                       studentName = studentProfile.firstName;
                     } else if (studentProfile.email) {
                       // Use email username as fallback
-                      studentName = studentProfile.email.split('@')[0];
+                      studentName = 'Trainee';
                     }
                   }
                   
@@ -1993,8 +2015,10 @@ const ClassDetail = () => {
       setAssessmentType('quiz');
       setQuizQuestions([]);
       setCurrentQuizDraftId(null);
+      setCurrentQuizStatus('draft');
       setQuizTitle('');
       setQuizDescription('');
+      setQuizHasTimeLimit(false);
       setQuizTimeLimit('');
       setQuizPoints('100');
       setQuizAvailableDate('');
@@ -2034,6 +2058,43 @@ const ClassDetail = () => {
   };
 
   // Quiz/Assessment Functions
+  const openAssessmentEditor = (assessment) => {
+    if (!assessment?.id || assessment._source !== 'assessment') return;
+
+    const toDateInputValue = (value) => {
+      if (!value) return '';
+      const date = value?.toDate ? value.toDate() : new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      const pad = (part) => String(part).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    };
+
+    const timeLimit = Number(assessment.timeLimit || assessment.duration || 0);
+    setCurrentQuizDraftId(assessment.id);
+    setCurrentQuizStatus(String(assessment.status || 'active'));
+    setAssessmentType(assessment.type || 'quiz');
+    setQuizTitle(assessment.title || '');
+    setQuizDescription(assessment.description || '');
+    setQuizHasTimeLimit(timeLimit > 0);
+    setQuizTimeLimit(timeLimit > 0 ? String(timeLimit) : '');
+    setQuizPoints(String(assessment.totalPoints || 100));
+    setQuizAvailableDate(toDateInputValue(assessment.availableDate));
+    setQuizDueDate(toDateInputValue(assessment.dueDate));
+    setQuizQuestions(assessment.questions || []);
+    setAssessmentSettings((prev) => ({ ...prev, ...(assessment.settings || {}) }));
+    setShowQuizModal(true);
+  };
+
+  const validatedQuizTimeLimit = () => {
+    if (!quizHasTimeLimit) return null;
+    const minutes = Number(quizTimeLimit);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 480) {
+      addToast('Time limit must be a whole number from 1 to 480 minutes.', 'error');
+      return undefined;
+    }
+    return minutes;
+  };
+
   const addQuestion = () => {
     let newQuestion = {
       id: `q_${Date.now()}`,
@@ -2118,13 +2179,16 @@ const ClassDetail = () => {
       return;
     }
 
+    const timeLimit = validatedQuizTimeLimit();
+    if (timeLimit === undefined) return;
+
     setIsSubmittingQuiz(true);
     try {
       const quizData = {
         title: quizTitle.trim(),
         description: quizDescription.trim(),
         type: assessmentType,
-        timeLimit: quizTimeLimit ? parseInt(quizTimeLimit) : null,
+        timeLimit,
         totalPoints: parseInt(quizPoints) || 100,
         questions: quizQuestions,
         settings: assessmentSettings,
@@ -2133,12 +2197,13 @@ const ClassDetail = () => {
         author: user?.displayName || 'Trainor',
         authorId: user?.uid,
         createdByAvatar: null,
-        status: 'draft'
+        status: currentQuizDraftId ? currentQuizStatus : 'draft'
       };
 
       if (currentQuizDraftId) {
         await updateAssessment(classData.id, currentQuizDraftId, quizData);
-        addToast('Assessment draft updated', 'success');
+        setAssessments(await getAssessments(classData.id));
+        addToast(currentQuizStatus === 'draft' ? 'Assessment draft updated' : 'Assessment updated', 'success');
       } else {
         // Place it in the section it was created from (if any), then refresh the
         // list so it shows in the Modules organiser / Assessments tab.
@@ -2169,6 +2234,9 @@ const ClassDetail = () => {
       return;
     }
 
+    const timeLimit = validatedQuizTimeLimit();
+    if (timeLimit === undefined) return;
+
     if (!currentQuizDraftId) {
       addToast('Please save draft first before publishing', 'warning');
       return;
@@ -2180,7 +2248,7 @@ const ClassDetail = () => {
         title: quizTitle.trim(),
         description: quizDescription.trim(),
         type: assessmentType,
-        timeLimit: quizTimeLimit ? parseInt(quizTimeLimit) : null,
+        timeLimit,
         totalPoints: parseInt(quizPoints) || 100,
         questions: quizQuestions,
         settings: assessmentSettings,
@@ -2196,8 +2264,10 @@ const ClassDetail = () => {
 
       setShowQuizModal(false);
       setCurrentQuizDraftId(null);
+      setCurrentQuizStatus('draft');
       setQuizTitle('');
       setQuizDescription('');
+      setQuizHasTimeLimit(false);
       setQuizTimeLimit('');
       setQuizPoints('100');
       setQuizAvailableDate('');
@@ -2360,6 +2430,16 @@ const ClassDetail = () => {
     reorderTopics(classData.id, ids).catch(() => addToast('Could not save the new order.', 'error'));
   };
 
+  const moveTopicByOffset = (topicId, offset) => {
+    const ids = orderedTopics.map((topic) => topic.id);
+    const currentIndex = ids.indexOf(topicId);
+    const nextIndex = currentIndex + offset;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= ids.length) return;
+    [ids[currentIndex], ids[nextIndex]] = [ids[nextIndex], ids[currentIndex]];
+    setTopics((prev) => prev.map((topic) => ({ ...topic, order: ids.indexOf(topic.id) })));
+    reorderTopics(classData.id, ids).catch(() => addToast('Could not save the new order.', 'error'));
+  };
+
   const onTopicDrop = (topic) => (e) => {
     e.preventDefault();
     setDragOverTopicId(null);
@@ -2423,9 +2503,9 @@ const ClassDetail = () => {
         key={`${kind}-${item.id}`}
         draggable
         onDragStart={onItemDragStart(kind, item.id)}
-        className="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg hover:border-blue-200 hover:shadow-sm transition-all cursor-move group"
+        className="group flex flex-wrap items-center gap-2 rounded-lg border border-gray-100 bg-white p-3 transition-all hover:border-blue-200 hover:shadow-sm sm:flex-nowrap sm:gap-3 sm:cursor-move"
       >
-        <GripVertical className="w-4 h-4 text-gray-300 group-hover:text-gray-400 flex-shrink-0" />
+        <GripVertical className="hidden w-4 h-4 text-gray-300 group-hover:text-gray-400 flex-shrink-0 sm:block" />
         <div className="p-1.5 rounded-lg bg-gray-50 flex-shrink-0">
           <Icon className="w-4 h-4 text-gray-500" />
         </div>
@@ -2448,7 +2528,7 @@ const ClassDetail = () => {
           </div>
           {item.description && <p className="text-xs text-gray-500 truncate mt-0.5">{item.description}</p>}
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex w-full flex-shrink-0 items-center justify-end gap-1 border-t border-gray-100 pt-2 sm:w-auto sm:border-0 sm:pt-0">
           <button
             onClick={() => toggleModuleItemPublished(kind, item)}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
@@ -2462,7 +2542,7 @@ const ClassDetail = () => {
           </button>
           {kind === 'material' && (
             <button
-              className="p-1.5 hover:bg-blue-50 rounded text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="p-1.5 hover:bg-blue-50 rounded text-blue-600 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
               onClick={() => {
                 setMaterialTitle(item.title);
                 setMaterialDescription(item.description || '');
@@ -2489,11 +2569,25 @@ const ClassDetail = () => {
                 addToast('Failed to delete.', 'error');
               }
             }}
-            className="p-1.5 hover:bg-red-50 rounded text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="p-1.5 hover:bg-red-50 rounded text-red-600 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
             title="Delete"
           >
             <Trash2 className="w-4 h-4" />
           </button>
+        </div>
+        <div className="order-last w-full sm:hidden">
+          <label htmlFor={`move-${kind}-${item.id}`} className="sr-only">Move {item.title} to section</label>
+          <select
+            id={`move-${kind}-${item.id}`}
+            value={item.topicId || ''}
+            onChange={(event) => moveItemToTopic(kind, item.id, event.target.value || null)}
+            className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
+          >
+            <option value="">Move to: Unassigned</option>
+            {orderedTopics.map((topic) => (
+              <option key={topic.id} value={topic.id}>Move to: {topic.title}</option>
+            ))}
+          </select>
         </div>
       </div>
     );
@@ -2520,14 +2614,14 @@ const ClassDetail = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="px-6 flex gap-8">
+        <div className="flex gap-4 overflow-x-auto px-4 sm:gap-8 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map((tab) => {
             const TabIcon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`py-4 px-0 font-medium text-sm flex items-center gap-2 border-b-2 transition-colors ${
+                className={`shrink-0 whitespace-nowrap py-4 px-0 font-medium text-sm flex items-center gap-2 border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -2541,7 +2635,7 @@ const ClassDetail = () => {
         </div>
       </div>
 
-      <div className="px-6 py-8">
+      <div className="px-4 py-6 sm:px-6 sm:py-8">
         {/* Overview Content */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
@@ -3113,13 +3207,13 @@ const ClassDetail = () => {
 
         {/* Modules Tab */}
         {activeTab === 'modules' && (
-          <div className="bg-white rounded-lg p-8 border border-gray-200">
-            <div className="flex items-center justify-between mb-8">
+          <div className="rounded-lg border border-gray-200 bg-white p-4 sm:p-8">
+            <div className="mb-6 flex flex-col items-stretch gap-3 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-lg font-bold text-gray-900">Modules</h3>
-              <div className="relative">
+              <div className="relative w-full sm:w-auto">
                 <button
                   onClick={() => setShowCreateDropdown(!showCreateDropdown)}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6 py-3 font-semibold transition-colors"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition-colors hover:bg-blue-700 sm:w-auto sm:rounded-full sm:px-6"
                 >
                   <Plus className="w-5 h-5" />
                   Add Content
@@ -3127,7 +3221,7 @@ const ClassDetail = () => {
 
                 {/* Create Dropdown Menu */}
                 {showCreateDropdown && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                  <div className="absolute left-0 right-0 z-20 mt-2 rounded-lg border border-gray-200 bg-white shadow-lg sm:left-auto sm:w-64">
                     <div className="p-4">
                       <p className="text-sm font-semibold text-gray-700 mb-3 px-3">CREATE NEW</p>
                       
@@ -3236,40 +3330,107 @@ const ClassDetail = () => {
                       className={`border rounded-lg overflow-hidden transition-colors ${dragOverTopicId === topic.id ? 'border-blue-400 ring-2 ring-blue-200 bg-blue-100' : 'border-blue-200 bg-blue-50'}`}
                     >
                       {/* Section header */}
-                      <div className="flex items-center gap-2 p-4">
-                        <span
-                          draggable
-                          onDragStart={onTopicDragStart(topic.id)}
-                          className="cursor-grab active:cursor-grabbing text-blue-400 hover:text-blue-600 flex-shrink-0"
-                          title="Drag to reorder section"
-                        >
-                          <GripVertical className="w-5 h-5" />
-                        </span>
-                        <button
-                          onClick={() => setExpandedTopics(prev => ({ ...prev, [topic.id]: !prev[topic.id] }))}
-                          className="flex items-center gap-3 flex-1 min-w-0 text-left"
-                        >
-                          <div className="p-2 bg-blue-200 rounded-lg flex-shrink-0">
-                            <FileText className="w-5 h-5 text-blue-600" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h4 className="text-lg font-semibold text-blue-900 truncate">{topic.title}</h4>
-                              <span className={`text-xs font-medium px-2 py-1 rounded-full flex-shrink-0 ${topic.isPublished ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                {topic.isPublished ? 'Published' : 'Draft'}
-                              </span>
-                            </div>
-                            {topic.description && (
-                              <p className="text-sm text-blue-700 mt-1 line-clamp-1">{topic.description}</p>
-                            )}
-                          </div>
-                          <span className="text-sm font-medium text-blue-700 bg-blue-200 px-3 py-1 rounded-full flex-shrink-0">
-                            {topicItems.length} {topicItems.length === 1 ? 'item' : 'items'}
+                      <div className="p-3 sm:p-4">
+                        <div className="flex items-start gap-2">
+                          <span
+                            draggable
+                            onDragStart={onTopicDragStart(topic.id)}
+                            className="hidden cursor-grab flex-shrink-0 text-blue-400 hover:text-blue-600 active:cursor-grabbing sm:inline-flex"
+                            title="Drag to reorder section"
+                          >
+                            <GripVertical className="w-5 h-5" />
                           </span>
-                          <span className="p-1 text-blue-600 flex-shrink-0">{isExpanded ? '▼' : '▶'}</span>
-                        </button>
-                        {/* Section actions */}
-                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => setExpandedTopics(prev => ({ ...prev, [topic.id]: !prev[topic.id] }))}
+                            className="flex min-w-0 flex-1 items-start gap-2 text-left sm:items-center sm:gap-3"
+                          >
+                            <div className="flex-shrink-0 rounded-lg bg-blue-200 p-2">
+                              <FileText className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="min-w-0 max-w-full truncate text-base font-semibold text-blue-900 sm:text-lg">{topic.title}</h4>
+                                <span className={`flex-shrink-0 rounded-full px-2 py-1 text-xs font-medium ${topic.isPublished ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                  {topic.isPublished ? 'Published' : 'Draft'}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-xs text-blue-700 sm:text-sm">
+                                {topicItems.length} {topicItems.length === 1 ? 'item' : 'items'}
+                                {topic.description ? ` · ${topic.description}` : ''}
+                              </p>
+                            </div>
+                            <span className="flex-shrink-0 p-1 text-blue-600">{isExpanded ? '▼' : '▶'}</span>
+                          </button>
+                          {/* Desktop section actions */}
+                          <div className="hidden flex-shrink-0 items-center gap-1 sm:flex">
+                            <button
+                              onClick={() => {
+                                setTopicTitle(topic.title);
+                                setTopicDescription(topic.description || '');
+                                setSelectedTopicId(topic.id);
+                                setCreateType('topic');
+                                setShowCreateModal(true);
+                              }}
+                              className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600"
+                              title="Edit section"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            {!topic.isPublished ? (
+                              <button
+                                onClick={() => handlePublishTopic(topic.id)}
+                                disabled={submittingTopic}
+                                className="px-3 py-2 text-xs font-medium text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                Publish
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleUnpublishTopic(topic.id)}
+                                disabled={submittingTopic}
+                                className="px-3 py-2 text-xs font-medium text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                Unpublish
+                              </button>
+                            )}
+                            <button
+                              onClick={async () => {
+                                if (window.confirm('Delete this section? Its items are kept and moved to Unassigned.')) {
+                                  try {
+                                    await deleteTopic(classData.id, topic.id);
+                                    setTopics(prev => prev.filter(t => t.id !== topic.id));
+                                    addToast('Section deleted.', 'success');
+                                  } catch {
+                                    addToast('Failed to delete section', 'error');
+                                  }
+                                }
+                              }}
+                              className="p-2 hover:bg-red-100 rounded-lg transition-colors text-red-600"
+                              title="Delete section"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Touch-safe alternatives to desktop drag and hover controls. */}
+                        <div className="mt-3 grid grid-cols-2 gap-2 sm:hidden">
+                          <button
+                            type="button"
+                            onClick={() => moveTopicByOffset(topic.id, -1)}
+                            disabled={orderedTopics[0]?.id === topic.id}
+                            className="min-h-11 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 disabled:opacity-40"
+                          >
+                            ↑ Move up
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveTopicByOffset(topic.id, 1)}
+                            disabled={orderedTopics[orderedTopics.length - 1]?.id === topic.id}
+                            className="min-h-11 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 disabled:opacity-40"
+                          >
+                            ↓ Move down
+                          </button>
                           <button
                             onClick={() => {
                               setTopicTitle(topic.title);
@@ -3278,16 +3439,15 @@ const ClassDetail = () => {
                               setCreateType('topic');
                               setShowCreateModal(true);
                             }}
-                            className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600"
-                            title="Edit section"
+                            className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-100 px-3 py-2 text-sm font-medium text-blue-700"
                           >
-                            <Edit2 className="w-4 h-4" />
+                            <Edit2 className="w-4 h-4" /> Edit
                           </button>
                           {!topic.isPublished ? (
                             <button
                               onClick={() => handlePublishTopic(topic.id)}
                               disabled={submittingTopic}
-                              className="px-3 py-2 text-xs font-medium text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50"
+                              className="min-h-11 rounded-lg bg-green-100 px-3 py-2 text-sm font-medium text-green-700 disabled:opacity-50"
                             >
                               Publish
                             </button>
@@ -3295,7 +3455,7 @@ const ClassDetail = () => {
                             <button
                               onClick={() => handleUnpublishTopic(topic.id)}
                               disabled={submittingTopic}
-                              className="px-3 py-2 text-xs font-medium text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors disabled:opacity-50"
+                              className="min-h-11 rounded-lg bg-orange-100 px-3 py-2 text-sm font-medium text-orange-700 disabled:opacity-50"
                             >
                               Unpublish
                             </button>
@@ -3307,15 +3467,14 @@ const ClassDetail = () => {
                                   await deleteTopic(classData.id, topic.id);
                                   setTopics(prev => prev.filter(t => t.id !== topic.id));
                                   addToast('Section deleted.', 'success');
-                                } catch (err) {
+                                } catch {
                                   addToast('Failed to delete section', 'error');
                                 }
                               }
                             }}
-                            className="p-2 hover:bg-red-100 rounded-lg transition-colors text-red-600"
-                            title="Delete section"
+                            className="col-span-2 flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4" /> Delete section
                           </button>
                         </div>
                       </div>
@@ -3823,7 +3982,7 @@ const ClassDetail = () => {
                 <div className="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
                   <div>
                     <h3 className="font-bold text-gray-900 text-lg">Trainees ({enrollments.filter((e) => e.status !== 'pending').length})</h3>
-                    <p className="text-sm text-gray-500 mt-1">All trainees including graduated ones in this class</p>
+                    <p className="text-sm text-gray-500 mt-1">All trainees including graduates</p>
                   </div>
                   <button
                     onClick={openAddTrainee}
@@ -4021,7 +4180,7 @@ const ClassDetail = () => {
               }
               return (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full">
+                  <table className="min-w-[680px]">
                     <thead className="bg-gray-50 border-b border-gray-100">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Trainee</th>
@@ -4101,7 +4260,7 @@ const ClassDetail = () => {
                     {/* Assessments List */}
                     {allAssessments.length > 0 ? (
                       <div className="overflow-x-auto">
-                        <table className="min-w-full">
+                        <table className="min-w-[900px]">
                           <thead>
                             <tr className="border-b-2 border-gray-200 bg-gray-50">
                               <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Title</th>
@@ -4139,7 +4298,11 @@ const ClassDetail = () => {
                                   <span className="font-semibold text-gray-900">{assessment.totalPoints || assessment.points || 0}</span>
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                  <span className="text-gray-600">{assessment.duration || assessment.timeLimit || '-'} min</span>
+                                  <span className="text-gray-600">
+                                    {assessment.duration || assessment.timeLimit
+                                      ? `${assessment.duration || assessment.timeLimit} min`
+                                      : 'No limit'}
+                                  </span>
                                 </td>
                                 <td className="px-6 py-4 text-center">
                                   <span className="text-gray-600">{(assessment.questions || []).length}</span>
@@ -4153,6 +4316,14 @@ const ClassDetail = () => {
                                 </td>
                                 <td className="px-6 py-4 text-center">
                                   <div className="flex items-center justify-center gap-3">
+                                    {assessment._source === 'assessment' && (
+                                      <button
+                                        onClick={() => openAssessmentEditor(assessment)}
+                                        className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                      >
+                                        Edit
+                                      </button>
+                                    )}
                                     <button
                                       onClick={() => toggleModuleItemPublished(assessment._source === 'assessment' ? 'assessment' : 'assignment', assessment)}
                                       className={`font-medium text-sm ${String(assessment.status || 'active') === 'draft' ? 'text-green-600 hover:text-green-700' : 'text-orange-600 hover:text-orange-700'}`}
@@ -4164,7 +4335,7 @@ const ClassDetail = () => {
                                         setSelectedAssessmentForResponses(assessment);
                                         setActiveTab('responses');
                                       }}
-                                      className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                      className="text-violet-600 hover:text-violet-700 font-medium text-sm"
                                     >
                                       View Responses
                                     </button>
@@ -4212,7 +4383,7 @@ const ClassDetail = () => {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
+                <table className="min-w-[720px] text-sm">
                   <thead>
                     <tr className="border-b-2 border-gray-200 bg-gray-50">
                       <th className="px-4 py-3 text-left font-semibold text-gray-900 sticky left-0 bg-gray-50">Trainee</th>
@@ -4426,7 +4597,7 @@ const ClassDetail = () => {
                     </div>
                   ) : assessmentResponses && assessmentResponses.length > 0 ? (
                     <div className="overflow-x-auto">
-                      <table className="min-w-full">
+                      <table className="min-w-[760px]">
                         <thead>
                           <tr className="border-b-2 border-gray-200 bg-gray-50">
                             <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Trainee</th>
@@ -4604,16 +4775,16 @@ const ClassDetail = () => {
 
       {/* Create Item Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl w-full max-w-6xl shadow-2xl animate-slide-up max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-0 sm:p-4">
+          <div className="flex h-[100dvh] w-full max-w-6xl flex-col overflow-hidden bg-white shadow-2xl animate-slide-up sm:h-auto sm:max-h-[90vh] sm:rounded-xl">
             {/* Header */}
-            <div className="sticky top-0 px-8 py-6 border-b border-gray-200 bg-white flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">
+            <div className="sticky top-0 px-4 py-4 sm:px-8 sm:py-6 border-b border-gray-200 bg-white flex-shrink-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">
                     {createType === 'material' ? (currentMaterialId && materials.find(m => m.id === currentMaterialId)?.isPublished ? 'Edit Material' : 'Add Material') : createType === 'topic' ? (selectedTopicId ? 'Edit Topic' : 'Create Topic') : 'Create Assignment'}
                   </h2>
-                  <p className="text-gray-500 text-sm mt-1">
+                  <p className="mt-1 text-xs text-gray-500 sm:text-sm">
                     {createType === 'material' ? (currentMaterialId && materials.find(m => m.id === currentMaterialId)?.isPublished ? 'Update learning resources for your class' : 'Upload learning resources for your class') : createType === 'topic' ? (selectedTopicId ? 'Update your discussion topic' : 'Create a new discussion topic') : 'Create an assignment for your trainees'}
                   </p>
                 </div>
@@ -4633,7 +4804,7 @@ const ClassDetail = () => {
                     setTopicDescription('');
                     setSelectedTopicId(null);
                   }}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="shrink-0 p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
@@ -4642,7 +4813,7 @@ const ClassDetail = () => {
 
             {/* Content based on createType */}
             {(createType === 'material' || createType === 'topic') && (
-              <div className="flex-1 overflow-y-auto p-8">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-8">
                 {/* Materials Form */}
                 {createType === 'material' && (
                   <form id="material-form" onSubmit={handleSaveMaterial} className="space-y-6">
@@ -4972,9 +5143,9 @@ const ClassDetail = () => {
             {/* Assignment Form */}
             {(!createType || createType === 'assignment') && (
               <div className="flex-1 overflow-hidden flex flex-col">
-                <form onSubmit={handleSaveItem} className="flex-1 overflow-hidden flex w-full">
+                <form onSubmit={handleSaveItem} className="flex-1 overflow-y-auto lg:overflow-hidden flex w-full flex-col lg:flex-row">
                   {/* Left Side - Form Builder */}
-                  <div className="flex-1 overflow-y-auto p-8 space-y-8 border-r border-gray-200">
+                  <div className="flex-1 overflow-y-visible p-4 space-y-6 border-b border-gray-200 sm:p-8 sm:space-y-8 lg:overflow-y-auto lg:border-b-0 lg:border-r">
                     {/* Title Section */}
                     <div className="space-y-3">
                   <input 
@@ -4982,7 +5153,7 @@ const ClassDetail = () => {
                     placeholder="Untitled assignment"
                     value={formBuilderTitle}
                     onChange={(e) => setFormBuilderTitle(e.target.value)}
-                    className="w-full text-3xl font-bold text-gray-900 placeholder-gray-300 focus:outline-none border-b-2 border-transparent focus:border-blue-600 transition-colors pb-2"
+                    className="w-full text-2xl font-bold text-gray-900 placeholder-gray-300 focus:outline-none border-b-2 border-transparent focus:border-blue-600 transition-colors pb-2 sm:text-3xl"
                     required
                   />
                   <textarea 
@@ -4992,6 +5163,25 @@ const ClassDetail = () => {
                     onChange={(e) => setFormBuilderDescription(e.target.value)}
                     className="w-full px-0 py-2 text-base text-gray-600 placeholder-gray-400 focus:outline-none border-b border-gray-300 focus:border-blue-600 resize-none transition-colors"
                   />
+                </div>
+
+                {/* Touch-friendly question picker appears before the question list on mobile. */}
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 lg:hidden">
+                  <h3 className="font-semibold text-gray-900">Add a question</h3>
+                  <p className="mb-3 mt-1 text-xs text-gray-600">Choose a response type to insert it below.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {FORM_QUESTION_TYPES.map((item) => (
+                      <button
+                        key={item.type}
+                        type="button"
+                        onClick={() => addFormQuestion(item.type)}
+                        className="flex min-h-11 items-center gap-2 rounded-lg border border-blue-100 bg-white px-3 py-2 text-left text-sm font-medium text-gray-800 active:bg-blue-100"
+                      >
+                        <span className="flex h-6 min-w-6 items-center justify-center text-xs font-bold text-blue-700">{item.icon}</span>
+                        <span className="min-w-0 leading-tight">{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Questions List */}
@@ -5008,20 +5198,20 @@ const ClassDetail = () => {
                     formBuilderQuestions.map((question, idx) => (
                       <div key={question.id} className="border border-gray-200 rounded-lg overflow-hidden">
                         {/* Question Header - Clickable */}
-                        <div 
+                        <div
                           onClick={() => setEditingQuestionId(editingQuestionId === question.id ? null : question.id)}
-                          className="bg-gray-50 px-5 py-3 flex items-center justify-between border-b border-gray-200 cursor-pointer hover:bg-blue-50 transition-colors"
+                          className="flex items-start justify-between gap-2 border-b border-gray-200 bg-gray-50 px-3 py-3 cursor-pointer hover:bg-blue-50 transition-colors sm:items-center sm:px-5"
                         >
-                          <div className="flex items-center gap-3 flex-1">
+                          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-3">
                             <span className="font-semibold text-gray-700">Q{idx + 1}</span>
                             <span className="inline-block px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded capitalize">
                               {question.type.replace('-', ' ')}
                             </span>
-                            <span className="text-sm text-gray-600 flex-1 truncate ml-2">
+                            <span className="min-w-0 basis-full truncate text-sm text-gray-600 sm:ml-2 sm:basis-auto sm:flex-1">
                               {question.question || 'Click to edit question'}
                             </span>
                           </div>
-                          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
                             <button 
                               type="button"
                               onClick={() => deleteFormQuestion(question.id)}
@@ -5239,23 +5429,10 @@ const ClassDetail = () => {
               </div>
 
               {/* Right Side - Question Type Selector */}
-              <div className="w-72 overflow-y-auto p-8 bg-gradient-to-b from-blue-50 to-white flex flex-col">
+              <div className="hidden w-72 shrink-0 overflow-y-auto bg-gradient-to-b from-blue-50 to-white p-8 lg:flex lg:flex-col">
                 <h3 className="font-semibold text-gray-900 mb-5">Question Types</h3>
-                <div className="space-y-2 flex-1">
-                  {[
-                    { type: 'short-answer', label: 'Short answer', icon: '✎', desc: 'Brief text response' },
-                    { type: 'paragraph', label: 'Paragraph', icon: '¶', desc: 'Long text response' },
-                    { type: 'multiple-choice', label: 'Multiple choice', icon: '●', desc: 'Pick one option' },
-                    { type: 'checkboxes', label: 'Checkboxes', icon: '☑', desc: 'Pick multiple options' },
-                    { type: 'dropdown', label: 'Dropdown', icon: '▼', desc: 'Choose from list' },
-                    { type: 'file-upload', label: 'File upload', icon: '📎', desc: 'Upload files' },
-                    { type: 'linear-scale', label: 'Linear scale', icon: '⎯', desc: 'Rate on a scale' },
-                    { type: 'rating', label: 'Rating', icon: '⭐', desc: 'Star rating' },
-                    { type: 'multiple-grid', label: 'Multiple choice grid', icon: '▦', desc: 'Grid of options' },
-                    { type: 'checkbox-grid', label: 'Checkbox grid', icon: '▨', desc: 'Grid multi-select' },
-                    { type: 'date', label: 'Date', icon: '📅', desc: 'Pick a date' },
-                    { type: 'time', label: 'Time', icon: '🕐', desc: 'Pick a time' },
-                  ].map(item => (
+                <div className="flex-1 space-y-2">
+                  {FORM_QUESTION_TYPES.map(item => (
                     <button
                       key={item.type}
                       type="button"
@@ -5276,7 +5453,7 @@ const ClassDetail = () => {
             </form>
 
                 {/* Footer */}
-                <div className="border-t border-gray-200 bg-gray-50 px-8 py-4 flex items-center justify-end gap-3 flex-shrink-0">
+                <div className="border-t border-gray-200 bg-gray-50 px-4 py-4 sm:px-8 flex flex-col-reverse items-stretch justify-end gap-2 flex-shrink-0 sm:flex-row sm:items-center sm:gap-3">
                   <button 
                     type="button"
                     onClick={() => {
@@ -5288,7 +5465,7 @@ const ClassDetail = () => {
                       setIsFormBuilderEditMode(false);
                       setEditingAssignmentId(null);
                     }}
-                    className="px-6 py-2.5 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+                    className="w-full px-6 py-2.5 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors sm:w-auto"
                   >
                     Cancel
                   </button>
@@ -5297,7 +5474,7 @@ const ClassDetail = () => {
                       type="submit"
                       form={undefined}
                       onClick={(e) => handleSaveItem(e, 'publish')}
-                      className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      className="flex w-full items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed sm:w-auto"
                       disabled={!formBuilderTitle.trim() || !hasPublishableAssignmentQuestion || isSubmittingItem || isPublishingItem}
                     >
                       <Save className="w-4 h-4" />
@@ -5308,7 +5485,7 @@ const ClassDetail = () => {
                       <button
                         type="button"
                         onClick={(e) => handleSaveItem(e, 'draft')}
-                        className="px-6 py-2.5 bg-slate-600 text-white rounded-lg font-medium hover:bg-slate-700 transition-colors flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        className="flex w-full items-center justify-center gap-2 px-6 py-2.5 bg-slate-600 text-white rounded-lg font-medium hover:bg-slate-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed sm:w-auto"
                         disabled={!formBuilderTitle.trim() || isSubmittingItem || isPublishingItem}
                       >
                         <Save className="w-4 h-4" />
@@ -5318,7 +5495,7 @@ const ClassDetail = () => {
                         type="submit"
                         form={undefined}
                         onClick={(e) => handleSaveItem(e, 'publish')}
-                        className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        className="flex w-full items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed sm:w-auto"
                         disabled={!formBuilderTitle.trim() || !hasPublishableAssignmentQuestion || isSubmittingItem || isPublishingItem || !currentAssignmentDraftId}
                       >
                         <Send className="w-4 h-4" />
@@ -5409,13 +5586,13 @@ const ClassDetail = () => {
 
       {/* Assignment Detail Modal */}
       {showAssignmentDetailModal && selectedAssignmentDetail && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl animate-slide-up my-8 max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl animate-slide-up max-h-[calc(100dvh-1rem)] sm:my-8 sm:max-h-[90vh] flex flex-col">
             {/* Header */}
-            <div className="px-8 py-6 border-b border-gray-200 flex-shrink-0">
+            <div className="px-4 py-4 sm:px-8 sm:py-6 border-b border-gray-200 flex-shrink-0">
               <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">{selectedAssignmentDetail.title}</h2>
+                <div className="min-w-0">
+                  <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">{selectedAssignmentDetail.title}</h2>
                   <p className="text-gray-600 text-sm mt-1">Created by {selectedAssignmentDetail.author}</p>
                 </div>
                 <button 
@@ -5428,10 +5605,10 @@ const ClassDetail = () => {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-0 border-b border-gray-200 px-8 pt-6 flex-shrink-0">
+            <div className="flex gap-0 overflow-x-auto border-b border-gray-200 px-4 pt-4 flex-shrink-0 sm:px-8 sm:pt-6">
               <button
                 onClick={() => setAssignmentDetailTab('questions')}
-                className={`pb-4 px-4 font-medium transition-colors ${
+                className={`shrink-0 whitespace-nowrap pb-4 px-4 font-medium transition-colors ${
                   assignmentDetailTab === 'questions'
                     ? 'border-b-2 border-blue-600 text-blue-600'
                     : 'text-gray-600 hover:text-gray-900'
@@ -5441,7 +5618,7 @@ const ClassDetail = () => {
               </button>
               <button
                 onClick={() => setAssignmentDetailTab('responses')}
-                className={`pb-4 px-4 font-medium transition-colors ${
+                className={`shrink-0 whitespace-nowrap pb-4 px-4 font-medium transition-colors ${
                   assignmentDetailTab === 'responses'
                     ? 'border-b-2 border-blue-600 text-blue-600'
                     : 'text-gray-600 hover:text-gray-900'
@@ -5451,7 +5628,7 @@ const ClassDetail = () => {
               </button>
               <button
                 onClick={() => setAssignmentDetailTab('settings')}
-                className={`pb-4 px-4 font-medium transition-colors ${
+                className={`shrink-0 whitespace-nowrap pb-4 px-4 font-medium transition-colors ${
                   assignmentDetailTab === 'settings'
                     ? 'border-b-2 border-blue-600 text-blue-600'
                     : 'text-gray-600 hover:text-gray-900'
@@ -5462,7 +5639,7 @@ const ClassDetail = () => {
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-8">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8">
               {/* Questions Tab */}
               {assignmentDetailTab === 'questions' && (
                 <div className="space-y-6">
@@ -5997,10 +6174,14 @@ const ClassDetail = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl animate-slide-up my-8 max-h-[90vh] flex flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-100 flex-shrink-0">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Create {assessmentType.charAt(0).toUpperCase() + assessmentType.slice(1)}</h2>
-                <p className="text-sm text-gray-500 mt-1">Build your {assessmentType} with various question types</p>
+            <div className="flex items-center justify-between gap-3 p-4 sm:p-6 border-b border-gray-100 flex-shrink-0">
+              <div className="min-w-0">
+                <h2 className="text-xl font-bold text-gray-900">
+                  {currentQuizDraftId ? 'Edit' : 'Create'} {assessmentType.charAt(0).toUpperCase() + assessmentType.slice(1)}
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {currentQuizDraftId ? 'Update assessment content, schedule, and timing' : `Build your ${assessmentType} with various question types`}
+                </p>
               </div>
               <button 
                 onClick={() => setShowQuizModal(false)}
@@ -6011,9 +6192,9 @@ const ClassDetail = () => {
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
               {/* Assessment Type Selector */}
-              <div className="flex gap-3 border-b pb-6">
+              <div className="flex gap-3 overflow-x-auto border-b pb-6">
                 {['quiz', 'survey', 'form'].map(type => (
                   <button
                     key={type}
@@ -6021,7 +6202,7 @@ const ClassDetail = () => {
                       setAssessmentType(type);
                       setQuizQuestions([]);
                     }}
-                    className={`px-4 py-2.5 rounded-lg font-medium transition-all ${
+                    className={`shrink-0 px-4 py-2.5 rounded-lg font-medium transition-all ${
                       assessmentType === type
                         ? 'bg-blue-600 text-white'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -6057,17 +6238,38 @@ const ClassDetail = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Time Limit (minutes)</label>
-                    <div className="relative">
-                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input 
-                        type="number"
-                        value={quizTimeLimit}
-                        onChange={(e) => setQuizTimeLimit(e.target.value)}
-                        placeholder="No limit"
-                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+                    <label className="flex items-center justify-between gap-3 text-sm font-medium text-gray-700 mb-2">
+                      <span>Timed assessment</span>
+                      <input
+                        type="checkbox"
+                        checked={quizHasTimeLimit}
+                        onChange={(e) => {
+                          setQuizHasTimeLimit(e.target.checked);
+                          if (e.target.checked && !quizTimeLimit) setQuizTimeLimit('30');
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
-                    </div>
+                    </label>
+                    {quizHasTimeLimit ? (
+                      <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                          type="number"
+                          min="1"
+                          max="480"
+                          step="1"
+                          value={quizTimeLimit}
+                          onChange={(e) => setQuizTimeLimit(e.target.value)}
+                          aria-label="Time limit in minutes"
+                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+                        />
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-500">
+                        No time limit
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">Timed assessments auto-submit when time expires.</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Total Points</label>
@@ -6619,17 +6821,17 @@ const ClassDetail = () => {
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between p-6 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+            <div className="flex flex-col gap-3 p-4 sm:p-6 border-t border-gray-100 bg-gray-50 flex-shrink-0 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-gray-500">
                 {quizQuestions.length > 0 && (
                   <span>{quizQuestions.length} question{quizQuestions.length !== 1 ? 's' : ''} • {quizQuestions.reduce((sum, q) => sum + (parseInt(q.points) || 0), 0)} points</span>
                 )}
               </div>
-              <div className="flex gap-3">
+              <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:gap-3">
                 <button 
                   type="button"
                   onClick={() => setShowQuizModal(false)}
-                  className="px-5 py-2.5 text-gray-700 hover:bg-gray-200 rounded-xl font-medium transition-colors"
+                  className="w-full px-5 py-2.5 text-gray-700 hover:bg-gray-200 rounded-xl font-medium transition-colors sm:w-auto"
                 >
                   Cancel
                 </button>
@@ -6637,28 +6839,30 @@ const ClassDetail = () => {
                   type="button"
                   onClick={handleSaveQuizDraft}
                   disabled={!quizTitle || isSubmittingQuiz || isPublishingQuiz}
-                  className={`px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all ${
+                  className={`flex w-full items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all sm:w-auto ${
                     !quizTitle || isSubmittingQuiz || isPublishingQuiz
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : 'bg-slate-600 text-white hover:bg-slate-700'
                   }`}
                 >
                   <Save className="w-4 h-4" />
-                  {isSubmittingQuiz ? 'Saving...' : 'Save Draft'}
+                  {isSubmittingQuiz ? 'Saving...' : currentQuizDraftId ? 'Save Changes' : 'Save Draft'}
                 </button>
-                <button
-                  type="button"
-                  onClick={handlePublishQuiz}
-                  disabled={!quizTitle || quizQuestions.length === 0 || isSubmittingQuiz || isPublishingQuiz || !currentQuizDraftId}
-                  className={`px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all ${
-                    !quizTitle || quizQuestions.length === 0 || isSubmittingQuiz || isPublishingQuiz || !currentQuizDraftId
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  }`}
-                >
-                  <Send className="w-4 h-4" />
-                  {isPublishingQuiz ? 'Publishing...' : 'Publish'}
-                </button>
+                {currentQuizStatus === 'draft' && (
+                  <button
+                    type="button"
+                    onClick={handlePublishQuiz}
+                    disabled={!quizTitle || quizQuestions.length === 0 || isSubmittingQuiz || isPublishingQuiz || !currentQuizDraftId}
+                    className={`flex w-full items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all sm:w-auto ${
+                      !quizTitle || quizQuestions.length === 0 || isSubmittingQuiz || isPublishingQuiz || !currentQuizDraftId
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    <Send className="w-4 h-4" />
+                    {isPublishingQuiz ? 'Publishing...' : 'Publish'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

@@ -346,7 +346,7 @@ const SystemLogs = () => {
       <div className="card p-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3 flex-1">
-            <div className="relative flex-1 sm:w-72 min-w-[12rem]">
+            <div className="relative min-w-0 flex-[1_1_100%] sm:w-72 sm:min-w-[12rem] sm:flex-initial">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
@@ -381,7 +381,7 @@ const SystemLogs = () => {
               <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm text-gray-400 mr-1">{filteredLogs.length} events</p>
             <button
               onClick={handleExportCsv}
@@ -405,7 +405,7 @@ const SystemLogs = () => {
       {/* Logs Table */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[820px]">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="table-header">LOG ID</th>
@@ -480,11 +480,11 @@ const SystemLogs = () => {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+        <div className="flex flex-col items-stretch gap-3 px-4 py-3 border-t border-gray-100 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-gray-500">
             {filteredLogs.length === 0 ? 0 : startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredLogs.length)} of {filteredLogs.length}
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end sm:gap-4">
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-500">Rows per page:</span>
               <select

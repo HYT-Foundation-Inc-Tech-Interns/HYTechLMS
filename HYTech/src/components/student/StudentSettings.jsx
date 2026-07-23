@@ -14,11 +14,12 @@ import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
 import { compressAvatarImageToBase64 } from '../../utils/avatarStorage';
 import MyCoursesCard from '../shared/MyCoursesCard';
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateProfile } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { getUserPrivateProfile, saveUserPrivateProfile } from '../../utils/firestoreService';
 import { normalizePhMobile, toStoredPhMobile } from '../../utils/phone';
+import { joinNameFields, normalizeEditedNameFields } from '../../utils/nameFormat';
 
 
 const StudentSettings = () => {
@@ -61,15 +62,10 @@ const StudentSettings = () => {
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [selectedAvatarFile, setSelectedAvatarFile] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [editedNameFields, setEditedNameFields] = useState({});
 
   useEffect(() => {
     if (!settingsData || settingsHydratedRef.current) return;
-    if (settingsData.profileForm) {
-      // Never hydrate sensitive fields from userSettings (they live in the
-      // private subcollection, loaded separately below).
-      const { phone: _p, address: _a, birthDate: _b, ...publicPF } = settingsData.profileForm;
-      setProfileForm((prev) => ({ ...prev, ...publicPF }));
-    }
     if (settingsData.notifications) setNotifications((prev) => ({ ...prev, ...settingsData.notifications }));
     if (settingsData.privacyForm) setPrivacyForm((prev) => ({ ...prev, ...settingsData.privacyForm }));
     if (settingsData.avatarBase64 || settingsData.avatarUrl || settingsData.avatarPreview) {
@@ -138,6 +134,14 @@ const StudentSettings = () => {
   };
 
   const handleSave = async () => {
+    const normalizedName = normalizeEditedNameFields(profileForm, editedNameFields);
+    const { firstName, middleName, lastName, nameExtension } = normalizedName;
+
+    if (!firstName || !lastName) {
+      addToast('First name and last name are required.', 'error');
+      return;
+    }
+
     setIsSaving(true);
     try {
       let avatarBase64 = settingsData?.avatarBase64 || null;
@@ -146,21 +150,21 @@ const StudentSettings = () => {
         avatarBase64 = result.base64;
       }
       if (!avatarPreview) avatarBase64 = null;
-      // Keep PII out of the world-readable userSettings copy.
-      const publicProfileForm = { ...profileForm, phone: '', address: '', birthDate: '' };
-      await saveSettings({ profileForm: publicProfileForm, notifications, privacyForm, avatarBase64 });
+
       if (uid && db) {
-        const fullName = `${profileForm.firstName.trim()} ${profileForm.middleName.trim()} ${profileForm.lastName.trim()}${profileForm.nameExtension.trim() ? ` ${profileForm.nameExtension.trim()}` : ''}`.replace(/\s+/g, ' ').trim();
+        const fullName = joinNameFields(normalizedName);
         // Public (org-readable) fields only.
         await setDoc(
           doc(db, 'users', uid),
           {
             uid,
-            firstName: profileForm.firstName.trim(),
-            middleName: profileForm.middleName.trim(),
-            lastName: profileForm.lastName.trim(),
-            nameExtension: profileForm.nameExtension.trim(),
+            firstName,
+            middleName,
+            lastName,
+            nameExtension,
             name: fullName,
+            displayName: fullName,
+            profileComplete: true,
             email: auth?.currentUser?.email || profileForm.email,
             updatedAt: serverTimestamp(),
             avatarBase64: avatarBase64 || null,
@@ -173,15 +177,33 @@ const StudentSettings = () => {
           address: profileForm.address.trim(),
           birthDate: profileForm.birthDate,
         });
+
+        // Keep Firebase Authentication's display name aligned with the
+        // canonical Firestore profile. The Firestore listener still updates
+        // the UI if this best-effort Auth metadata update is unavailable.
+        if (auth?.currentUser && auth.currentUser.displayName !== fullName) {
+          try {
+            await updateProfile(auth.currentUser, { displayName: fullName });
+          } catch (profileError) {
+            console.warn('Could not synchronize Firebase display name:', profileError?.message);
+          }
+        }
       }
+
+      // Preferences belong in userSettings; identity fields live only in the
+      // users document/private profile to avoid two sources overwriting them.
+      await saveSettings({ notifications, privacyForm, avatarBase64 });
+      setProfileForm((prev) => ({ ...prev, ...normalizedName }));
+      setEditedNameFields({});
       setAvatar(avatarBase64 || null);
       setAvatarPreview(avatarBase64 || null);
       setSelectedAvatarFile(null);
-      setIsSaving(false);
       addToast('Settings saved successfully!', 'success');
-    } catch {
-      setIsSaving(false);
+    } catch (error) {
+      console.error('Unable to save student settings:', error);
       addToast('Unable to save settings.', 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -293,7 +315,10 @@ const StudentSettings = () => {
           <input
             type="text"
             value={profileForm.firstName}
-            onChange={(e) => setProfileForm((prev) => ({ ...prev, firstName: e.target.value }))}
+            onChange={(e) => {
+              setProfileForm((prev) => ({ ...prev, firstName: e.target.value }));
+              setEditedNameFields((prev) => ({ ...prev, firstName: true }));
+            }}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
@@ -302,7 +327,10 @@ const StudentSettings = () => {
           <input
             type="text"
             value={profileForm.middleName}
-            onChange={(e) => setProfileForm((prev) => ({ ...prev, middleName: e.target.value }))}
+            onChange={(e) => {
+              setProfileForm((prev) => ({ ...prev, middleName: e.target.value }));
+              setEditedNameFields((prev) => ({ ...prev, middleName: true }));
+            }}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
@@ -311,7 +339,10 @@ const StudentSettings = () => {
           <input
             type="text"
             value={profileForm.lastName}
-            onChange={(e) => setProfileForm((prev) => ({ ...prev, lastName: e.target.value }))}
+            onChange={(e) => {
+              setProfileForm((prev) => ({ ...prev, lastName: e.target.value }));
+              setEditedNameFields((prev) => ({ ...prev, lastName: true }));
+            }}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
@@ -321,7 +352,10 @@ const StudentSettings = () => {
             type="text"
             placeholder="Jr., Sr., III, etc."
             value={profileForm.nameExtension}
-            onChange={(e) => setProfileForm((prev) => ({ ...prev, nameExtension: e.target.value }))}
+            onChange={(e) => {
+              setProfileForm((prev) => ({ ...prev, nameExtension: e.target.value }));
+              setEditedNameFields((prev) => ({ ...prev, nameExtension: true }));
+            }}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
@@ -512,7 +546,7 @@ const StudentSettings = () => {
   );
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="mb-4 flex items-center gap-3">
         <User className="w-6 h-6 text-blue-600" />
         <span className="text-lg font-semibold text-gray-900">
@@ -520,12 +554,28 @@ const StudentSettings = () => {
         </span>
       </div>
 
-      <div className="mb-6 flex gap-2 border-b border-gray-200">
+      <div className="mb-6 sm:hidden">
+        <label htmlFor="student-settings-section" className="mb-2 block text-sm font-medium text-gray-700">
+          Settings section
+        </label>
+        <select
+          id="student-settings-section"
+          value={activeTab}
+          onChange={(event) => setActiveTab(event.target.value)}
+          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+        >
+          {tabs.map((tab) => (
+            <option key={tab.id} value={tab.id}>{tab.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="mb-6 hidden gap-2 overflow-x-auto border-b border-gray-200 sm:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 -mb-px border-b-2 transition-colors font-medium text-sm ${
+            className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2 -mb-px border-b-2 transition-colors font-medium text-sm ${
               activeTab === tab.id
                 ? 'border-blue-600 text-blue-600 bg-white'
                 : 'border-transparent text-gray-500 hover:text-blue-600 hover:bg-gray-50'
@@ -537,7 +587,7 @@ const StudentSettings = () => {
         ))}
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 p-6">
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6">
         {activeTab === 'profile' && renderProfileSettings()}
         {activeTab === 'notifications' && renderNotificationSettings()}
         {activeTab === 'security' && renderSecuritySettings()}

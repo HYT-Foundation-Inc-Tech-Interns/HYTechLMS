@@ -15,6 +15,7 @@ import {
   getDoc,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from 'firebase/firestore';
 import { auth, db, firebaseInitError } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
@@ -96,10 +97,35 @@ const SignIn = () => {
 
   const ensureUserProfileDocument = async (firebaseUser) => {
     const normalizedEmail = String(firebaseUser?.email || '').trim().toLowerCase();
+    const authDisplayName = String(firebaseUser?.displayName || '').trim();
+    const emailLocalPart = normalizedEmail.split('@')[0];
+    const usableAuthName =
+      authDisplayName && authDisplayName.toLowerCase() !== emailLocalPart.toLowerCase()
+        ? authDisplayName
+        : '';
     const profileRef = doc(db, 'users', firebaseUser.uid);
     const existingDoc = await getDoc(profileRef);
 
     if (existingDoc.exists()) {
+      const data = existingDoc.data() || {};
+      const hasStructuredName = [data.firstName, data.lastName]
+        .some((part) => String(part || '').trim());
+      const storedName = String(data.name || data.displayName || '').trim();
+      const storedNameIsEmailPrefix =
+        storedName && storedName.toLowerCase() === emailLocalPart.toLowerCase();
+
+      // Repair legacy placeholder records when Firebase Auth still has the
+      // actual signup name. Lost private details must be completed by the user.
+      if (!hasStructuredName && usableAuthName && (!storedName || storedNameIsEmailPrefix)) {
+        await updateDoc(profileRef, {
+          name: usableAuthName,
+          displayName: usableAuthName,
+          profileComplete: false,
+          updatedAt: serverTimestamp(),
+        });
+        return getDoc(profileRef);
+      }
+
       return existingDoc;
     }
 
@@ -107,9 +133,14 @@ const SignIn = () => {
       profileRef,
       {
         uid: firebaseUser.uid,
-        name: normalizedEmail.split('@')[0] || 'User',
+        name: usableAuthName,
+        displayName: usableAuthName,
+        firstName: '',
+        middleName: '',
+        lastName: '',
+        nameExtension: '',
+        profileComplete: false,
         email: normalizedEmail,
-        phone: '',
         role: 'student',
         status: 'Active',
         createdAt: serverTimestamp(),
@@ -215,7 +246,7 @@ const SignIn = () => {
   };
 
   return (
-    <div className="min-h-screen flex relative overflow-hidden">
+    <div className="min-h-screen min-h-[100dvh] flex relative overflow-hidden">
       {/* Animated Background Layers */}
       <div className="absolute inset-0 -z-10 bg-gradient-to-br from-blue-50 via-white to-orange-50" />
       <div className="absolute inset-0 -z-10 overflow-hidden">

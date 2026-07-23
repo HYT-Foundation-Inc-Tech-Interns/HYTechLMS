@@ -93,7 +93,7 @@ const StudentWaitingRoom = ({ pendingEnrollments = [] }) => {
               <GraduationCap className="w-10 h-10" />
             </div>
             <h1 className="text-2xl font-bold mb-2">
-              Welcome{user?.displayName ? `, ${user.displayName}` : ''}!
+              Welcome, {user?.displayName || 'Trainee'}!
             </h1>
             <p className="text-white/80">
               Your account is ready, but you're not in a class yet.

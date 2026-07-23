@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { auth, db } from '../firebase';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { auth, db } from '../firebase';
 
 const AuthContext = createContext();
 
@@ -11,66 +11,88 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        if (firebaseUser) {
-          // Get or create user profile from Firestore
-          const userRef = doc(db, 'users', firebaseUser.uid);
-          const userSnap = await getDoc(userRef);
+    if (!auth || !db) {
+      setUser(null);
+      setLoading(false);
+      return () => {};
+    }
 
-          if (userSnap.exists()) {
-            const userData = userSnap.data();
-            setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: userData.name || firebaseUser.displayName,
-              role: userData.role,
-              ...userData,
-              emailVerified: firebaseUser.emailVerified,
-            });
-          } else {
-            // Create user profile if it doesn't exist
-            const newUserData = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName || firebaseUser.email.split('@')[0],
-              role: 'student', // default role
-              status: 'Active',
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            };
-            
-            try {
-              // merge:true so this safety-net write can NEVER clobber a richer
-              // profile (name/firstName/…) that signup writes around the same
-              // time — a non-merge setDoc here was wiping the signup name,
-              // leaving accounts showing as "Unnamed User".
-              await setDoc(userRef, newUserData, { merge: true });
-              setUser(newUserData);
-            } catch (createError) {
-              // If creation fails due to permissions, still set user locally
-              console.warn('Could not create user profile in Firestore:', createError);
-              setUser({
-                uid: firebaseUser.uid,
-                email: firebaseUser.email,
-                displayName: firebaseUser.displayName,
-              });
-            }
-          }
-          setError(null);
-        } else {
-          setUser(null);
-        }
-      } catch (err) {
-        console.error('Error loading user profile:', err);
-        setError(err.message);
-        setUser(null);
-      } finally {
-        setLoading(false);
+    let unsubscribeProfile = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
       }
+
+      if (!firebaseUser) {
+        setUser(null);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      const userRef = doc(db, 'users', firebaseUser.uid);
+
+      const applyProfile = (userData = {}) => {
+        const structuredName = [
+          userData.firstName,
+          userData.middleName,
+          userData.lastName,
+          userData.nameExtension,
+        ]
+          .map((part) => String(part || '').trim())
+          .filter(Boolean)
+          .join(' ');
+        const emailLocalPart = String(firebaseUser.email || '').split('@')[0].toLowerCase();
+        const nonEmailPlaceholderName = [
+          userData.name,
+          userData.displayName,
+          firebaseUser.displayName,
+        ]
+          .map((value) => String(value || '').trim())
+          .find((value) => value && value.toLowerCase() !== emailLocalPart);
+        const resolvedDisplayName =
+          structuredName ||
+          nonEmailPlaceholderName ||
+          'Trainee';
+
+        // Stored data is spread first so a stale displayName can never
+        // overwrite the canonical name resolved above.
+        setUser({
+          ...userData,
+          uid: firebaseUser.uid,
+          email: firebaseUser.email || userData.email || '',
+          displayName: resolvedDisplayName,
+          role: userData.role || 'student',
+          emailVerified: firebaseUser.emailVerified,
+        });
+      };
+
+      // Signup owns profile creation. Listening here prevents AuthContext from
+      // racing signup with an email-derived Firestore document and refreshes
+      // all welcome/profile UI immediately after a profile update.
+      unsubscribeProfile = onSnapshot(
+        userRef,
+        (snapshot) => {
+          applyProfile(snapshot.exists() ? snapshot.data() : {});
+          setError(null);
+          setLoading(false);
+        },
+        (profileError) => {
+          console.error('Error loading user profile:', profileError);
+          applyProfile({});
+          setError(profileError.message);
+          setLoading(false);
+        }
+      );
     });
 
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribeProfile) unsubscribeProfile();
+      unsubscribeAuth();
+    };
   }, []);
 
   const logout = async () => {

@@ -1238,7 +1238,7 @@ const StudentCourse = () => {
 
   const handleBeginQuiz = () => {
     setQuizStarted(true);
-    setTimeRemaining(selectedQuiz.duration * 60);
+    setTimeRemaining(Number(selectedQuiz.duration || 0) * 60);
     enterFullscreen();
   };
 
@@ -2358,7 +2358,7 @@ const StudentCourse = () => {
                     <div className="flex items-center gap-4 text-gray-500">
                       <span className="flex items-center gap-1">
                         <Timer className="w-4 h-4" />
-                        {quiz.duration} mins
+                        {quiz.duration ? `${quiz.duration} mins` : 'No time limit'}
                       </span>
                       <span className="flex items-center gap-1">
                         <Award className="w-4 h-4" />
@@ -2672,7 +2672,7 @@ const StudentCourse = () => {
                               {quiz.totalPoints ? (
                                 <span className="font-semibold text-gray-900">{quiz.totalPoints}</span>
                               ) : (
-                                <span className="text-gray-400">-</span>
+                                <span className="text-gray-400">No limit</span>
                               )}
                             </td>
                             <td className="px-6 py-4 text-center">
@@ -3133,7 +3133,9 @@ const StudentCourse = () => {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-orange-50 rounded-xl p-4">
                   <p className="text-xs text-orange-700 uppercase">Duration</p>
-                  <p className="text-xl font-bold text-orange-900 mt-1">{selectedQuizInfo.duration} mins</p>
+                  <p className="text-xl font-bold text-orange-900 mt-1">
+                    {selectedQuizInfo.duration ? `${selectedQuizInfo.duration} mins` : 'No limit'}
+                  </p>
                 </div>
                 <div className="bg-blue-50 rounded-xl p-4">
                   <p className="text-xs text-blue-700 uppercase">Total Points</p>
@@ -3336,27 +3338,27 @@ const StudentCourse = () => {
       {showQuizModal && selectedQuiz && (
         <div 
           ref={quizContainerRef}
-          className="fixed top-0 left-0 w-screen h-screen bg-gray-100 z-[9999] flex flex-col"
+          className="fixed inset-0 h-screen h-[100dvh] w-full bg-gray-100 z-[9999] flex flex-col"
           style={{ margin: 0, padding: 0 }}
         >
           {/* Quiz Header */}
-          <div className="bg-white border-b border-gray-200 px-6 py-3">
-            <div className="flex items-center justify-between max-w-5xl mx-auto">
-              <div className="flex items-center gap-4">
+          <div className="bg-white border-b border-gray-200 px-3 py-3 sm:px-6">
+            <div className="flex items-center justify-between gap-2 max-w-5xl mx-auto">
+              <div className="flex min-w-0 items-center gap-2 sm:gap-4">
                 <button 
                   onClick={handleCloseQuiz}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500" />
                 </button>
-                <div>
-                  <h1 className="font-bold text-gray-900">{selectedQuiz.title}</h1>
+                <div className="min-w-0">
+                  <h1 className="truncate font-bold text-gray-900">{selectedQuiz.title}</h1>
                   <p className="text-sm text-gray-500">{selectedQuiz.questions.length} questions · {selectedQuiz.totalPoints} points</p>
                 </div>
               </div>
               
-              {quizStarted && !quizSubmitted && (
-                <div className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-lg font-bold ${
+              {quizStarted && !quizSubmitted && Number(selectedQuiz.duration) > 0 && (
+                <div className={`flex shrink-0 items-center gap-1 px-2 py-2 rounded-lg font-mono text-sm font-bold sm:gap-2 sm:px-4 sm:text-lg ${
                   timeRemaining < 60 ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
                 }`}>
                   <Timer className="w-5 h-5" />
@@ -3368,17 +3370,17 @@ const StudentCourse = () => {
 
           {/* Quiz Content */}
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-3xl mx-auto p-6">
+            <div className="max-w-3xl mx-auto p-3 sm:p-6">
               {/* Before Starting */}
               {!quizStarted && !quizSubmitted && (
-                <div className="bg-white rounded-2xl p-8 text-center">
+                <div className="bg-white rounded-2xl p-4 text-center sm:p-8">
                   <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
                     <Pencil className="w-10 h-10 text-orange-600" />
                   </div>
                   <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedQuiz.title}</h2>
                   <p className="text-gray-500 mb-6">Read the instructions carefully before starting</p>
                   
-                  <div className="bg-gray-50 rounded-xl p-6 text-left mb-6">
+                  <div className="bg-gray-50 rounded-xl p-4 text-left mb-6 sm:p-6">
                     <h3 className="font-semibold text-gray-900 mb-4">Quiz Instructions:</h3>
                     <ul className="space-y-2 text-gray-600">
                       <li className="flex items-start gap-2">
@@ -3387,7 +3389,11 @@ const StudentCourse = () => {
                       </li>
                       <li className="flex items-start gap-2">
                         <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                        <span>You have <strong>{selectedQuiz.duration} minutes</strong> to complete the quiz</span>
+                        <span>
+                          {selectedQuiz.duration
+                            ? <>You have <strong>{selectedQuiz.duration} minutes</strong> to complete the quiz</>
+                            : <>This quiz has <strong>no time limit</strong></>}
+                        </span>
                       </li>
                       <li className="flex items-start gap-2">
                         <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
@@ -3401,23 +3407,25 @@ const StudentCourse = () => {
                         <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                         <span>Do not leave or switch tabs during the quiz</span>
                       </li>
-                      <li className="flex items-start gap-2">
-                        <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                        <span>Quiz will auto-submit when time expires</span>
-                      </li>
+                      {selectedQuiz.duration > 0 && (
+                        <li className="flex items-start gap-2">
+                          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                          <span>Quiz will auto-submit when time expires</span>
+                        </li>
+                      )}
                     </ul>
                   </div>
 
-                  <div className="flex items-center justify-center gap-4">
+                  <div className="flex flex-col-reverse items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:gap-4">
                     <button 
                       onClick={handleCloseQuiz}
-                      className="px-6 py-3 border border-gray-200 rounded-xl font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                      className="w-full px-6 py-3 border border-gray-200 rounded-xl font-medium text-gray-700 hover:bg-gray-50 transition-colors sm:w-auto"
                     >
                       Cancel
                     </button>
                     <button 
                       onClick={handleBeginQuiz}
-                      className="px-8 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition-colors flex items-center gap-2"
+                      className="flex w-full items-center justify-center gap-2 px-8 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition-colors sm:w-auto"
                     >
                       <Play className="w-5 h-5" />
                       Start Quiz
@@ -3466,7 +3474,7 @@ const StudentCourse = () => {
 
                   {/* Current Question */}
                   {selectedQuiz.questions[currentQuestion] && (
-                    <div className="bg-white rounded-xl p-6">
+                    <div className="bg-white rounded-xl p-4 sm:p-6">
                       <div className="flex items-center justify-between mb-4">
                         <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-medium">
                           Question {currentQuestion + 1} of {selectedQuiz.questions.length}
@@ -3491,7 +3499,7 @@ const StudentCourse = () => {
                       </div>
 
                       {/* Navigation */}
-                      <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-100">
+                      <div className="flex flex-wrap items-center justify-between gap-3 mt-8 pt-6 border-t border-gray-100">
                         <button
                           onClick={() => setCurrentQuestion(prev => Math.max(0, prev - 1))}
                           disabled={currentQuestion === 0}

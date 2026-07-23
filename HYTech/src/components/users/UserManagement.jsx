@@ -33,7 +33,11 @@ import {
 } from 'firebase/firestore';
 import { auth, db, firebaseConfig, firebaseInitError, hasValidFirebaseConfig } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
-import { createNotification, logActivity } from '../../utils/firestoreService';
+import {
+  createNotification,
+  getUserPrivateProfile,
+  logActivity,
+} from '../../utils/firestoreService';
 
 // Build the temporary password from a last name + birth date.
 // Strips spaces/punctuation so names like "De la Cruz" yield a clean,
@@ -61,6 +65,8 @@ const UserManagement = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedPrivateProfile, setSelectedPrivateProfile] = useState(null);
+  const [isLoadingPrivateProfile, setIsLoadingPrivateProfile] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -144,16 +150,22 @@ const UserManagement = () => {
                   const normalizedRole = (data.role || 'student').toString();
                   const prettyRole =
                     normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1).toLowerCase();
+                  const structuredName = [
+                    data.firstName || data.profile?.firstName,
+                    data.middleName || data.profile?.middleName,
+                    data.lastName || data.profile?.lastName,
+                    data.nameExtension || data.profile?.nameExtension,
+                  ].map((part) => String(part || '').trim()).filter(Boolean).join(' ');
+                  const emailLocalPart = String(data.email || '').split('@')[0].toLowerCase();
+                  const storedName = [data.name, data.displayName]
+                    .map((value) => String(value || '').trim())
+                    .find((value) => value && value.toLowerCase() !== emailLocalPart);
 
                   return {
+                    ...data,
                     id: docSnap.id,
                     rowNumber: index + 1,
-                    name:
-                      data.name ||
-                      `${data.firstName || ''} ${data.lastName || ''}`.trim() ||
-                      data.displayName ||
-                      (data.email ? data.email.split('@')[0] : '') ||
-                      'Unnamed User',
+                    name: structuredName || storedName || 'Profile incomplete',
                     idNumber: data.idNumber || '-',
                     email: data.email || '-',
                     role: prettyRole,
@@ -447,20 +459,29 @@ const UserManagement = () => {
     }
   };
 
-  const handleViewUser = (user) => {
+  const handleViewUser = async (user) => {
     setSelectedUser(user);
+    setSelectedPrivateProfile(null);
+    setIsLoadingPrivateProfile(true);
     setShowViewModal(true);
     setActiveDropdown(null);
+
+    try {
+      const privateProfile = await getUserPrivateProfile(user.id);
+      setSelectedPrivateProfile(privateProfile);
+    } finally {
+      setIsLoadingPrivateProfile(false);
+    }
   };
 
   const handleEditUser = (user) => {
-    const nameParts = user.name.split(' ');
+    const nameParts = String(user.name || user.displayName || '').trim().split(/\s+/).filter(Boolean);
     setSelectedUser(user);
     setEditUser({
-      firstName: nameParts[0] || '',
-      middleName: nameParts.length > 3 ? nameParts.slice(1, -1).join(' ') : (nameParts.length > 2 ? nameParts[1] : ''),
-      lastName: nameParts.length > 1 ? nameParts[nameParts.length - 1] : '',
-      nameExtension: '',
+      firstName: user.firstName || user.profile?.firstName || nameParts[0] || '',
+      middleName: user.middleName || user.profile?.middleName || (nameParts.length > 2 ? nameParts.slice(1, -1).join(' ') : ''),
+      lastName: user.lastName || user.profile?.lastName || (nameParts.length > 1 ? nameParts[nameParts.length - 1] : ''),
+      nameExtension: user.nameExtension || user.profile?.nameExtension || '',
       email: user.email || '',
       role: user.role,
     });
@@ -470,7 +491,12 @@ const UserManagement = () => {
 
   const handleUpdateUser = async (e) => {
     e.preventDefault();
-    const fullName = `${editUser.firstName} ${editUser.middleName ? editUser.middleName + ' ' : ''}${editUser.lastName}${editUser.nameExtension ? ' ' + editUser.nameExtension : ''}`;
+    const fullName = [
+      editUser.firstName,
+      editUser.middleName,
+      editUser.lastName,
+      editUser.nameExtension,
+    ].map((part) => String(part || '').trim()).filter(Boolean).join(' ');
 
     try {
       await updateDoc(doc(db, 'users', selectedUser.id), {
@@ -479,6 +505,7 @@ const UserManagement = () => {
         lastName: editUser.lastName.trim(),
         nameExtension: editUser.nameExtension.trim(),
         name: fullName,
+        displayName: fullName,
         email: editUser.email.trim().toLowerCase(),
         role: editUser.role.trim().toLowerCase(),
         updatedAt: serverTimestamp(),
@@ -584,7 +611,7 @@ const UserManagement = () => {
       <div className="card p-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-72 min-w-[12rem]">
+            <div className="relative min-w-0 flex-[1_1_100%] sm:w-72 sm:min-w-[12rem] sm:flex-initial">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
@@ -640,7 +667,7 @@ const UserManagement = () => {
           </div>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
+            className="flex w-full items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg sm:w-auto"
           >
             <Plus className="w-5 h-5" />
             <span>Add User</span>
@@ -674,11 +701,11 @@ const UserManagement = () => {
 
       {/* Bulk actions bar */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-lg">
+        <div className="flex flex-col items-stretch gap-3 px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-lg sm:flex-row sm:items-center sm:justify-between">
           <span className="text-sm font-medium text-blue-800">
             {selectedIds.size} selected
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               onClick={() => setSelectedIds(new Set())}
               className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 transition-colors"
@@ -708,7 +735,7 @@ const UserManagement = () => {
       {/* Table */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[700px]">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="table-header w-10">
@@ -861,11 +888,11 @@ const UserManagement = () => {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+        <div className="flex flex-col items-stretch gap-3 px-4 py-3 border-t border-gray-100 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-gray-500">
             {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredUsers.length)} of {filteredUsers.length}
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end sm:gap-4">
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-500">Rows per page:</span>
               <select
@@ -1097,6 +1124,11 @@ const UserManagement = () => {
               </div>
 
               <div className="p-6 space-y-4 overflow-y-auto">
+                {selectedUser.profileComplete === false && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    This is a legacy or incomplete profile. Missing personal details must be completed by the user in Settings.
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-1">Full Name</label>
                   <p className="text-gray-900 font-medium">{selectedUser.name}</p>
@@ -1108,6 +1140,25 @@ const UserManagement = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-1">Email</label>
                   <p className="text-gray-900 font-medium">{selectedUser.email}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Contact Number</label>
+                  <p className="text-gray-900 font-medium">
+                    {isLoadingPrivateProfile
+                      ? 'Loading...'
+                      : selectedPrivateProfile?.phone || selectedUser.phone || 'Not provided'}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Date of Birth</label>
+                  <p className="text-gray-900 font-medium">
+                    {isLoadingPrivateProfile
+                      ? 'Loading...'
+                      : selectedPrivateProfile?.birthDate ||
+                        selectedUser.birthDate ||
+                        selectedUser.profile?.dateOfBirth ||
+                        'Not provided'}
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-1">Role</label>

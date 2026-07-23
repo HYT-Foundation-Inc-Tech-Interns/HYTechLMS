@@ -169,11 +169,11 @@ const StudentHome = () => {
     if (hasClass) return null;
 
     return (
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg p-8 mb-8 text-white">
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg p-4 mb-8 text-white sm:p-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Left side - Info */}
           <div>
-            <h2 className="text-3xl font-bold mb-3">Join a Class</h2>
+            <h2 className="text-2xl font-bold mb-3 sm:text-3xl">Join a Class</h2>
             <p className="text-blue-100 mb-4">
               Enter your class code to join a class immediately. Your trainor will assign you a class code.
             </p>
@@ -216,7 +216,7 @@ const StudentHome = () => {
         return (
           <div
             key={index}
-            className={`${stat.bgColor} rounded-lg p-6 border border-gray-200`}
+            className={`${stat.bgColor} rounded-lg p-4 border border-gray-200 sm:p-6`}
           >
             <div className="flex items-start justify-between">
               <div>
@@ -238,7 +238,7 @@ const StudentHome = () => {
     if (!activeEnrollment) return null;
 
     return (
-      <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-6 mb-6 text-white shadow-lg">
+      <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-4 mb-6 text-white shadow-lg sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
             <h3 className="font-bold text-lg mb-2">Your Current Class</h3>
@@ -250,7 +250,7 @@ const StudentHome = () => {
             </p>
           </div>
           <button
-            onClick={() => navigate(`/student/${encodeURIComponent(activeEnrollment.className)}`)}
+            onClick={() => navigate(`/student/${encodeURIComponent(activeEnrollment.classId || activeEnrollment.className)}`)}
             className="flex items-center gap-2 bg-white text-blue-600 font-semibold px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors whitespace-nowrap flex-shrink-0"
           >
             View Class
@@ -291,7 +291,7 @@ const StudentHome = () => {
           return (
             <div
               key={enrollment.id}
-              onClick={() => enrollment.className && navigate(`/student/${encodeURIComponent(enrollment.className)}`)}
+              onClick={() => (enrollment.classId || enrollment.className) && navigate(`/student/${encodeURIComponent(enrollment.classId || enrollment.className)}`)}
               className={`bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer border border-gray-200 ${
                 enrollment.className ? '' : 'opacity-75'
               }`}
@@ -323,7 +323,7 @@ const StudentHome = () => {
               </div>
 
               {/* Class Info */}
-              <div className="p-6 space-y-4">
+              <div className="p-4 space-y-4 sm:p-6">
                 {/* Title */}
                 <div>
                   <h3 className="font-bold text-navy-900 text-lg line-clamp-2">{enrollment.className}</h3>
@@ -377,7 +377,9 @@ const StudentHome = () => {
     <div className="p-4">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-navy-900 mb-2">Welcome, {user?.displayName}!</h1>
+          <h1 className="text-2xl font-bold text-navy-900 mb-2 sm:text-3xl">
+            Welcome, {user?.displayName || 'Trainee'}!
+          </h1>
         </div>
 
         {/* Join Class Section */}

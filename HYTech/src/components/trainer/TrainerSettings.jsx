@@ -1,15 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Bell, Shield, Palette, Globe, Save, Camera, X } from 'lucide-react';
+import { User, Bell, Shield, Save, Camera, X } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
 import { compressAvatarImageToBase64 } from '../../utils/avatarStorage';
 import MyCoursesCard from '../shared/MyCoursesCard';
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateProfile } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { getUserPrivateProfile, saveUserPrivateProfile } from '../../utils/firestoreService';
 import { normalizePhMobile, toStoredPhMobile } from '../../utils/phone';
+import { joinNameFields, normalizeEditedNameFields } from '../../utils/nameFormat';
 
 const TrainerSettings = () => {
   const [activeTab, setActiveTab] = useState('profile');
@@ -46,13 +47,10 @@ const TrainerSettings = () => {
     newEnrollments: true,
     messages: true,
   });
-  const [appearanceSettings, setAppearanceSettings] = useState({
-    language: 'en',
-  });
-
 const fileInputRef = useRef(null);
 const [avatarPreview, setAvatarPreview] = useState(null);
 const [selectedAvatarFile, setSelectedAvatarFile] = useState(null);
+const [editedNameFields, setEditedNameFields] = useState({});
 
 useEffect(() => {
   if (!settingsData || settingsHydratedRef.current) {
@@ -66,9 +64,6 @@ useEffect(() => {
   }
   if (settingsData.trainerNotificationSettings) {
     setTrainerNotificationSettings((prev) => ({ ...prev, ...settingsData.trainerNotificationSettings }));
-  }
-  if (settingsData.appearanceSettings) {
-    setAppearanceSettings((prev) => ({ ...prev, ...settingsData.appearanceSettings }));
   }
   if (settingsData.privacySettings) {
     setPrivacySettings((prev) => ({ ...prev, ...settingsData.privacySettings }));
@@ -148,6 +143,12 @@ const removeAvatar = () => {
 
   // Handle save
 const handleSave = async () => {
+  const normalizedName = normalizeEditedNameFields(profileForm, editedNameFields);
+  if (!normalizedName.firstName || !normalizedName.lastName) {
+    addToast('First name and last name are required.', 'error');
+    return;
+  }
+
   setIsSaving(true);
   try {
     let avatarBase64 = settingsData?.avatarBase64 || null;
@@ -162,26 +163,31 @@ const handleSave = async () => {
     }
 
     // Keep PII out of the world-readable userSettings copy.
-    const publicProfileForm = { ...profileForm, phone: '', birthDate: '' };
+    const publicProfileForm = {
+      ...profileForm,
+      ...normalizedName,
+      phone: '',
+      birthDate: '',
+    };
     await saveSettings({
       profileForm: publicProfileForm,
       trainerNotificationSettings,
-      appearanceSettings,
       privacySettings,
       avatarBase64,
     });
 
     if (uid && db) {
-      const fullName = `${profileForm.firstName.trim()} ${profileForm.middleName.trim()} ${profileForm.lastName.trim()}${profileForm.nameExtension.trim() ? ` ${profileForm.nameExtension.trim()}` : ''}`.replace(/\s+/g, ' ').trim();
+      const fullName = joinNameFields(normalizedName);
       await setDoc(
         doc(db, 'users', uid),
         {
           uid,
-          firstName: profileForm.firstName.trim(),
-          middleName: profileForm.middleName.trim(),
-          lastName: profileForm.lastName.trim(),
-          nameExtension: profileForm.nameExtension.trim(),
+          firstName: normalizedName.firstName,
+          middleName: normalizedName.middleName,
+          lastName: normalizedName.lastName,
+          nameExtension: normalizedName.nameExtension,
           name: fullName,
+          displayName: fullName,
           email: auth?.currentUser?.email || profileForm.email,
           bio: profileForm.bio.trim(),
           updatedAt: serverTimestamp(),
@@ -189,6 +195,15 @@ const handleSave = async () => {
         },
         { merge: true }
       );
+      setProfileForm((prev) => ({ ...prev, ...normalizedName }));
+      setEditedNameFields({});
+      if (auth?.currentUser && auth.currentUser.displayName !== fullName) {
+        try {
+          await updateProfile(auth.currentUser, { displayName: fullName });
+        } catch (profileError) {
+          console.warn('Could not synchronize Firebase display name:', profileError?.message);
+        }
+      }
       // Sensitive PII to the owner/admin-only private subcollection.
       await saveUserPrivateProfile(uid, {
         phone: toStoredPhMobile(profileForm.phone),
@@ -255,7 +270,6 @@ const handleSave = async () => {
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'security', label: 'Security', icon: Shield },
   ];
 
@@ -309,7 +323,10 @@ const handleSave = async () => {
           <input 
             type="text" 
             value={profileForm.firstName}
-            onChange={(e) => setProfileForm((prev) => ({ ...prev, firstName: e.target.value }))}
+            onChange={(e) => {
+              setProfileForm((prev) => ({ ...prev, firstName: e.target.value }));
+              setEditedNameFields((prev) => ({ ...prev, firstName: true }));
+            }}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
@@ -318,7 +335,10 @@ const handleSave = async () => {
           <input 
             type="text" 
             value={profileForm.middleName}
-            onChange={(e) => setProfileForm((prev) => ({ ...prev, middleName: e.target.value }))}
+            onChange={(e) => {
+              setProfileForm((prev) => ({ ...prev, middleName: e.target.value }));
+              setEditedNameFields((prev) => ({ ...prev, middleName: true }));
+            }}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
@@ -327,7 +347,10 @@ const handleSave = async () => {
           <input 
             type="text" 
             value={profileForm.lastName}
-            onChange={(e) => setProfileForm((prev) => ({ ...prev, lastName: e.target.value }))}
+            onChange={(e) => {
+              setProfileForm((prev) => ({ ...prev, lastName: e.target.value }));
+              setEditedNameFields((prev) => ({ ...prev, lastName: true }));
+            }}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
@@ -337,7 +360,10 @@ const handleSave = async () => {
             type="text" 
             placeholder="Jr., Sr., III, etc."
             value={profileForm.nameExtension}
-            onChange={(e) => setProfileForm((prev) => ({ ...prev, nameExtension: e.target.value }))}
+            onChange={(e) => {
+              setProfileForm((prev) => ({ ...prev, nameExtension: e.target.value }));
+              setEditedNameFields((prev) => ({ ...prev, nameExtension: true }));
+            }}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
           />
         </div>
@@ -420,31 +446,6 @@ const handleSave = async () => {
             </label>
           </div>
         ))}
-      </div>
-    </div>
-  );
-
-  const renderAppearanceSettings = () => (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <div className="p-4 bg-gray-50 rounded-xl">
-          <div className="flex items-center gap-4 mb-4">
-            <Globe className="w-5 h-5 text-gray-600" />
-            <div>
-              <h4 className="font-medium text-gray-900">Language</h4>
-              <p className="text-sm text-gray-500">Select your preferred language</p>
-            </div>
-          </div>
-          <select
-            value={appearanceSettings.language}
-            onChange={(e) => setAppearanceSettings((prev) => ({ ...prev, language: e.target.value }))}
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
-          >
-            <option value="en">English (US)</option>
-            <option value="fil">Filipino</option>
-            <option value="es">Spanish</option>
-          </select>
-        </div>
       </div>
     </div>
   );
@@ -549,14 +550,13 @@ const handleSave = async () => {
     switch (activeTab) {
       case 'profile': return renderProfileSettings();
       case 'notifications': return renderNotificationSettings();
-      case 'appearance': return renderAppearanceSettings();
       case 'security': return renderSecuritySettings();
       default: return renderProfileSettings();
     }
   };
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="w-full">
         <div className="mb-4 flex items-center gap-3">
           <User className="w-6 h-6 text-blue-600" />
@@ -565,12 +565,28 @@ const handleSave = async () => {
           </span>
         </div>
 
-        <div className="mb-6 flex gap-2 border-b border-gray-200">
+        <div className="mb-6 sm:hidden">
+          <label htmlFor="trainer-settings-section" className="mb-2 block text-sm font-medium text-gray-700">
+            Settings section
+          </label>
+          <select
+            id="trainer-settings-section"
+            value={activeTab}
+            onChange={(event) => setActiveTab(event.target.value)}
+            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          >
+            {tabs.map((tab) => (
+              <option key={tab.id} value={tab.id}>{tab.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mb-6 hidden gap-2 overflow-x-auto border-b border-gray-200 sm:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 -mb-px border-b-2 transition-colors font-medium text-sm ${
+              className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2 -mb-px border-b-2 transition-colors font-medium text-sm ${
                 activeTab === tab.id
                   ? 'border-blue-600 text-blue-600 bg-white'
                   : 'border-transparent text-gray-500 hover:text-blue-600 hover:bg-gray-50'
@@ -582,10 +598,9 @@ const handleSave = async () => {
           ))}
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 p-6">
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6">
           {activeTab === 'profile' && renderProfileSettings()}
           {activeTab === 'notifications' && renderNotificationSettings()}
-          {activeTab === 'appearance' && renderAppearanceSettings()}
           {activeTab === 'security' && renderSecuritySettings()}
         </div>
 

@@ -128,7 +128,7 @@ const Tasks = () => {
 
   const openClass = (task) => {
     if (task.className) {
-      navigate(`/trainer/${encodeURIComponent(task.className)}`);
+      navigate(`/trainer/${encodeURIComponent(task.classId || task.className)}`);
     }
   };
 
@@ -141,7 +141,7 @@ const Tasks = () => {
   }
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-6">
         {filters.map(f => (

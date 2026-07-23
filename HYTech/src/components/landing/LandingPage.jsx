@@ -5,7 +5,7 @@ const LandingPage = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="h-screen w-full relative bg-[#0f1438] overflow-hidden">
+    <div className="h-screen h-[100dvh] w-full relative bg-[#0f1438] overflow-hidden">
       {/* Fallback background color if image doesn't load */}
       <div className="absolute inset-0 bg-[#1a1f4e] -z-20" />
 
@@ -28,9 +28,9 @@ const LandingPage = () => {
       </div>
 
       {/* Main Content */}
-      <div className="relative z-10 h-screen flex items-center justify-center lg:justify-start">
+      <div className="relative z-10 h-screen h-[100dvh] flex items-center justify-center lg:justify-start">
         {/* Left Content */}
-        <div className="flex-1 flex flex-col justify-center px-4 sm:px-6 md:px-10 lg:px-16 xl:px-24 py-8 sm:py-10 md:py-12 w-full lg:w-auto lg:max-w-[58%] overflow-y-auto lg:overflow-y-visible max-h-screen lg:max-h-none">
+        <div className="flex-1 flex flex-col justify-center px-4 sm:px-6 md:px-10 lg:px-16 xl:px-24 py-8 sm:py-10 md:py-12 w-full lg:w-auto lg:max-w-[58%] overflow-y-auto lg:overflow-y-visible max-h-[100dvh] lg:max-h-none">
           {/* Logo */}
           <div className="mb-4 sm:mb-5 md:mb-6 animate-fade-in">
             <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 lg:w-48 lg:h-48 landing-logo-glow">

@@ -274,11 +274,15 @@ const Sectors = () => {
     try {
       setSaving(true);
       const newStatus = course.status === 'Active' ? 'Inactive' : 'Active';
-      await updateCourse(course.id, { status: newStatus });
+      await updateCourse(course.id, {
+        status: newStatus,
+        available: newStatus === 'Active',
+      });
       addToast(`Course marked ${newStatus}!`, 'success');
       // Refresh courses list - use getCoursesTemplates for consistency
       const courses = await getCoursesTemplates({ sectorId: selectedSector.id });
       setSelectedSectorCourses(courses || []);
+      await reloadSectors();
     } catch (err) {
       console.error('Error updating course status:', err);
       addToast('Failed to update course status', 'error');
@@ -413,7 +417,7 @@ const Sectors = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 space-y-6 sm:p-6">
       {/* Error Alert */}
       {error && (
         <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -431,12 +435,12 @@ const Sectors = () => {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">{user?.role === 'trainer' ? 'Training Classes' : 'Training Sectors'}</h1>
+      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">{user?.role === 'trainer' ? 'Training Classes' : 'Training Sectors'}</h1>
         {user?.role !== 'trainer' && (
           <button
             onClick={() => setShowAddSectorModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#0B005C] text-white rounded-lg hover:bg-[#0B005C]/90 transition-colors"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-[#0B005C] text-white rounded-lg hover:bg-[#0B005C]/90 transition-colors sm:w-auto"
           >
             <Plus className="w-5 h-5" />
             Add Sector
@@ -530,6 +534,11 @@ const Sectors = () => {
 
                 {/* Description */}
                 <p className="text-sm text-gray-600 line-clamp-2">{sector.description}</p>
+                <p className="text-xs font-medium text-gray-500">
+                  {sector.activeCourseCount || 0} active {(sector.activeCourseCount || 0) === 1 ? 'course' : 'courses'}
+                  {' · '}
+                  {sector.totalCourseCount || 0} total
+                </p>
               </div>
 
               {/* Actions - Docked at Bottom */}
@@ -573,8 +582,8 @@ const Sectors = () => {
       {/* ADD SECTOR MODAL */}
       {showAddSectorModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-md max-h-96 overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+          <div className="bg-white rounded-lg w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
+            <div className="p-4 sm:p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
               <h2 className="text-xl font-bold text-gray-900">Add New Sector</h2>
               <button
                 onClick={() => setShowAddSectorModal(false)}
@@ -584,7 +593,7 @@ const Sectors = () => {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-1">
                   Sector Name *
@@ -663,8 +672,8 @@ const Sectors = () => {
       {/* EDIT SECTOR MODAL */}
       {showEditSectorModal && selectedSector && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-md max-h-96 overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+          <div className="bg-white rounded-lg w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
+            <div className="p-4 sm:p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
               <h2 className="text-xl font-bold text-gray-900">Edit Sector</h2>
               <button
                 onClick={() => setShowEditSectorModal(false)}
@@ -674,7 +683,7 @@ const Sectors = () => {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-1">
                   Sector Name *
@@ -756,9 +765,9 @@ const Sectors = () => {
       {/* VIEW COURSES MODAL */}
       {showViewCoursesModal && selectedSector && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-2xl max-h-96 overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
-              <h2 className="text-xl font-bold text-gray-900">{user?.role === 'trainer' ? 'Classes' : 'Courses'} in {selectedSector.name}</h2>
+          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto">
+            <div className="p-4 sm:p-6 border-b border-gray-200 flex items-center justify-between gap-3 sticky top-0 bg-white">
+              <h2 className="min-w-0 text-lg font-bold text-gray-900 sm:text-xl">{user?.role === 'trainer' ? 'Classes' : 'Courses'} in {selectedSector.name}</h2>
               <button
                 onClick={() => setShowViewCoursesModal(false)}
                 className="text-gray-500 hover:text-gray-700"
@@ -767,7 +776,7 @@ const Sectors = () => {
               </button>
             </div>
 
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {selectedSectorCourses.length === 0 ? (
                 <p className="text-gray-600 text-center py-8">No {user?.role === 'trainer' ? 'classes' : 'courses'} in this sector yet.</p>
               ) : (
@@ -775,7 +784,7 @@ const Sectors = () => {
                   {selectedSectorCourses.map((course) => (
                     <div key={course.id} className="p-3 border border-gray-200 rounded-lg flex gap-3">
                       {/* Course Image - Square */}
-                      <div className="w-20 h-20 flex-shrink-0 rounded bg-cover bg-center"
+                      <div className="w-14 h-14 sm:w-20 sm:h-20 flex-shrink-0 rounded bg-cover bg-center"
                         style={course.bgImage 
                           ? { backgroundImage: `url(${course.bgImage})` }
                           : { background: getPlaceholderColor(course.id) }
@@ -784,7 +793,7 @@ const Sectors = () => {
                       </div>
                       
                       {/* Course Info */}
-                      <div className="flex-1 flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1 flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-gray-900">{course.name}</h4>
                           <p className="text-sm text-gray-600 mt-1 line-clamp-1">{course.description}</p>
@@ -846,8 +855,8 @@ const Sectors = () => {
       {/* ADD COURSE MODAL */}
       {showAddCourseModal && selectedSector && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-md max-h-96 overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+          <div className="bg-white rounded-lg w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
+            <div className="p-4 sm:p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
               <h2 className="text-xl font-bold text-gray-900">{user?.role === 'trainer' ? 'Add Class to' : 'Add Course to'} {selectedSector.name}</h2>
               <button
                 onClick={() => setShowAddCourseModal(false)}
@@ -857,7 +866,7 @@ const Sectors = () => {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-1">
                   {user?.role === 'trainer' ? 'Class Name' : 'Course Name'} *
@@ -883,7 +892,7 @@ const Sectors = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-1">
                     Level
@@ -954,8 +963,8 @@ const Sectors = () => {
       {/* EDIT COURSE MODAL */}
       {showEditCourseModal && selectedCourse && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-md max-h-96 overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+          <div className="bg-white rounded-lg w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
+            <div className="p-4 sm:p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
               <h2 className="text-xl font-bold text-gray-900">{user?.role === 'trainer' ? 'Edit Class' : 'Edit Course'}</h2>
               <button
                 onClick={() => setShowEditCourseModal(false)}
@@ -965,7 +974,7 @@ const Sectors = () => {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-1">
                   {user?.role === 'trainer' ? 'Class Name' : 'Course Name'} *
@@ -991,7 +1000,7 @@ const Sectors = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-1">
                     Level

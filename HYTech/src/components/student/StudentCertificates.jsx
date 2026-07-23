@@ -146,7 +146,7 @@ const StudentCertificates = () => {
       const inProgress = enrollments.filter(e => e.status === 'ongoing');
 
       const recipientName =
-        user.displayName || user.name || user.email?.split('@')[0] || 'Trainee';
+        user.displayName || user.name || 'Trainee';
 
       // Map to certificate format
       const certs = completed.map((enrollment) => ({
@@ -219,7 +219,7 @@ const StudentCertificates = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 space-y-6 sm:p-6">
       {/* Error Alert */}
       {error && (
         <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -256,7 +256,7 @@ const StudentCertificates = () => {
                 className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all"
               >
                 {/* Certificate Preview Header */}
-                <div className="bg-gradient-to-r from-[#0B005C] to-[#1a1a7d] p-6 text-center">
+                <div className="bg-gradient-to-r from-[#0B005C] to-[#1a1a7d] p-4 text-center sm:p-6">
                   <Award className="w-12 h-12 text-white mx-auto mb-2" />
                   <h3 className="text-white font-bold">Certificate of Completion</h3>
                 </div>

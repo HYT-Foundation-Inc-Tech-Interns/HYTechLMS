@@ -909,7 +909,7 @@ const Settings = () => {
   };
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="w-full">
         <div className="mb-4 flex items-center gap-3">
           <User className="w-6 h-6 text-blue-600" />
@@ -918,12 +918,28 @@ const Settings = () => {
           </span>
         </div>
 
-        <div className="mb-6 flex gap-2 border-b border-gray-200 overflow-x-auto">
+        <div className="mb-6 sm:hidden">
+          <label htmlFor="admin-settings-section" className="mb-2 block text-sm font-medium text-gray-700">
+            Settings section
+          </label>
+          <select
+            id="admin-settings-section"
+            value={activeTab}
+            onChange={(event) => setActiveTab(event.target.value)}
+            className="input-field w-full appearance-auto"
+          >
+            {tabs.map((tab) => (
+              <option key={tab.id} value={tab.id}>{tab.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mb-6 hidden gap-2 border-b border-gray-200 overflow-x-auto sm:flex">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 -mb-px border-b-2 transition-colors font-medium text-sm whitespace-nowrap ${
+              className={`flex shrink-0 items-center gap-2 px-3 sm:px-4 py-2 -mb-px border-b-2 transition-colors font-medium text-sm whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-blue-600 text-blue-600 bg-white'
                   : 'border-transparent text-gray-500 hover:text-blue-600 hover:bg-gray-50'
@@ -935,7 +951,7 @@ const Settings = () => {
           ))}
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 p-6 animate-fade-in">
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6 animate-fade-in">
           {renderTabContent()}
         </div>
 

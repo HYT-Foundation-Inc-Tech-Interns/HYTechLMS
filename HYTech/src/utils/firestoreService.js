@@ -82,6 +82,88 @@ export const createUserProfile = async (userId, userData) => {
 };
 
 /**
+ * Persist every record required by a self-registered account in one commit.
+ * This prevents Firebase Auth from being paired with only part of the user's
+ * Firestore profile (for example, a public name without DOB/contact details).
+ */
+export const createRegisteredUserProfile = async (
+  userId,
+  publicProfile = {},
+  privateProfile = {}
+) => {
+  const timestamp = serverTimestamp();
+  const userRef = doc(db, 'users', userId);
+  const privateRef = doc(db, 'users', userId, 'private', 'profile');
+  const lmsRef = doc(db, 'users', userId, 'lmsExperience', 'profile');
+  const batch = writeBatch(db);
+
+  batch.set(
+    userRef,
+    {
+      uid: userId,
+      email: String(publicProfile.email || '').trim().toLowerCase(),
+      displayName: String(publicProfile.displayName || '').trim(),
+      name: String(publicProfile.name || '').trim(),
+      idNumber: String(publicProfile.idNumber || '').trim(),
+      firstName: String(publicProfile.firstName || '').trim(),
+      middleName: String(publicProfile.middleName || '').trim(),
+      lastName: String(publicProfile.lastName || '').trim(),
+      nameExtension: String(publicProfile.nameExtension || '').trim(),
+      profileComplete: true,
+      profile: {
+        firstName: String(publicProfile.firstName || '').trim(),
+        middleName: String(publicProfile.middleName || '').trim(),
+        lastName: String(publicProfile.lastName || '').trim(),
+        nameExtension: String(publicProfile.nameExtension || '').trim(),
+      },
+      role: 'student',
+      status: 'Active',
+      createdBy: 'self-registration',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
+    { merge: true }
+  );
+
+  batch.set(
+    privateRef,
+    {
+      phone: String(privateProfile.phone || '').trim(),
+      birthDate: String(privateProfile.birthDate || '').trim(),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
+    { merge: true }
+  );
+
+  batch.set(
+    lmsRef,
+    {
+      userId,
+      headline: '',
+      about: '',
+      skills: [],
+      experience: [],
+      education: [],
+      certifications: [],
+      achievements: {
+        coursesCompleted: 0,
+        totalHoursLearned: 0,
+        certificatesEarned: 0,
+        streak: 0,
+      },
+      visibility: 'private',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
+    { merge: true }
+  );
+
+  await batch.commit();
+  return true;
+};
+
+/**
  * Get user profile by ID
  */
 export const getUserProfile = async (userId) => {
@@ -416,32 +498,43 @@ export const reconcileSectorStatuses = async () => {
       getSectors({}),
       getCoursesTemplates({}),
     ]);
-    const sectorsWithActive = new Set(
-      templates
-        .filter(isSectorActiveCourse)
-        .map((c) => c.sectorId)
-        .filter(Boolean)
-    );
-    const toDeactivate = sectors.filter(
-      (s) => !sectorsWithActive.has(s.id) && String(s.status || '') !== 'Inactive'
-    );
+    const activeCounts = new Map();
+    const totalCounts = new Map();
+    templates.forEach((course) => {
+      if (!course.sectorId) return;
+      totalCounts.set(course.sectorId, (totalCounts.get(course.sectorId) || 0) + 1);
+      if (isSectorActiveCourse(course)) {
+        activeCounts.set(course.sectorId, (activeCounts.get(course.sectorId) || 0) + 1);
+      }
+    });
+    const statusChanges = sectors.filter((sector) => {
+      const desired = (activeCounts.get(sector.id) || 0) > 0 ? 'Active' : 'Inactive';
+      return String(sector.status || '') !== desired;
+    });
     // Persisting requires admin write access (see firestore.rules). Non-admins
     // (e.g. a trainer opening the create-class flow) still get the derived list
     // below for correct filtering, even though the write is skipped/denied.
-    if (toDeactivate.length) {
+    if (statusChanges.length) {
       try {
         const batch = writeBatch(db);
-        toDeactivate.forEach((s) =>
-          batch.update(doc(db, 'sectors', s.id), { status: 'Inactive', updatedAt: serverTimestamp() })
-        );
+        statusChanges.forEach((sector) => {
+          const status = (activeCounts.get(sector.id) || 0) > 0 ? 'Active' : 'Inactive';
+          batch.update(doc(db, 'sectors', sector.id), { status, updatedAt: serverTimestamp() });
+        });
         await batch.commit();
       } catch (writeErr) {
         console.warn('Could not persist sector status reconciliation:', writeErr?.message);
       }
     }
-    return sectors.map((s) =>
-      sectorsWithActive.has(s.id) ? s : { ...s, status: 'Inactive' }
-    );
+    return sectors.map((sector) => {
+      const activeCourseCount = activeCounts.get(sector.id) || 0;
+      return {
+        ...sector,
+        status: activeCourseCount > 0 ? 'Active' : 'Inactive',
+        activeCourseCount,
+        totalCourseCount: totalCounts.get(sector.id) || 0,
+      };
+    });
   } catch (error) {
     console.error('Error reconciling sector statuses:', error);
     return null;
@@ -587,14 +680,20 @@ export const getCoursesTemplates = async (filters = {}) => {
 export const getCourseByName = async (courseName) => {
   try {
     const classesRef = collection(db, 'classes');
-    const q = query(classesRef, where('name', '==', courseName));
-    const snapshot = await getDocs(q);
-    
-    if (snapshot.docs.length === 0) {
-      return null;
+    // New links use the immutable Firestore id, so renaming a class cannot
+    // break bookmarks. Keep the name lookup as a legacy fallback.
+    const directSnap = String(courseName || '').includes('/')
+      ? null
+      : await getDoc(doc(db, 'classes', courseName));
+    let courseSnap = directSnap;
+
+    if (!directSnap?.exists()) {
+      const q = query(classesRef, where('name', '==', courseName));
+      const snapshot = await getDocs(q);
+      if (snapshot.docs.length === 0) return null;
+      courseSnap = snapshot.docs[0];
     }
-    
-    const courseSnap = snapshot.docs[0];
+
     const courseId = courseSnap.id;
     
     // Fetch course materials if needed
@@ -690,6 +789,7 @@ export const createCourseTemplate = async (courseData, { sectorId = null } = {})
       ...courseData,
       sectorId: sectorId || null,
       status: courseData.status || 'Active',
+      available: courseData.available ?? String(courseData.status || 'Active').toLowerCase() === 'active',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -718,6 +818,18 @@ export const createCourseTemplate = async (courseData, { sectorId = null } = {})
 export const createCourse = async (courseData, { sectorId = null, trainerId = null } = {}) => {
   try {
     const classesRef = collection(db, 'classes');
+    const normalizedName = String(courseData.name || '').trim().replace(/\s+/g, ' ');
+    if (normalizedName.length < 3 || normalizedName.length > 100) {
+      throw new Error('Class name must be between 3 and 100 characters.');
+    }
+    const nameKey = normalizedName.toLowerCase();
+    const [duplicateSnapshot, legacyDuplicateSnapshot] = await Promise.all([
+      getDocs(query(classesRef, where('nameKey', '==', nameKey))),
+      getDocs(query(classesRef, where('name', '==', normalizedName))),
+    ]);
+    if (!duplicateSnapshot.empty || !legacyDuplicateSnapshot.empty) {
+      throw new Error('A class with this name already exists. Choose a more specific class name.');
+    }
 
     // `subjects` drives the class's modules but is not itself a class field —
     // keep it off the class doc.
@@ -725,6 +837,8 @@ export const createCourse = async (courseData, { sectorId = null, trainerId = nu
 
     const newCourse = {
       ...classFields,
+      name: normalizedName,
+      nameKey,
       sectorId: sectorId || null,
       trainerId: trainerId || null,
       // Additional trainers who share edit rights (the lead is `trainerId`).
@@ -948,9 +1062,73 @@ export const updateCourseTemplate = async (courseId, updates) => {
 export const updateCourse = async (courseId, updates) => {
   try {
     const courseRef = doc(db, 'classes', courseId);
-    
+    const nextUpdates = { ...updates };
+
+    if (Object.prototype.hasOwnProperty.call(nextUpdates, 'name')) {
+      const currentClassSnapshot = await getDoc(courseRef);
+      if (!currentClassSnapshot.exists()) {
+        throw new Error('Class not found.');
+      }
+      const previousName = String(currentClassSnapshot.data()?.name || '').trim();
+      const normalizedName = String(nextUpdates.name || '').trim().replace(/\s+/g, ' ');
+      if (normalizedName.length < 3 || normalizedName.length > 100) {
+        throw new Error('Class name must be between 3 and 100 characters.');
+      }
+
+      const nameKey = normalizedName.toLowerCase();
+      const classesRef = collection(db, 'classes');
+      const [duplicateSnapshot, legacyDuplicateSnapshot] = await Promise.all([
+        getDocs(query(classesRef, where('nameKey', '==', nameKey))),
+        getDocs(query(classesRef, where('name', '==', normalizedName))),
+      ]);
+      const duplicate = [...duplicateSnapshot.docs, ...legacyDuplicateSnapshot.docs]
+        .find((classDoc) => classDoc.id !== courseId);
+      if (duplicate) {
+        throw new Error('A class with this name already exists. Choose a more specific class name.');
+      }
+
+      nextUpdates.name = normalizedName;
+      nextUpdates.nameKey = nameKey;
+
+      // Enrollment cards intentionally keep a display copy of the class name.
+      // Update those copies so trainees see the rename immediately. Routes use
+      // classId, so even a later batch failure cannot break navigation.
+      const enrollmentSnapshot = await getDocs(
+        query(collection(db, 'enrollments'), where('classId', '==', courseId))
+      );
+      const enrollmentDocs = enrollmentSnapshot.docs;
+      const firstBatch = writeBatch(db);
+      firstBatch.set(courseRef, {
+        ...nextUpdates,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      enrollmentDocs.slice(0, 499).forEach((enrollmentDoc) => {
+        firstBatch.update(enrollmentDoc.ref, {
+          className: normalizedName,
+          updatedAt: serverTimestamp(),
+        });
+      });
+      await firstBatch.commit();
+
+      for (let index = 499; index < enrollmentDocs.length; index += 500) {
+        const batch = writeBatch(db);
+        enrollmentDocs.slice(index, index + 500).forEach((enrollmentDoc) => {
+          batch.update(enrollmentDoc.ref, {
+            className: normalizedName,
+            updatedAt: serverTimestamp(),
+          });
+        });
+        await batch.commit();
+      }
+      logActivity(auth?.currentUser?.uid || 'system', 'rename_class', 'classes', courseId, {
+        previousName,
+        className: normalizedName,
+      });
+      return true;
+    }
+
     await setDoc(courseRef, {
-      ...updates,
+      ...nextUpdates,
       updatedAt: serverTimestamp(),
     }, { merge: true });
     

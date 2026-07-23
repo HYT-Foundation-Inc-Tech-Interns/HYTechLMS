@@ -94,7 +94,7 @@ const StudentEnroll = () => {
     <div className="p-4">
       <div className="space-y-6 mb-8">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Enroll in a Course</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2 sm:text-3xl">Enroll in a Course</h2>
           <p className="text-gray-600">Browse available courses and apply. Your trainor will review your request.</p>
         </div>
 

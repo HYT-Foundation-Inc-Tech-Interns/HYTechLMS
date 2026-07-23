@@ -67,7 +67,7 @@ const DashboardLayout = () => {
       return { title: 'Sectors', subtitle: 'Training Regulations' };
     }
     if (path === '/trainer/archived') {
-      return { title: 'Archived Courses', subtitle: 'Your earned certifications and progress toward new ones.' };
+      return { title: 'Archived Classes', subtitle: 'Manage classes you have archived.' };
     }
     if (path === '/trainer/settings') {
       return { title: 'Settings', subtitle: 'Configure your Learning Management System.' };
@@ -93,7 +93,7 @@ const DashboardLayout = () => {
   const pageInfo = getPageInfo();
 
   return (
-    <div className="h-screen w-screen max-w-[1920px] max-h-[1080px] mx-auto bg-gray-50 flex flex-col transition-colors duration-200">
+    <div className="h-screen h-[100dvh] w-full max-w-[1920px] mx-auto bg-gray-50 flex flex-col transition-colors duration-200">
       {/* Fixed Navbar - Full Width */}
       <Navbar title={pageInfo.title} subtitle={pageInfo.subtitle} />
       {/* Main Area - Sidebar + Content */}
@@ -101,7 +101,7 @@ const DashboardLayout = () => {
         {/* Fixed Sidebar */}
         <Sidebar />
         {/* Scrollable Content */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50">
+        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden bg-gray-50">
           <div className="animate-fade-in h-full">
             <Outlet />
           </div>

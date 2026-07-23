@@ -237,10 +237,10 @@ const StudentCalendar = () => {
   };
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Calendar */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 p-6">
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 p-3 sm:p-6">
           {/* Calendar Header */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-gray-900">
@@ -271,7 +271,7 @@ const StudentCalendar = () => {
           {/* Day Names */}
           <div className="grid grid-cols-7 mb-2">
             {dayNames.map(day => (
-              <div key={day} className="text-center text-sm font-semibold text-gray-500 py-2">
+              <div key={day} className="text-center text-xs font-semibold text-gray-500 py-2 sm:text-sm">
                 {day}
               </div>
             ))}
@@ -281,7 +281,7 @@ const StudentCalendar = () => {
           <div className="grid grid-cols-7 gap-1">
             {/* Empty cells for days before the first day of month */}
             {Array.from({ length: firstDayOfMonth }, (_, i) => (
-              <div key={`empty-${i}`} className="h-24" />
+              <div key={`empty-${i}`} className="h-12 sm:h-24" />
             ))}
 
             {/* Days of the month */}
@@ -293,7 +293,7 @@ const StudentCalendar = () => {
                 <div 
                   key={day}
                   onClick={() => setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day))}
-                  className={`h-24 p-2 border border-gray-100 rounded-lg cursor-pointer transition-all hover:bg-gray-50:bg-gray-700 ${
+                  className={`h-12 p-1 border border-gray-100 rounded-md cursor-pointer transition-all hover:bg-gray-50:bg-gray-700 sm:h-24 sm:rounded-lg sm:p-2 ${
                     isToday(day) ? 'bg-blue-50 border-blue-200' : ''
                   } ${
                     selectedDate.getDate() === day && 
@@ -302,7 +302,7 @@ const StudentCalendar = () => {
                       : ''
                   }`}
                 >
-                  <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-medium ${
+                  <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium sm:h-7 sm:w-7 sm:text-sm ${
                     isToday(day) 
                       ? 'bg-[#0D4291] text-white' 
                       : 'text-gray-700'
@@ -311,7 +311,7 @@ const StudentCalendar = () => {
                   </span>
                   
                   {/* Event Indicators */}
-                  <div className="mt-1 space-y-1">
+                  <div className="mt-1 hidden space-y-1 sm:block">
                     {dayEvents.slice(0, 2).map(event => (
                       <div 
                         key={event.id}
@@ -326,6 +326,13 @@ const StudentCalendar = () => {
                       </div>
                     )}
                   </div>
+                  {dayEvents.length > 0 && (
+                    <div className="mt-0.5 flex justify-center gap-0.5 sm:hidden">
+                      {dayEvents.slice(0, 3).map((event) => (
+                        <span key={event.id} className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}

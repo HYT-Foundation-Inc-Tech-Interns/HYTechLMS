@@ -112,7 +112,7 @@ const StudentTasks = () => {
   }, [pending]);
 
   const openTask = (task) => {
-    navigate(`/student/${encodeURIComponent(task.className)}`);
+    navigate(`/student/${encodeURIComponent(task.classId || task.className)}`);
   };
 
   const formatDue = (date) =>
@@ -158,7 +158,7 @@ const StudentTasks = () => {
   }
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       {/* Due This Week */}
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
         <div className="p-5 border-b border-gray-100 flex items-center gap-2">

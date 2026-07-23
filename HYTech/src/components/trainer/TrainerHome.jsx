@@ -72,6 +72,9 @@ const TrainerHome = () => {
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
+  const [editingClass, setEditingClass] = useState(null);
+  const [editClassName, setEditClassName] = useState('');
+  const [isUpdatingClass, setIsUpdatingClass] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
 
@@ -207,6 +210,41 @@ const TrainerHome = () => {
     } catch (error) {
       console.error('Error archiving class:', error);
       addToast('Failed to archive class', 'error');
+    }
+  };
+
+  const handleOpenEditClass = (course) => {
+    setEditingClass(course);
+    setEditClassName(course?.name || '');
+    setActiveMenu(null);
+  };
+
+  const handleRenameClass = async (event) => {
+    event.preventDefault();
+    if (!editingClass) return;
+    const normalizedName = editClassName.trim().replace(/\s+/g, ' ');
+    if (normalizedName.length < 3 || normalizedName.length > 100) {
+      addToast('Class name must be between 3 and 100 characters.', 'error');
+      return;
+    }
+    if (normalizedName === editingClass.name) {
+      setEditingClass(null);
+      return;
+    }
+
+    try {
+      setIsUpdatingClass(true);
+      await updateCourse(editingClass.id, { name: normalizedName });
+      setCourses((prev) => prev.map((course) => (
+        course.id === editingClass.id ? { ...course, name: normalizedName } : course
+      )));
+      setEditingClass(null);
+      setEditClassName('');
+      addToast('Class name updated.', 'success');
+    } catch (error) {
+      addToast(error?.message || 'Unable to update the class name.', 'error');
+    } finally {
+      setIsUpdatingClass(false);
     }
   };
 
@@ -397,9 +435,11 @@ const TrainerHome = () => {
                     type="text"
                     value={newClassForm.name}
                     onChange={(e) => setNewClassForm({ ...newClassForm, name: e.target.value })}
+                    maxLength={100}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Enter class name"
                   />
+                  <p className="mt-1 text-xs text-gray-500">Use a distinct name for this class or batch. You can change it later.</p>
                 </div>
                 <div className="pt-2 border-t border-gray-100">
                   <SubjectListEditor
@@ -536,7 +576,7 @@ const TrainerHome = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header Section */}
-      <div className="px-6 py-8">
+      <div className="px-4 py-6 sm:px-6 sm:py-8">
         {/* Welcome Message */}
         <div className="mb-2">
           <h1 className="text-2xl font-bold text-gray-800">Welcome, {user?.displayName}!</h1>
@@ -544,17 +584,17 @@ const TrainerHome = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
         {/* Your Classes Section */}
         <div className="mb-12">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col items-stretch gap-4 mb-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Your Classes</h2>
               <p className="text-gray-600 mt-1">Active classes you are teaching</p>
             </div>
             <button
               onClick={handleOpenCreateClass}
-              className="px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
+              className="flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-md hover:shadow-lg sm:w-auto"
             >
               <Plus className="w-5 h-5" />
               Create Class
@@ -562,7 +602,7 @@ const TrainerHome = () => {
           </div>
 
           {courses.length === 0 ? (
-            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+            <div className="bg-white rounded-lg border border-gray-200 p-6 text-center sm:p-12">
               <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-600 text-lg">No classes yet. Create your first class to get started!</p>
             </div>
@@ -574,13 +614,27 @@ const TrainerHome = () => {
                 return (
                   <div
                     key={course.id}
-                    onClick={() => navigate(`/trainer/${encodeURIComponent(course.name)}`)}
-                    className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer border border-gray-200 flex flex-col h-full"
+                    onClick={() => navigate(`/trainer/${course.id}`)}
+                    className="relative bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer border border-gray-200 flex flex-col h-full"
                   >
+                    {course.trainerId === user?.uid && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleOpenEditClass(course);
+                        }}
+                        className="absolute right-3 top-3 z-10 rounded-lg bg-white/95 p-2 text-gray-600 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                        aria-label={`Edit ${course.name}`}
+                        title="Edit class"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                    )}
                     {/* Class Info */}
-                    <div className="p-6 space-y-4 flex flex-col flex-1">
+                    <div className="p-4 space-y-4 flex flex-col flex-1 sm:p-6">
                       {/* Title */}
-                      <div className="min-h-14">
+                      <div className="min-h-14 pr-9">
                         <h3 className="font-bold text-navy-900 text-lg line-clamp-2 leading-snug">{course.name}</h3>
                         {course.courseName && (
                           <p className="text-sm text-gray-600 mt-1 line-clamp-1">{course.courseName}</p>
@@ -631,7 +685,7 @@ const TrainerHome = () => {
             <select
               value={selectedFilterSector || ''}
               onChange={(e) => setSelectedFilterSector(e.target.value)}
-              className="px-4 py-2 rounded-lg font-medium border border-gray-300 bg-white text-gray-900 hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
+              className="w-full px-4 py-2 rounded-lg font-medium border border-gray-300 bg-white text-gray-900 hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer sm:w-auto"
             >
               <option value="">All Courses</option>
               {sectors.map((sector) => (
@@ -667,7 +721,7 @@ const TrainerHome = () => {
                   </div>
 
                   {/* Content */}
-                  <div className="p-6 space-y-4">
+                  <div className="p-4 space-y-4 sm:p-6">
                     <div>
                       <h3 className="font-bold text-lg line-clamp-1 mb-1">{course.name}</h3>
                       <p className="text-sm text-gray-500 line-clamp-1">{course.sectorName}</p>
@@ -695,7 +749,7 @@ const TrainerHome = () => {
 
           {availableCourses.filter((course) => !selectedFilterSector || course.sectorId === selectedFilterSector).length ===
             0 && (
-            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+            <div className="bg-white rounded-lg border border-gray-200 p-6 text-center sm:p-12">
               <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-600 text-lg">No courses available in this sector</p>
             </div>
@@ -705,8 +759,8 @@ const TrainerHome = () => {
 
         {/* Archive Modal */}
         {showArchiveModal && selectedCourse && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg max-w-sm w-full mx-4 p-6">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-sm w-full p-4 sm:p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Archive Class?</h2>
               <p className="text-gray-600 mb-6">
                 Are you sure you want to archive "{selectedCourse.name}"? Existing enrollments will not be affected.
@@ -731,15 +785,72 @@ const TrainerHome = () => {
           </div>
         )}
 
+        {editingClass && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <form
+              onSubmit={handleRenameClass}
+              className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6"
+            >
+              <div className="mb-5 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Edit Class</h2>
+                  <p className="mt-1 text-sm text-gray-500">Rename this class without changing its program or class code.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingClass(null)}
+                  className="shrink-0 rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+                  aria-label="Close edit class"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <label htmlFor="edit-class-name" className="mb-2 block text-sm font-semibold text-gray-800">
+                Class Name
+              </label>
+              <input
+                id="edit-class-name"
+                type="text"
+                value={editClassName}
+                onChange={(event) => setEditClassName(event.target.value)}
+                maxLength={100}
+                autoFocus
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                placeholder="Enter class name"
+              />
+              <p className="mt-2 text-xs text-gray-500">{editClassName.trim().length}/100 characters</p>
+
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setEditingClass(null)}
+                  disabled={isUpdatingClass}
+                  className="rounded-xl px-5 py-2.5 font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingClass || !editClassName.trim()}
+                  className="rounded-xl bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isUpdatingClass ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
         {/* Applications Review Modal */}
         {showApplicationModal && selectedCourse && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg max-w-2xl w-full mx-4 p-6">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4">
                 Pending Applications - {selectedCourse.name}
               </h2>
 
-              <div className="space-y-4 max-h-96 overflow-y-auto mb-6">
+              <div className="space-y-4 max-h-[60dvh] overflow-y-auto mb-6">
                 {applications
                   .filter(a => a.courseId === selectedCourse.id)
                   .map((app) => (
@@ -790,8 +901,8 @@ const TrainerHome = () => {
 
         {/* Rejection Modal */}
         {selectedApp && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg max-w-sm w-full mx-4 p-6">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-sm w-full p-4 sm:p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Reject Application</h2>
               
               <textarea
