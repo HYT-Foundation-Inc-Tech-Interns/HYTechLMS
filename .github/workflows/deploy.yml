@@ -1,18 +1,23 @@
-name: Deploy to Firebase Hosting
+name: Deploy Firebase
 
-# Any push to main (by anyone with push access) auto-builds and deploys.
+# Every push to main deploys all resources declared in HYTech/firebase.json:
+# Hosting, Firestore rules/indexes, Storage rules, and Cloud Functions.
 on:
   push:
     branches: [main]
-  # Lets you also trigger it manually from the Actions tab.
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
-        working-directory: HYTech   # the app lives in the HYTech/ subfolder
+        working-directory: HYTech
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -20,18 +25,21 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-          cache-dependency-path: HYTech/package-lock.json
+          cache-dependency-path: |
+            HYTech/package-lock.json
+            HYTech/functions/package-lock.json
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build
-        # These VITE_FIREBASE_* values are PUBLIC Firebase identifiers (they
-        # already ship inside the deployed JS bundle), so it is safe to keep
-        # them here. The only real secret is FIREBASE_TOKEN, set as a GitHub
-        # Actions secret. Vite bakes these into dist/ at build time.
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions
+
+      - name: Build frontend
+        # Firebase web identifiers and the reCAPTCHA site key are public values
+        # embedded in the browser bundle. Keep FIREBASE_TOKEN in GitHub Secrets.
         env:
           VITE_FIREBASE_API_KEY: AIzaSyANfQhkxPSlkoWT5s1IayCZrK5v8GTm6-M
           VITE_FIREBASE_AUTH_DOMAIN: hyt-global-institute-lms.firebaseapp.com
@@ -39,9 +47,22 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: hyt-global-institute-lms.firebasestorage.app
           VITE_FIREBASE_MESSAGING_SENDER_ID: "671829419730"
           VITE_FIREBASE_APP_ID: "1:671829419730:web:705e9bcc9e8c32df562f0b"
+          VITE_RECAPTCHA_SITE_KEY: ${{ vars.VITE_RECAPTCHA_SITE_KEY }}
         run: npm run build
 
-      - name: Deploy to Firebase Hosting
+      - name: Validate Firebase deployment
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-        run: npx firebase-tools@latest deploy --only hosting --project hyt-global-institute-lms --non-interactive
+        run: >-
+          npx --yes firebase-tools@15.24.0 deploy
+          --project hyt-global-institute-lms
+          --dry-run
+          --non-interactive
+
+      - name: Deploy all configured Firebase resources
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: >-
+          npx --yes firebase-tools@15.24.0 deploy
+          --project hyt-global-institute-lms
+          --non-interactive
