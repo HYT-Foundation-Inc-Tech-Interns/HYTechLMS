@@ -113,7 +113,7 @@ const describeCorrect = (q) => {
   return opts[q.correctAnswer] ?? '';
 };
 
-const StudentCourse = () => {
+const StudentCourse = ({ previewMode = false }) => {
   const { classname } = useParams();
   const decodedClassname = decodeURIComponent(classname || '');
   const [courseId, setCourseId] = useState(null);
@@ -209,23 +209,24 @@ const StudentCourse = () => {
           setCourseId(courseData.id);
           setCourseDataLocal(courseData);
           
-          // Load student enrollment data
-          const enrollments = await getStudentEnrollments(user.uid);
-          const currentEnrollment = enrollments.find(e => e.classId === courseData.id);
-          if (currentEnrollment) {
-            setEnrollmentData(currentEnrollment);
+          if (!previewMode) {
+            // Load student-specific data only in the real trainee experience.
+            const enrollments = await getStudentEnrollments(user.uid);
+            const currentEnrollment = enrollments.find(e => e.classId === courseData.id);
+            if (currentEnrollment) {
+              setEnrollmentData(currentEnrollment);
+            }
+
+            const progress = await getStudentProgress(user.uid, courseData.id);
+            setStudentProgress(progress);
           }
-          
-          // Load student progress
-          const progress = await getStudentProgress(user.uid, courseData.id);
-          setStudentProgress(progress);
         }
       } catch (error) {
         console.error('Error resolving course ID:', error);
       }
     };
     resolveCourseId();
-  }, [decodedClassname, user?.uid]);
+  }, [decodedClassname, previewMode, user?.uid]);
 
   // Fetch student's avatar for use in UI
   useEffect(() => {
@@ -377,6 +378,7 @@ const StudentCourse = () => {
 
   // Check attempted assessments and load full attempt history from Firestore
   useEffect(() => {
+    if (previewMode) return;
     const loadAssessmentAttempts = async () => {
       const assessableItems = [
         ...(firestoreAssessments || []),
@@ -442,7 +444,7 @@ const StudentCourse = () => {
     };
     
     loadAssessmentAttempts();
-  }, [courseId, user?.uid, firestoreAssessments, firestoreAssignments]);
+  }, [courseId, user?.uid, firestoreAssessments, firestoreAssignments, previewMode]);
 
   // Resolve each post author's *current* avatar so changing your photo updates
   // the icon on existing posts (not just the profile spotlight).
@@ -583,6 +585,10 @@ const StudentCourse = () => {
 
   // Handle edit announcement
   const handleEditAnnouncement = async (announcementId, newMessage) => {
+    if (previewMode) {
+      addToast('Trainee preview is read-only.', 'info');
+      return;
+    }
     if (!newMessage.trim()) {
       addToast('Announcement cannot be empty', 'error');
       return;
@@ -604,6 +610,10 @@ const StudentCourse = () => {
 
   // Handle delete announcement
   const handleDeleteAnnouncement = async (announcementId) => {
+    if (previewMode) {
+      addToast('Trainee preview is read-only.', 'info');
+      return;
+    }
     if (window.confirm('Are you sure you want to delete this announcement?')) {
       try {
         await deleteAnnouncement(courseId, announcementId);
@@ -617,6 +627,7 @@ const StudentCourse = () => {
 
   // Check if current user is the author (can edit and delete own posts)
   const isAuthor = (announcement) => {
+    if (previewMode) return false;
     // If announced has no authorId but user is posting as student, still allow edit/delete
     // This handles legacy announcements that may not have authorId set
     if (!announcement.authorId) {
@@ -628,7 +639,7 @@ const StudentCourse = () => {
 
   // Check if can delete (author can always delete own, others can't delete)
   const canDelete = (announcement) => {
-    return user?.uid === announcement.authorId;
+    return !previewMode && user?.uid === announcement.authorId;
   };
 
   // Format absolute time
@@ -810,6 +821,10 @@ const StudentCourse = () => {
 
   // Handle adding a comment
   const handleAddComment = async () => {
+    if (previewMode) {
+      addToast('Trainee preview is read-only.', 'info');
+      return;
+    }
     if (!newComment.trim() || !selectedAnnouncementForComments) {
       addToast('Comment cannot be empty', 'error');
       return;
@@ -839,6 +854,10 @@ const StudentCourse = () => {
 
   // Handle posting announcement as student
   const handlePostAnnouncement = async () => {
+    if (previewMode) {
+      addToast('Trainee preview is read-only.', 'info');
+      return;
+    }
     if (!announcementText.trim()) {
       addToast('Announcement cannot be empty', 'error');
       return;
@@ -1017,7 +1036,7 @@ const StudentCourse = () => {
   // Previously nothing wrote progress, so it was stuck at 0% even after finishing
   // every assessment.
   useEffect(() => {
-    if (!enrollmentData?.id || !courseId || !user?.uid) return;
+    if (previewMode || !enrollmentData?.id || !courseId || !user?.uid) return;
     const assessmentIds = assessmentItems.map((a) => String(a.id));
     const taskIds = submissionTasks.map((t) => String(t.id));
     const total = assessmentIds.length + taskIds.length;
@@ -1036,7 +1055,7 @@ const StudentCourse = () => {
     }).catch(() => {});
     updateStudentProgress(user.uid, courseId, { modulesCompleted: done, progressPercentage: pct }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attemptedAssessmentIds, submittedTaskIds, assessmentItems.length, submissionTasks.length, enrollmentData?.id, courseId, user?.uid]);
+  }, [attemptedAssessmentIds, submittedTaskIds, assessmentItems.length, submissionTasks.length, enrollmentData?.id, courseId, user?.uid, previewMode]);
 
   // An assessment/task is open once its "available from" date has passed
   // (or if none is set). Trainees can't start it before then.
@@ -1050,7 +1069,7 @@ const StudentCourse = () => {
   // Timer effect
   useEffect(() => {
     let interval;
-    if (quizStarted && timeRemaining > 0 && !quizSubmitted) {
+    if (!previewMode && quizStarted && timeRemaining > 0 && !quizSubmitted) {
       interval = setInterval(() => {
         setTimeRemaining(prev => {
           if (prev <= 1) {
@@ -1062,7 +1081,7 @@ const StudentCourse = () => {
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [quizStarted, timeRemaining, quizSubmitted]);
+  }, [quizStarted, timeRemaining, quizSubmitted, previewMode]);
 
   // Fullscreen handling
   const enterFullscreen = () => {
@@ -1091,18 +1110,19 @@ const StudentCourse = () => {
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      if (!document.fullscreenElement && quizStarted && !quizSubmitted) {
+      if (!previewMode && !document.fullscreenElement && quizStarted && !quizSubmitted) {
         // User tried to exit fullscreen during quiz - re-enter
         enterFullscreen();
       }
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, [quizStarted, quizSubmitted]);
+  }, [quizStarted, quizSubmitted, previewMode]);
 
   // Prevent tab switching
   useEffect(() => {
     const handleVisibilityChange = () => {
+      if (previewMode) return;
       if (document.hidden && quizStarted && !quizSubmitted) {
         setShowWarningModal(true);
         // Record the alt-tab away for the trainer's class Logs tab.
@@ -1131,7 +1151,7 @@ const StudentCourse = () => {
     };
 
     const handleBeforeUnload = (e) => {
-      if (quizStarted && !quizSubmitted) {
+      if (!previewMode && quizStarted && !quizSubmitted) {
         e.preventDefault();
         e.returnValue = '';
         return '';
@@ -1145,11 +1165,11 @@ const StudentCourse = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [quizStarted, quizSubmitted]);
+  }, [quizStarted, quizSubmitted, previewMode]);
 
   // Track when a trainee opens and closes this class (trainer Logs tab).
   useEffect(() => {
-    if (!courseId || !user?.uid) return undefined;
+    if (previewMode || !courseId || !user?.uid) return undefined;
     const actor = {
       studentId: user.uid,
       studentName: user.displayName || user.name || user.email || 'Trainee',
@@ -1162,7 +1182,7 @@ const StudentCourse = () => {
       logClassActivity(courseId, { ...actor, type: 'class_close' });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseId, user?.uid]);
+  }, [courseId, user?.uid, previewMode]);
 
   const handleStartQuiz = async (quiz) => {
     if (!isAssessmentOpen(quiz)) {
@@ -1171,7 +1191,7 @@ const StudentCourse = () => {
     }
     // Check if student has already attempted this assessment
     try {
-      if (courseId && user?.uid) {
+      if (!previewMode && courseId && user?.uid) {
         const hasAttempted = await hasStudentAttempted(courseId, quiz.id, user.uid);
         if (hasAttempted) {
           setStudentHasAttempted(true);
@@ -1195,8 +1215,8 @@ const StudentCourse = () => {
 
   const handleBeginQuiz = () => {
     setQuizStarted(true);
-    setTimeRemaining(Number(selectedQuiz.duration || 0) * 60);
-    enterFullscreen();
+    setTimeRemaining(previewMode ? 0 : Number(selectedQuiz.duration || 0) * 60);
+    if (!previewMode) enterFullscreen();
   };
 
   // Route an assessment to the right flow. Submission-type tasks open the
@@ -1220,7 +1240,7 @@ const StudentCourse = () => {
     setSubmissionFiles([]);
     setMySubmission(null);
     setShowSubmissionModal(true);
-    if (courseId && user?.uid) {
+    if (!previewMode && courseId && user?.uid) {
       const existing = await getMySubmission(courseId, item.id, user.uid);
       if (existing) {
         setMySubmission(existing);
@@ -1253,6 +1273,10 @@ const StudentCourse = () => {
   };
 
   const handleSubmitWork = async () => {
+    if (previewMode) {
+      addToast('Trainee preview is read-only. No work was submitted.', 'info');
+      return;
+    }
     if (!submissionItem || !courseId || !user?.uid) return;
 
     const hasText = submitTextAllowed && submissionText.trim().length > 0;
@@ -1516,6 +1540,10 @@ const StudentCourse = () => {
   };
 
   const handleSubmitQuiz = async () => {
+    if (previewMode) {
+      addToast('Trainee preview is read-only. No attempt was submitted.', 'info');
+      return;
+    }
     if (!selectedQuiz || !courseId || !user?.uid) return;
 
     try {
@@ -1578,6 +1606,13 @@ const StudentCourse = () => {
   };
 
   const handleCloseQuiz = () => {
+    if (previewMode) {
+      exitFullscreen();
+      setShowQuizModal(false);
+      setQuizStarted(false);
+      setQuizSubmitted(false);
+      return;
+    }
     if (quizStarted && !quizSubmitted) {
       if (window.confirm('Are you sure you want to exit? Your progress will be lost.')) {
         exitFullscreen();
@@ -1847,9 +1882,10 @@ const StudentCourse = () => {
             <div className="relative z-10 flex items-center justify-between">
               <div className="flex-1">
                 <p className="text-white/70 text-sm mb-1">{currentDate}</p>
-                <h1 className="text-2xl font-bold mb-2">Hello!</h1>
+                <h1 className="text-2xl font-bold mb-2">{previewMode ? 'Trainee experience' : 'Hello!'}</h1>
                 <p className="text-white/80 mb-6">
-                  You're currently enrolled in <span className="font-semibold text-white">{displayCourseData.name}</span>.
+                  {previewMode ? 'Previewing' : "You're currently enrolled in"}{' '}
+                  <span className="font-semibold text-white">{displayCourseData.name}</span>.
                 </p>
 
                 <div className="flex items-center gap-3">
@@ -1917,7 +1953,8 @@ const StudentCourse = () => {
               </div>
             </div>
 
-            {/* Inline Announcement Composer - Trainees can post too */}
+            {/* Inline Announcement Composer - hidden in the admin's read-only preview. */}
+            {!previewMode && (
             <div className="p-5 border-b border-gray-100 bg-gray-50/50">
               <div className="flex gap-3">
                 {studentAvatar ? (
@@ -1965,6 +2002,7 @@ const StudentCourse = () => {
                 </div>
               </div>
             </div>
+            )}
 
             <div className="divide-y divide-gray-100 max-h-[560px] overflow-y-auto">
               {loadingFirestoreData ? (
@@ -3063,6 +3101,12 @@ const StudentCourse = () => {
                 {submissionItem.description || 'Submit your work for this task below.'}
               </p>
 
+              {previewMode && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                  Preview only: submission fields are disabled and nothing can be submitted.
+                </div>
+              )}
+
               {/* Graded result */}
               {mySubmission?.status === 'graded' && (
                 <div className="rounded-xl border border-green-200 bg-green-50 p-4">
@@ -3109,8 +3153,9 @@ const StudentCourse = () => {
                     rows={4}
                     value={submissionText}
                     onChange={(e) => setSubmissionText(e.target.value)}
+                    disabled={previewMode}
                     placeholder="Type your answer or notes here..."
-                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:text-gray-500"
                   />
                 </div>
               )}
@@ -3122,8 +3167,9 @@ const StudentCourse = () => {
                     type="url"
                     value={submissionLink}
                     onChange={(e) => setSubmissionLink(e.target.value)}
+                    disabled={previewMode}
                     placeholder="https://…"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
                   />
                   {mySubmission?.link && (
                     <p className="text-xs text-gray-500 mt-1 break-all">Previously submitted: {mySubmission.link}</p>
@@ -3141,6 +3187,7 @@ const StudentCourse = () => {
                     multiple
                     accept={submitFileAccept}
                     onChange={(e) => setSubmissionFiles(Array.from(e.target.files || []))}
+                    disabled={previewMode}
                     className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                   />
                   {submissionFiles.length > 0 && (
@@ -3164,11 +3211,11 @@ const StudentCourse = () => {
               </button>
               <button
                 onClick={handleSubmitWork}
-                disabled={submittingWork}
+                disabled={previewMode || submittingWork}
                 className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <FileText className="w-4 h-4" />
-                {submittingWork ? 'Submitting...' : mySubmission ? 'Resubmit' : 'Submit'}
+                {previewMode ? 'Submission Disabled' : submittingWork ? 'Submitting...' : mySubmission ? 'Resubmit' : 'Submit'}
               </button>
             </div>
           </div>
@@ -3240,15 +3287,19 @@ const StudentCourse = () => {
                         <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
                         <span>Total points: <strong>{selectedQuiz.totalPoints}</strong></span>
                       </li>
+                      {!previewMode && (
                       <li className="flex items-start gap-2">
                         <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                         <span>The quiz will open in <strong>fullscreen mode</strong></span>
                       </li>
+                      )}
+                      {!previewMode && (
                       <li className="flex items-start gap-2">
                         <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                         <span>Do not leave or switch tabs during the quiz</span>
                       </li>
-                      {selectedQuiz.duration > 0 && (
+                      )}
+                      {!previewMode && selectedQuiz.duration > 0 && (
                         <li className="flex items-start gap-2">
                           <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                           <span>Quiz will auto-submit when time expires</span>
@@ -3269,7 +3320,7 @@ const StudentCourse = () => {
                       className="flex w-full items-center justify-center gap-2 px-8 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition-colors sm:w-auto"
                     >
                       <Play className="w-5 h-5" />
-                      Start Quiz
+                      {previewMode ? 'Preview Questions' : 'Start Quiz'}
                     </button>
                   </div>
                 </div>
@@ -3352,11 +3403,11 @@ const StudentCourse = () => {
                         
                         {currentQuestion === selectedQuiz.questions.length - 1 ? (
                           <button
-                            onClick={handleSubmitQuiz}
+                            onClick={previewMode ? handleCloseQuiz : handleSubmitQuiz}
                             className="px-6 py-2.5 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center gap-2"
                           >
                             <CheckCircle className="w-5 h-5" />
-                            Submit Quiz
+                            {previewMode ? 'Finish Preview' : 'Submit Quiz'}
                           </button>
                         ) : (
                           <button
@@ -3560,6 +3611,7 @@ const StudentCourse = () => {
             </div>
 
             {/* Comment Input */}
+            {!previewMode && (
             <div className="border-t border-gray-100 p-6 bg-gray-50">
               <div className="flex gap-3">
                 <textarea
@@ -3578,6 +3630,7 @@ const StudentCourse = () => {
                 </button>
               </div>
             </div>
+            )}
           </div>
         </div>
       )}
@@ -3667,7 +3720,7 @@ const StudentCourse = () => {
                         <div className="flex-1">
                           <div className="flex items-start justify-between">
                             <p className="font-semibold text-gray-900 text-sm">{comment.author}</p>
-                            {user?.uid === comment.authorId && (
+                            {!previewMode && user?.uid === comment.authorId && (
                               <button
                                 onClick={async () => {
                                   try {
@@ -3698,6 +3751,7 @@ const StudentCourse = () => {
                 </div>
 
                 {/* Comment Input */}
+                {!previewMode && (
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -3773,6 +3827,7 @@ const StudentCourse = () => {
                     <Send className="w-4 h-4" />
                   </button>
                 </div>
+                )}
               </div>
             </div>
           </div>

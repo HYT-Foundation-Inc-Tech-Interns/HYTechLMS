@@ -20,6 +20,9 @@ const AdminDashboardLayout = () => {
     if (path === '/admin/sectors') {
       return { title: 'Sectors', subtitle: 'Training Regulations' };
     }
+    if (path.startsWith('/admin/classes/')) {
+      return { title: 'Class Preview', subtitle: 'View the class from a trainee perspective' };
+    }
     if (path === '/admin/classes') {
       return { title: 'Classes', subtitle: 'Manage course templates and active classes' };
     }

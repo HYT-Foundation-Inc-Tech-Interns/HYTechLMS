@@ -59,6 +59,19 @@ jobs:
           --dry-run
           --non-interactive
 
+      # Function builds leave container images in Artifact Registry. Configure
+      # this policy explicitly so the deploy never stops for an interactive
+      # cleanup prompt and old images do not accumulate storage charges.
+      - name: Configure Functions artifact cleanup
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: >-
+          npx --yes firebase-tools@15.24.0 functions:artifacts:setpolicy
+          --project hyt-global-institute-lms
+          --location asia-southeast1
+          --days 1
+          --force
+
       - name: Deploy all configured Firebase resources
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}

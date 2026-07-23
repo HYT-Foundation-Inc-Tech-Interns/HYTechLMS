@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Search,
   ChevronDown,
@@ -56,12 +57,22 @@ const LEVEL_OPTIONS = ['NC I', 'NC II', 'NC III', 'NC IV'];
 const isActiveStatus = (status) => String(status || 'active').toLowerCase() === 'active';
 
 const Classes = () => {
-  const [activeTab, setActiveTab] = useState('courses');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'classes');
   const [courses, setCourses] = useState([]); // course templates (catalog)
   const [classes, setClasses] = useState([]); // running classes
   const [sectors, setSectors] = useState([]);
   const [trainers, setTrainers] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const returnedClassId = location.state?.expandedClassId;
+    if (!returnedClassId) return;
+    setActiveTab('classes');
+    setExpandedClassId(returnedClassId);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
 
   // Manage-students modal
   const [managingClass, setManagingClass] = useState(null);
@@ -586,11 +597,13 @@ const Classes = () => {
         {/* Header */}
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl">Courses &amp; Classes</h1>
+            <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl">
+              {activeTab === 'classes' ? 'Classes' : 'Course Templates'}
+            </h1>
             <p className="text-gray-600 mt-2">
-              <span className="font-medium">Courses</span> are the catalog (programs, per category). A program is
-              hidden from trainors until you <span className="font-medium">Make available</span>.{' '}
-              <span className="font-medium">Classes</span> are running sessions created from a course and assigned to a lead trainer.
+              {activeTab === 'classes'
+                ? 'Manage running classes, trainer assignments, rosters, and trainee-view previews.'
+                : 'Manage reusable program templates. A template remains hidden from trainers until you make it available.'}
             </p>
           </div>
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
@@ -628,17 +641,6 @@ const Classes = () => {
         {/* Tabs */}
         <div className="mb-6 flex gap-2 overflow-x-auto border-b border-gray-200">
           <button
-            onClick={() => setActiveTab('courses')}
-            className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'courses'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-blue-600'
-            }`}
-          >
-            <FolderOpen className="w-4 h-4" />
-            Courses ({courses.length})
-          </button>
-          <button
             onClick={() => setActiveTab('classes')}
             className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'classes'
@@ -648,6 +650,17 @@ const Classes = () => {
           >
             <BookOpen className="w-4 h-4" />
             Classes ({classes.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('courses')}
+            className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'courses'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-blue-600'
+            }`}
+          >
+            <FolderOpen className="w-4 h-4" />
+            Courses ({courses.length})
           </button>
         </div>
 
@@ -863,6 +876,13 @@ const Classes = () => {
                       <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 space-y-4">
                         {!editingClassId && (
                           <div className="flex flex-wrap justify-end gap-2">
+                            <button
+                              onClick={() => navigate(`/admin/classes/${encodeURIComponent(course.id)}/preview`)}
+                              className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
+                            >
+                              <Eye className="w-4 h-4" />
+                              View as Trainee
+                            </button>
                             <button
                               onClick={() => openTemplatePreview(course)}
                               disabled={!course.courseId}

@@ -14,6 +14,7 @@ const Dashboard = lazy(() => import('./components/dashboard/Dashboard'));
 const UserManagement = lazy(() => import('./components/users/UserManagement'));
 const Sectors = lazy(() => import('./components/sectors/Sectors'));
 const Classes = lazy(() => import('./components/admin/Classes'));
+const AdminStudentClassPreview = lazy(() => import('./components/admin/AdminStudentClassPreview'));
 const SystemLogs = lazy(() => import('./components/logs/SystemLogs'));
 const Settings = lazy(() => import('./components/settings/Settings'));
 const NotificationsPage = lazy(() => import('./components/shared/NotificationsPage'));
@@ -77,6 +78,7 @@ function App() {
           <Route path="users" element={<UserManagement />} />
           <Route path="sectors" element={<Sectors />} />
           <Route path="classes" element={<Classes />} />
+          <Route path="classes/:classname/preview" element={<AdminStudentClassPreview />} />
           <Route path="logs" element={<SystemLogs />} />
           <Route path="id-requests" element={<IdRequests />} />
           <Route path="incident-forms" element={<IncidentForms scope="all" canManage />} />
