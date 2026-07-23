@@ -37,6 +37,9 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { getGradientStyle } from '../../utils/courseColors';
 
+const isTrainerVisibleClass = (course) =>
+  ['active', 'draft'].includes(String(course?.status || '').toLowerCase());
+
 const TrainerHome = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -87,7 +90,8 @@ const TrainerHome = () => {
         setErrorMessage(null);
 
         // Load classes this trainer leads OR co-trains.
-        const coursesData = await getClassesForTrainer(user.uid, { status: 'Active' });
+        const assignedClasses = await getClassesForTrainer(user.uid);
+        const coursesData = (assignedClasses || []).filter(isTrainerVisibleClass);
         setCourses(coursesData || []);
 
         // Load available course templates (programs an admin has switched on)
@@ -337,7 +341,8 @@ const TrainerHome = () => {
 
       // Reload trainer's classes (led + co-trained) to show the new class
       try {
-        const coursesData = await getClassesForTrainer(user.uid, { status: 'Active' });
+        const assignedClasses = await getClassesForTrainer(user.uid);
+        const coursesData = (assignedClasses || []).filter(isTrainerVisibleClass);
         setCourses(coursesData || []);
       } catch (reloadError) {
         console.error('Error reloading courses:', reloadError);
@@ -640,7 +645,7 @@ const TrainerHome = () => {
           <div className="flex flex-col items-stretch gap-4 mb-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Your Classes</h2>
-              <p className="text-gray-600 mt-1">Active classes you are teaching</p>
+              <p className="text-gray-600 mt-1">Active and draft classes assigned to you</p>
             </div>
             <button
               onClick={handleOpenCreateClass}
@@ -731,8 +736,12 @@ const TrainerHome = () => {
                         </div>
                         <div className="bg-gray-50 rounded-lg p-3">
                           <p className="text-xs text-gray-500 font-medium">Status</p>
-                          <span className="inline-block text-xs font-bold px-2 py-1 rounded mt-1 bg-green-100 text-green-700">
-                            Active
+                          <span className={`inline-block text-xs font-bold px-2 py-1 rounded mt-1 ${
+                            String(course.status || '').toLowerCase() === 'draft'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}>
+                            {String(course.status || 'Active').toLowerCase() === 'draft' ? 'Draft' : 'Active'}
                           </span>
                         </div>
                       </div>

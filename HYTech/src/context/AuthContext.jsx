@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { subscribeToAppSettings } from '../utils/firestoreService';
 
 const AuthContext = createContext();
 
@@ -104,6 +105,45 @@ export const AuthProvider = ({ children }) => {
       setError(err.message);
     }
   };
+
+  // Auto sign-out after inactivity, using the admin-configured session timeout
+  // (Settings → Access & Registration). 0/undefined disables it.
+  useEffect(() => {
+    if (!user || !auth) return undefined;
+
+    let timeoutMinutes = 0;
+    let idleTimer = null;
+
+    const doLogout = async () => {
+      try {
+        await signOut(auth);
+      } catch {
+        // Ignore sign-out errors; the auth listener still clears state.
+      }
+      setUser(null);
+    };
+
+    const resetTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      if (timeoutMinutes > 0) {
+        idleTimer = setTimeout(doLogout, timeoutMinutes * 60 * 1000);
+      }
+    };
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+    activityEvents.forEach((evt) => window.addEventListener(evt, resetTimer, { passive: true }));
+
+    const unsubscribeSettings = subscribeToAppSettings((settings) => {
+      timeoutMinutes = Number(settings?.access?.sessionTimeoutMinutes) || 0;
+      resetTimer();
+    });
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      activityEvents.forEach((evt) => window.removeEventListener(evt, resetTimer));
+      if (typeof unsubscribeSettings === 'function') unsubscribeSettings();
+    };
+  }, [user]);
 
   const value = {
     user,

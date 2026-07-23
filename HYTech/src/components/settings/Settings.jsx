@@ -218,8 +218,9 @@ const Settings = () => {
       return;
     }
 
-    if (accountForm.newPassword.length < 8) {
-      addToast('New password must be at least 8 characters.', 'error');
+    const minLen = Number(appSettings.access.minPasswordLength) || 8;
+    if (accountForm.newPassword.length < minLen) {
+      addToast(`New password must be at least ${minLen} characters.`, 'error');
       return;
     }
 

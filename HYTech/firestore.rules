@@ -47,6 +47,35 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/classes/$(classId));
     }
 
+    // Learners may only request enrollment in a class that is explicitly open.
+    // This server-side check prevents a modified client from joining draft,
+    // provisioning, archived, or otherwise inactive classes.
+    function classAcceptsSelfEnrollment(classId) {
+      return classExists(classId)
+        && get(/databases/$(database)/documents/classes/$(classId))
+          .data.get('status', '') in ['Active', 'active'];
+    }
+
+    // Global access policy (config/appSettings → access map). Falls back to an
+    // empty map when the config doc is absent so defaults apply.
+    function appAccess() {
+      return exists(/databases/$(database)/documents/config/appSettings)
+        ? get(/databases/$(database)/documents/config/appSettings).data.get('access', {})
+        : {};
+    }
+
+    // Self-registration is allowed unless an admin has explicitly turned it off.
+    function selfRegistrationAllowed() {
+      return appAccess().get('allowSelfRegistration', true) != false;
+    }
+
+    // A self-joining trainee may create a 'pending' enrollment, or an 'active'
+    // one only when admins have turned enrollment approval off.
+    function selfEnrollStatusAllowed(status) {
+      return status == 'pending'
+        || (status == 'active' && appAccess().get('requireEnrollmentApproval', true) == false);
+    }
+
     // True when caller may manage classes/{classId} content: the lead trainer
     // OR a co-trainer listed in coTrainerIds. Content writes (materials, modules,
     // topics, assignments, assessments, grading, enrollments) use this so co-
@@ -79,12 +108,14 @@ service cloud.firestore {
       // and account enumeration.
       allow read: if isAdmin() || isTrainer() || isSelf(uid);
 
-      // Self-signup may only create a plain Active student.
+      // Self-signup may only create a plain Active student, and only while an
+      // admin has left self-registration enabled.
       // Admin may create any user doc (Add User writes as admin).
       allow create: if isAdmin()
         || (isSelf(uid)
             && request.resource.data.get('role', '') == 'student'
-            && request.resource.data.get('status', '') == 'Active');
+            && request.resource.data.get('status', '') == 'Active'
+            && selfRegistrationAllowed());
 
       // Owner edits profile but NEVER role or status.
       allow update: if isAdmin()
@@ -199,7 +230,10 @@ service cloud.firestore {
     // Sanitized enrollment directory. It intentionally excludes meetings,
     // internal activity, rosters, and other class-private fields.
     match /classDirectory/{classId} {
-      allow read: if canUseLms();
+      allow read: if isAdmin()
+        || isTrainer()
+        || (canUseLms()
+            && resource.data.get('status', '') in ['Active', 'active']);
       allow write: if false;
     }
 
@@ -349,8 +383,8 @@ service cloud.firestore {
         || (canUseLms()
             && enrollmentId == request.resource.data.get('classId', '') + '_' + request.auth.uid
             && request.resource.data.get('studentId', '') == request.auth.uid
-            && request.resource.data.get('status', '') == 'pending'
-            && classExists(request.resource.data.get('classId', 'none')))
+            && selfEnrollStatusAllowed(request.resource.data.get('status', ''))
+            && classAcceptsSelfEnrollment(request.resource.data.get('classId', 'none')))
         || (isTrainer() && request.resource.data.get('trainerId', '') == request.auth.uid)
         // A co-trainer adds a trainee: the enrollment's trainerId is the LEAD,
         // so authorize by class membership instead of the trainerId field.

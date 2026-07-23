@@ -946,9 +946,10 @@ export const cloneTemplateToClass = async (templateId, classId) => {
 };
 
 /**
- * Create a new class from course template (Trainor only) - saves to 'classes' collection
+ * Create a new class from a course template (trainer or admin) - saves to 'classes' collection
  */
 export const createCourse = async (courseData, { sectorId = null, trainerId = null } = {}) => {
+  let createdClassId = null;
   try {
     const classesRef = collection(db, 'classes');
     const normalizedName = String(courseData.name || '').trim().replace(/\s+/g, ' ');
@@ -970,6 +971,7 @@ export const createCourse = async (courseData, { sectorId = null, trainerId = nu
       subjects: inlineSubjects,
       templateMode = 'legacy',
       templateHasContent = false,
+      desiredStatus = '',
       ...classFields
     } = courseData;
 
@@ -989,6 +991,7 @@ export const createCourse = async (courseData, { sectorId = null, trainerId = nu
     };
 
     const docRef = await addDoc(classesRef, newCourse);
+    createdClassId = docRef.id;
 
     // Full templates are copied server-side so private assessment answer keys
     // are never exposed to the trainer's browser.
@@ -1062,15 +1065,21 @@ export const createCourse = async (courseData, { sectorId = null, trainerId = nu
     }
 
     // Log activity
-    const actionBy = trainerId || 'admin';
+    const actionBy = auth?.currentUser?.uid || trainerId || 'system';
     await logActivity(actionBy, 'create_class', 'classes', docRef.id, {
       className: courseData.name,
       sectorId: sectorId,
+      assignedTrainerId: trainerId || '',
+      creationMode: newCourse.creationMode,
+      requestedStatus: desiredStatus || courseData.status || 'Active',
     });
 
     return docRef.id;
   } catch (error) {
     console.error('Error creating class:', error);
+    if (createdClassId && error && typeof error === 'object') {
+      error.createdClassId = createdClassId;
+    }
     throw error;
   }
 };
@@ -1954,7 +1963,11 @@ export const joinClassByCode = async (studentId, classCode) => {
 
     // Find class by code
     const classesRef = collection(db, 'classDirectory');
-    const q = query(classesRef, where('classCode', '==', classCode.trim().toUpperCase()));
+    const q = query(
+      classesRef,
+      where('classCode', '==', classCode.trim().toUpperCase()),
+      where('status', '==', 'Active')
+    );
     const snapshot = await getDocs(q);
 
     if (snapshot.empty) {
@@ -1964,6 +1977,23 @@ export const joinClassByCode = async (studentId, classCode) => {
     const classDoc = snapshot.docs[0];
     const classData = classDoc.data();
     const classId = classDoc.id;
+
+    if (String(classData.status || '').toLowerCase() !== 'active') {
+      throw new Error('This class is not currently open for enrollment.');
+    }
+
+    // Admin-configurable enrollment policy (Settings → Access & Registration).
+    const { access } = await getAppSettings();
+    const requireApproval = access.requireEnrollmentApproval !== false;
+    const allowMultiple = access.allowMultipleEnrollments !== false;
+
+    // When multiple active enrollments are disallowed, block a second one.
+    if (!allowMultiple) {
+      const active = await queryActiveEnrollment(studentId);
+      if (active) {
+        throw new Error('You already have an active enrollment. Finish it before joining another class.');
+      }
+    }
 
     // Trainees may hold several enrollments at once, but not duplicate the same
     // class or re-join one they already have a request/seat in.
@@ -1986,13 +2016,14 @@ export const joinClassByCode = async (studentId, classCode) => {
       throw new Error('You are already enrolled in this class.');
     }
 
-    // Create a PENDING enrollment — the class trainer approves it before the
-    // student gains access. (Class code = request, not instant access.)
+    // Enrollment starts PENDING when approval is required (the trainer approves
+    // it), or ACTIVE immediately when approval is turned off.
+    const initialStatus = requireApproval ? 'pending' : 'active';
     const enrollmentData = {
       studentId,
       classId,
       className: classData.name || 'Unnamed Class',
-      status: 'pending',
+      status: initialStatus,
       requestedAt: new Date().toISOString(),
       progress: {
         attendanceRate: 0,
@@ -2000,6 +2031,9 @@ export const joinClassByCode = async (studentId, classCode) => {
         totalTasks: 0
       }
     };
+    if (!requireApproval) {
+      enrollmentData.joinedAt = new Date().toISOString();
+    }
 
     // Add optional fields if they exist
     if (classData.trainerName) {
@@ -2026,8 +2060,26 @@ export const joinClassByCode = async (studentId, classCode) => {
     const docRef = doc(enrollmentsRef, `${classId}_${studentId}`);
     await setDoc(docRef, enrollmentData);
 
-    // Let the trainer know someone is waiting for approval.
-    if (classData.trainerId) {
+    if (!requireApproval) {
+      // Auto-approved: grant class membership immediately and confirm to the
+      // trainee (no trainer action needed).
+      try {
+        await ensureClassMembership({ id: docRef.id, classId, studentId, status: 'active' });
+      } catch (memberErr) {
+        console.warn('Could not create class membership on auto-approve:', memberErr?.message);
+      }
+      try {
+        await createNotification({
+          toUid: studentId,
+          type: 'join_approved',
+          text: `You've joined ${classData.name || 'the class'}. Your dashboard is now unlocked.`,
+          metadata: { classId, enrollmentId: docRef.id, className: classData.name || '' },
+        });
+      } catch (notifyErr) {
+        console.warn('Could not notify student of auto-approval:', notifyErr?.message);
+      }
+    } else if (classData.trainerId) {
+      // Let the trainer know someone is waiting for approval.
       try {
         const studentProfile = await getUserProfile(studentId).catch(() => null);
         const studentName =

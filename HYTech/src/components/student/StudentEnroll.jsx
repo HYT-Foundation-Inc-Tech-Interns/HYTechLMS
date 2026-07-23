@@ -8,6 +8,7 @@ import {
   joinClassByCode,
 } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
+import { useAppSettings } from '../../context/useAppSettings';
 import { getPlaceholderColor, getGradientStyle } from '../../utils/courseColors';
 
 // Dedicated "Enroll" tab: browse courses by sector and apply for trainer approval.
@@ -15,6 +16,9 @@ import { getPlaceholderColor, getGradientStyle } from '../../utils/courseColors'
 const StudentEnroll = () => {
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { appSettings } = useAppSettings();
+  const allowMultipleEnrollments = appSettings.access.allowMultipleEnrollments !== false;
+  const requireEnrollmentApproval = appSettings.access.requireEnrollmentApproval !== false;
 
   const [sectors, setSectors] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -82,8 +86,12 @@ const StudentEnroll = () => {
       if (!selectedCourse.classCode) {
         throw new Error('This class is missing an enrollment code. Ask the trainor to update it.');
       }
-      await joinClassByCode(user.uid, selectedCourse.classCode);
-      addToast(`Request sent to join ${selectedCourse.name}. Awaiting trainor approval.`, 'success');
+      const result = await joinClassByCode(user.uid, selectedCourse.classCode);
+      if (result?.status === 'active') {
+        addToast(`You've joined ${selectedCourse.name}. It's now on your dashboard.`, 'success');
+      } else {
+        addToast(`Request sent to join ${selectedCourse.name}. Awaiting trainor approval.`, 'success');
+      }
       setShowCourseModal(false);
       setSelectedCourse(null);
     } catch (error) {
@@ -240,9 +248,15 @@ const StudentEnroll = () => {
               <p><span className="font-medium">Class code:</span> Provided after you request admission</p>
             </div>
             {activeEnrollment && (
-              <p className="text-xs text-orange-600 mb-3">
-                You already have an active enrollment. You can still apply, subject to trainor approval.
-              </p>
+              allowMultipleEnrollments ? (
+                <p className="text-xs text-orange-600 mb-3">
+                  You already have an active enrollment. You can still apply{requireEnrollmentApproval ? ', subject to trainor approval' : ''}.
+                </p>
+              ) : (
+                <p className="text-xs text-red-600 mb-3">
+                  You already have an active enrollment. Finish it before joining another class.
+                </p>
+              )
             )}
             <div className="flex gap-3">
               <button
@@ -253,7 +267,7 @@ const StudentEnroll = () => {
               </button>
               <button
                 onClick={handleApplyToCourse}
-                disabled={loadingApply}
+                disabled={loadingApply || (!allowMultipleEnrollments && Boolean(activeEnrollment))}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loadingApply ? 'Applying...' : 'Apply Now'}

@@ -12,6 +12,7 @@ import {
 } from 'firebase/auth';
 import { auth, firebaseInitError } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
+import { useAppSettings } from '../../context/useAppSettings';
 import {
   createRegisteredUserProfile,
   generateNextIdNumber,
@@ -23,6 +24,9 @@ import { buildFullName, normalizeNameFields } from '../../utils/nameFormat';
 const SignUp = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { appSettings } = useAppSettings();
+  const allowSelfRegistration = appSettings.access.allowSelfRegistration !== false;
+  const minPasswordLength = Number(appSettings.access.minPasswordLength) || 8;
   const [showPassword, setShowPassword] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [rememberMe, setRememberMe] = useState(false);
@@ -110,6 +114,11 @@ const SignUp = () => {
         return;
       }
 
+      if (!allowSelfRegistration) {
+        addToast('Self-registration is currently disabled. Please contact an administrator.', 'error');
+        return;
+      }
+
       if (!formData.email.trim()) {
         addToast('Please enter your email address.', 'error');
         return;
@@ -118,8 +127,8 @@ const SignUp = () => {
         addToast('Enter a valid mobile number: 10 digits starting with 9 (e.g. 9XX XXX XXXX).', 'error');
         return;
       }
-      if (formData.password.length < 8) {
-        addToast('Password must be at least 8 characters.', 'error');
+      if (formData.password.length < minPasswordLength) {
+        addToast(`Password must be at least ${minPasswordLength} characters.`, 'error');
         return;
       }
 
@@ -216,6 +225,25 @@ const SignUp = () => {
       setIsLoading(false);
     }
   };
+
+  if (!allowSelfRegistration) {
+    return (
+      <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-orange-50 p-6">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-lg border border-gray-100 p-8 text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Registration is disabled</h1>
+          <p className="text-gray-600 mb-6">
+            New self-registration is currently turned off. Please contact an administrator to have an account created for you.
+          </p>
+          <Link
+            to="/signin"
+            className="inline-flex items-center justify-center px-6 py-2.5 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition-colors"
+          >
+            Back to Sign In
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen min-h-[100dvh] flex relative overflow-hidden">

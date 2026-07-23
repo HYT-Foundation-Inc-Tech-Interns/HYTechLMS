@@ -372,7 +372,7 @@ const IncidentForms = ({ scope = 'own', canManage = false }) => {
                   <input type="date" value={draft.date} max={new Date().toISOString().split('T')[0]} onChange={(e) => setDraft({ ...draft, date: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B005C]" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Trainee involved (optional)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Persons involved (optional)</label>
                   <input type="text" value={draft.involvedStudentName} onChange={(e) => setDraft({ ...draft, involvedStudentName: e.target.value })} placeholder="Name" className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B005C]" />
                 </div>
               </div>

@@ -4,12 +4,14 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from '../../firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { getHomePathForRole, normalizeRole, resolveEffectiveRole } from '../../utils/authRole';
+import ForcePasswordChange from './ForcePasswordChange';
 
 const RoleProtectedRoute = ({ allowedRole, children }) => {
   const location = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState('');
+  const [mustChangePassword, setMustChangePassword] = useState(false);
 
   useEffect(() => {
     if (!auth || !db) {
@@ -52,6 +54,7 @@ const RoleProtectedRoute = ({ allowedRole, children }) => {
 
             const data = userSnap.exists() ? (userSnap.data() || {}) : {};
             const status = String(data.status || 'Active').toLowerCase();
+            if (isMounted) setMustChangePassword(data.mustChangePassword === true);
 
             if (status !== 'active') {
               await signOut(auth);
@@ -165,6 +168,11 @@ const RoleProtectedRoute = ({ allowedRole, children }) => {
   if (!normalizedAllowedRole || userRole !== normalizedAllowedRole) {
     const fallbackPath = getHomePathForRole(userRole);
     return <Navigate to={fallbackPath} replace />;
+  }
+
+  // Force a password change before any dashboard is reachable.
+  if (mustChangePassword) {
+    return <ForcePasswordChange />;
   }
 
   return children;

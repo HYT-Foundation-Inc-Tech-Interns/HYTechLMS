@@ -46,6 +46,7 @@ import {
 import { catalogTotals } from '../../data/tesdaCatalog';
 import SubjectListEditor from '../shared/SubjectListEditor';
 import ClassAppearanceEditor from '../shared/ClassAppearanceEditor';
+import AdminCreateClassModal from './AdminCreateClassModal';
 import { useToast } from '../../context/ToastContext';
 
 const LEVEL_OPTIONS = ['NC I', 'NC II', 'NC III', 'NC IV'];
@@ -94,6 +95,7 @@ const Classes = () => {
 
   // New Course (template) modal
   const [showAddCourse, setShowAddCourse] = useState(false);
+  const [showCreateClass, setShowCreateClass] = useState(false);
   const [savingCourse, setSavingCourse] = useState(false);
   const [newCourse, setNewCourse] = useState({
     name: '',
@@ -588,10 +590,12 @@ const Classes = () => {
             <p className="text-gray-600 mt-2">
               <span className="font-medium">Courses</span> are the catalog (programs, per category). A program is
               hidden from trainors until you <span className="font-medium">Make available</span>.{' '}
-              <span className="font-medium">Classes</span> are the running sessions trainors open from an available course.
+              <span className="font-medium">Classes</span> are running sessions created from a course and assigned to a lead trainer.
             </p>
           </div>
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            {activeTab === 'courses' ? (
+              <>
             <button
               onClick={handleImportCatalog}
               disabled={seeding}
@@ -608,6 +612,16 @@ const Classes = () => {
               <Plus className="w-4 h-4" />
               New Course
             </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setShowCreateClass(true)}
+                className="flex flex-1 items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium sm:flex-none"
+              >
+                <Plus className="w-4 h-4" />
+                Create Class
+              </button>
+            )}
           </div>
         </div>
 
@@ -812,7 +826,7 @@ const Classes = () => {
               <div className="bg-white rounded-lg p-12 text-center border border-gray-200">
                 <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-600 text-lg">
-                  {searchTerm ? 'No classes match your search.' : 'No classes yet. Trainors open classes from a course.'}
+                  {searchTerm ? 'No classes match your search.' : 'No classes yet. Create one from a course or have a trainer open one.'}
                 </p>
               </div>
             ) : (
@@ -1039,6 +1053,21 @@ const Classes = () => {
           </>
         )}
       </div>
+
+      {showCreateClass && (
+        <AdminCreateClassModal
+          courses={courses}
+          sectors={sectors}
+          trainers={trainers}
+          onClose={() => setShowCreateClass(false)}
+          onCreated={async (classId) => {
+            await loadAll();
+            setActiveTab('classes');
+            setExpandedClassId(classId);
+            setShowCreateClass(false);
+          }}
+        />
+      )}
 
       {/* New Course modal */}
       {showAddCourse && (

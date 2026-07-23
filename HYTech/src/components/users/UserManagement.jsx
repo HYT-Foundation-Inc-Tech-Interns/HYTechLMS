@@ -44,6 +44,7 @@ import {
   createNotification,
   adminUpdateUserAccount,
   generateNextIdNumber,
+  getAppSettings,
   getUserPrivateProfile,
   logActivity,
   saveUserPrivateProfile,
@@ -361,6 +362,11 @@ const UserManagement = () => {
       );
       await updateProfile(credential.user, { displayName: fullName });
 
+      // Admin policy: new accounts get a temporary password and must change it
+      // on first login (unless the admin has turned this off in Settings).
+      const { access } = await getAppSettings();
+      const forcePasswordChange = access.forcePasswordChangeDefault !== false;
+
       await setDoc(doc(db, 'users', credential.user.uid), {
         uid: credential.user.uid,
         firstName: newUser.firstName.trim(),
@@ -375,6 +381,7 @@ const UserManagement = () => {
         status: 'Active',
         createdAt: serverTimestamp(),
         createdBy: 'admin',
+        mustChangePassword: forcePasswordChange,
       });
       await saveUserPrivateProfile(credential.user.uid, {
         birthDate: newUser.birthDate,
