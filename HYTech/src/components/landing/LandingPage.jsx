@@ -78,7 +78,7 @@ const LandingPage = () => {
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-5">
               <button
                 onClick={() => navigate('/signup')}
-                className="w-full sm:w-40 inline-flex items-center justify-center bg-orange-500 text-white px-5 sm:px-7 py-2 sm:py-3 rounded-lg font-semibold text-sm sm:text-base
+                className="w-full sm:w-40 min-h-11 inline-flex items-center justify-center bg-orange-700 text-white px-5 sm:px-7 py-2 sm:py-3 rounded-lg font-semibold text-sm sm:text-base
                            transition-all duration-300 hover:bg-orange-400 hover:-translate-y-1 hover:shadow-2xl hover:shadow-orange-500/30
                            active:translate-y-0"
               >
@@ -86,7 +86,7 @@ const LandingPage = () => {
               </button>
               <button
                 onClick={() => navigate('/signin')}
-                className="text-white/80 hover:text-white font-medium transition-all underline-offset-4 hover:underline hover:tracking-wide text-xs sm:text-sm"
+                className="touch-target -mx-3 px-3 text-white/80 hover:text-white font-medium transition-all underline-offset-4 hover:underline hover:tracking-wide text-xs sm:text-sm"
               >
                 Sign In
               </button>

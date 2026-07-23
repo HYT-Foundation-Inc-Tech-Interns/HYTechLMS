@@ -88,7 +88,7 @@ const StudentWaitingRoom = ({ pendingEnrollments = [] }) => {
       <div className="w-full max-w-2xl">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-fade-in">
           {/* Header */}
-          <div className="bg-[#0B005C] text-white p-8 text-center">
+          <div className="bg-[#0B005C] text-white p-4 text-center sm:p-6 lg:p-8">
             <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <GraduationCap className="w-10 h-10" />
             </div>
@@ -100,7 +100,7 @@ const StudentWaitingRoom = ({ pendingEnrollments = [] }) => {
             </p>
           </div>
 
-          <div className="p-8 space-y-8">
+          <div className="p-4 space-y-6 sm:p-6 sm:space-y-8 lg:p-8">
             {/* Pending approval banner */}
             {pendingEnrollments.length > 0 && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -135,7 +135,7 @@ const StudentWaitingRoom = ({ pendingEnrollments = [] }) => {
                 <KeyRound className="w-5 h-5 text-gray-500" />
                 <h3 className="font-semibold text-gray-800">Have a class code?</h3>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   type="text"
                   value={classCode}
@@ -147,7 +147,7 @@ const StudentWaitingRoom = ({ pendingEnrollments = [] }) => {
                 <button
                   type="submit"
                   disabled={isJoining || !classCode.trim()}
-                  className="px-6 py-3 rounded-xl bg-orange-500 text-white font-medium hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 py-3 rounded-xl bg-orange-700 text-white font-medium hover:bg-orange-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isJoining ? 'Joining...' : 'Join'}
                 </button>
@@ -156,9 +156,9 @@ const StudentWaitingRoom = ({ pendingEnrollments = [] }) => {
           </div>
 
           {/* Footer */}
-          <div className="px-8 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
-            <p className="text-xs text-gray-400 truncate">Signed in as {user?.email}</p>
-            <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="px-4 py-4 bg-gray-50 border-t border-gray-100 flex flex-col items-stretch gap-3 sm:px-6 lg:px-8 sm:flex-row sm:items-center sm:justify-between">
+            <p className="break-all text-xs text-gray-500">Signed in as {user?.email}</p>
+            <div className="flex flex-wrap items-center gap-2 sm:flex-shrink-0 sm:gap-4">
               <button
                 type="button"
                 onClick={() => setShowPasswordModal(true)}

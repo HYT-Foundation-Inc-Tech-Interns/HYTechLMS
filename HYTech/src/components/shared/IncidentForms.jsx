@@ -352,7 +352,7 @@ const IncidentForms = ({ scope = 'own', canManage = false }) => {
               </button>
             </div>
             <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
                   <select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B005C]">
@@ -366,7 +366,7 @@ const IncidentForms = ({ scope = 'own', canManage = false }) => {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
                   <input type="date" value={draft.date} max={new Date().toISOString().split('T')[0]} onChange={(e) => setDraft({ ...draft, date: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B005C]" />

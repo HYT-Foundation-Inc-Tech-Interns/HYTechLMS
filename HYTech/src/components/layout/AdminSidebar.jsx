@@ -28,6 +28,24 @@ const AdminSidebar = () => {
     );
   }, [isCollapsed]);
 
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isMobileOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setIsMobileOpen(false);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isMobileOpen]);
+
   const navItems = [
     { path: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
     { path: '/admin/users', icon: Users, label: 'User Management' },
@@ -69,13 +87,18 @@ const AdminSidebar = () => {
       <button
         onClick={() => setIsMobileOpen(!isMobileOpen)}
         className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-colors"
+        aria-label={isMobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        aria-expanded={isMobileOpen}
+        aria-controls="admin-sidebar-navigation"
       >
         {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
       </button>
 
       {/* Mobile Overlay */}
       {isMobileOpen && (
-        <div 
+        <button
+          type="button"
+          aria-label="Close navigation menu"
           className="fixed inset-x-0 bottom-0 top-16 z-30 bg-black/50 backdrop-blur-sm lg:hidden"
           onClick={() => setIsMobileOpen(false)}
         />
@@ -83,6 +106,8 @@ const AdminSidebar = () => {
 
       {/* Sidebar */}
       <aside
+        id="admin-sidebar-navigation"
+        aria-label="Admin navigation"
         className={`
           fixed bottom-0 left-0 top-16 z-40 lg:relative lg:inset-y-0
           w-[min(88vw,18rem)] ${isCollapsed ? 'lg:w-20' : 'lg:w-72'}

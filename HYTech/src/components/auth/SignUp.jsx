@@ -228,8 +228,8 @@ const SignUp = () => {
 
   if (!allowSelfRegistration) {
     return (
-      <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-orange-50 p-6">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-lg border border-gray-100 p-8 text-center">
+      <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-orange-50 p-4 sm:p-6">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 lg:p-8 text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Registration is disabled</h1>
           <p className="text-gray-600 mb-6">
             New self-registration is currently turned off. Please contact an administrator to have an account created for you.
@@ -441,10 +441,11 @@ const SignUp = () => {
               </div>
 
               <div className="group">
-                <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors">
+                <label htmlFor="signup-birth-date" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors">
                   Birth Date <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id="signup-birth-date"
                   type="date"
                   name="birthDate"
                   value={formData.birthDate}
@@ -574,7 +575,7 @@ const SignUp = () => {
             Already have an account?{' '}
             <Link 
               to="/signin" 
-              className="text-orange-500 font-semibold hover:text-orange-600 transition-all duration-300 hover:underline underline-offset-4"
+              className="touch-target -mx-3 px-3 text-orange-700 font-semibold hover:text-orange-800 transition-all duration-300 hover:underline underline-offset-4"
             >
               Sign In
             </Link>

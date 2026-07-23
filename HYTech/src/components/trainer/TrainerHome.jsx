@@ -792,7 +792,7 @@ const TrainerHome = () => {
                     style={
                       course.bgImage 
                         ? { backgroundImage: `url(${course.bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-                        : getGradientStyle(course.color)
+                        : { background: getGradientStyle(course.color) }
                     }
                   >
                     {/* Status Badge */}
@@ -811,7 +811,7 @@ const TrainerHome = () => {
                     <p className="text-gray-600 text-sm line-clamp-2">{course.description || 'No description available'}</p>
 
                     {/* Course Info */}
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div className="bg-gray-50 rounded-lg p-3">
                         <p className="text-xs text-gray-500 font-medium">Level</p>
                         <p className="font-bold text-gray-900">{course.level || 'NC I'}</p>

@@ -1,0 +1,10 @@
+# HYTech Learning Management System
+
+HYTech is a role-based learning management system for administrators, trainers, and trainees.
+
+Public pages:
+
+- `/` — product overview
+- `/signin` — account sign in
+- `/signup` — trainee account registration
+

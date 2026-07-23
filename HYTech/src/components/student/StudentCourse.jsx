@@ -1498,7 +1498,7 @@ const StudentCourse = ({ previewMode = false }) => {
       const gridAnswer = answer && typeof answer === 'object' ? answer : {};
       return (
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="min-w-[36rem] w-full border-collapse">
             <thead>
               <tr>
                 <th className="p-2" />
@@ -2552,7 +2552,7 @@ const StudentCourse = ({ previewMode = false }) => {
                   <p className="text-sm text-gray-600 mt-1">View and take assessments posted by your trainor</p>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="min-w-[760px] w-full">
                     <thead>
                       <tr className="border-b border-gray-100 bg-gray-50">
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">Assessment Name</th>

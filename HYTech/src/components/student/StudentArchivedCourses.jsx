@@ -279,7 +279,7 @@ const StudentArchivedCourses = () => {
             {/* Modal Content */}
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-12rem)]">
               {/* Course Stats */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2">
                 <div className="bg-gray-50 rounded-xl p-4 text-center">
                   <div className="flex items-center justify-center gap-1 mb-1">
                     <Clock className="w-5 h-5 text-green-500" />

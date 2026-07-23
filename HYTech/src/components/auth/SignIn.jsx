@@ -383,6 +383,7 @@ const SignIn = () => {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="w-4 sm:w-5 h-4 sm:h-5" /> : <Eye className="w-4 sm:w-5 h-4 sm:h-5" />}
                 </button>
@@ -394,7 +395,7 @@ const SignIn = () => {
               <button
                 type="button"
                 onClick={() => setShowForgotPasswordModal(true)}
-                className="text-xs sm:text-sm text-orange-500 hover:text-orange-600 font-semibold transition-all hover:underline"
+                className="px-3 text-xs sm:text-sm text-orange-700 hover:text-orange-800 font-semibold transition-all hover:underline"
               >
                 Forgot Password?
               </button>
@@ -424,7 +425,7 @@ const SignIn = () => {
             Don't have account?{' '}
             <Link 
               to="/signup" 
-              className="text-orange-500 font-semibold hover:text-orange-600 transition-all duration-300 hover:underline underline-offset-4"
+              className="touch-target -mx-3 px-3 text-orange-700 font-semibold hover:text-orange-800 transition-all duration-300 hover:underline underline-offset-4"
             >
               Sign up
             </Link>

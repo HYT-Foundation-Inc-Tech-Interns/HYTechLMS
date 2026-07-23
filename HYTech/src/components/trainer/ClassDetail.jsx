@@ -3763,7 +3763,7 @@ const ClassDetail = () => {
 
                 {/* Metadata */}
                 <div className="border-t border-gray-200 pt-6">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
                     <div>
                       <p className="text-gray-600">Published Date</p>
                       <p className="font-medium text-gray-900">
@@ -5270,7 +5270,7 @@ const ClassDetail = () => {
                 <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 lg:hidden">
                   <h3 className="font-semibold text-gray-900">Add a question</h3>
                   <p className="mb-3 mt-1 text-xs text-gray-600">Choose a response type to insert it below.</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {FORM_QUESTION_TYPES.map((item) => (
                       <button
                         key={item.type}
@@ -5934,7 +5934,7 @@ const ClassDetail = () => {
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Due date</label>
                   <input type="date" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} min={new Date().toISOString().split('T')[0]} max={maxDateStr} className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
@@ -5946,7 +5946,7 @@ const ClassDetail = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Allowed submission types <span className="text-red-500">*</span></label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {UPLOAD_TYPE_OPTIONS.map((opt) => (
                     <label
                       key={opt.id}
@@ -6790,7 +6790,7 @@ const ClassDetail = () => {
                         {/* Linear Scale */}
                         {question.type === 'linear-scale' && (
                           <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                               <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Low End Label</label>
                                 <input

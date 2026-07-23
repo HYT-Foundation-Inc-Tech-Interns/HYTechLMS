@@ -73,8 +73,8 @@ const ForcePasswordChange = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-orange-50 p-6">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center overflow-y-auto bg-gradient-to-br from-blue-50 via-white to-orange-50 p-4 sm:p-6">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 lg:p-8">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2 rounded-lg bg-blue-50 text-blue-600"><Lock className="w-5 h-5" /></div>
           <h1 className="text-xl font-bold text-gray-900">Set a new password</h1>

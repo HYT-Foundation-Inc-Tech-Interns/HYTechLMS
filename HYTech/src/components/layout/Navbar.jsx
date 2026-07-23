@@ -95,6 +95,15 @@ const Navbar = ({ title, subtitle }) => {
           alt={`${siteName} Logo`}
           className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 object-contain cursor-pointer select-none"
           onClick={handleLogoClick}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              handleLogoClick();
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label="Go to trainer home"
           onError={(e) => {
             e.target.style.display = 'none';
           }}
@@ -103,6 +112,14 @@ const Navbar = ({ title, subtitle }) => {
         <span
           className="hidden sm:inline font-semibold text-base md:text-lg whitespace-nowrap cursor-pointer select-none"
           onClick={handleEasterEgg}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              handleEasterEgg();
+            }
+          }}
+          role="button"
+          tabIndex={0}
         >
           {siteName}
         </span>

@@ -567,7 +567,7 @@ const SystemLogs = () => {
 
             {/* Presets */}
             <label className="block text-sm font-medium text-gray-700 mb-2">Date range</label>
-            <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="grid grid-cols-1 gap-2 mb-3 sm:grid-cols-2">
               {PURGE_PRESETS.map((preset) => (
                 <button
                   key={preset.id}
@@ -596,7 +596,7 @@ const SystemLogs = () => {
 
             {/* Custom date inputs */}
             {rangePreset === 'custom' && (
-              <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="grid grid-cols-1 gap-3 mb-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">From</label>
                   <input

@@ -278,10 +278,12 @@ const StudentCalendar = () => {
               const dayEvents = getEventsForDate(day);
               
               return (
-                <div 
+                <button
+                  type="button"
                   key={day}
                   onClick={() => setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day))}
-                  className={`h-12 p-1 border border-gray-100 rounded-md cursor-pointer transition-all hover:bg-gray-50:bg-gray-700 sm:h-24 sm:rounded-lg sm:p-2 ${
+                  aria-label={`${currentDate.toLocaleString('default', { month: 'long' })} ${day}, ${currentDate.getFullYear()}${dayEvents.length ? `, ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}` : ''}`}
+                  className={`h-12 min-h-11 w-full p-1 text-left border border-gray-100 rounded-md cursor-pointer transition-all hover:bg-gray-50 sm:h-24 sm:rounded-lg sm:p-2 ${
                     isToday(day) ? 'bg-blue-50 border-blue-200' : ''
                   } ${
                     selectedDate.getDate() === day && 
@@ -321,7 +323,7 @@ const StudentCalendar = () => {
                       ))}
                     </div>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
@@ -485,7 +487,7 @@ const StudentCalendar = () => {
               </div>
 
               {/* Time */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
                   <input
