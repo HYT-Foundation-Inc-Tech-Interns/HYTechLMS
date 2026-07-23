@@ -75,7 +75,7 @@ const buildLocalFallbackReply = (userMessage, currentRole = 'guest') => {
   }
 
   if (includesAny(text, ['reset password', 'forgot password', 'change password', 'password'])) {
-    return `Password help:\n1. Go to ${settingsPath}.\n2. Open Security / Change Password.\n3. Enter your current password, new password, and confirmation.\n4. Click Save Password.\n\nIf you are locked out, use the Forgot Password option on the Sign In page.`;
+    return `Password help:\n1. Go to ${settingsPath}.\n2. Open Security.\n3. Enter your current password, new password, and confirmation.\n4. Click Save Password.\n\nIf you are locked out, use Forgot Password on the Sign In page.`;
   }
 
   if (includesAny(text, ['settings', 'profile', 'update name', 'birth date', 'middle name', 'name extension'])) {
@@ -83,15 +83,15 @@ const buildLocalFallbackReply = (userMessage, currentRole = 'guest') => {
   }
 
   if (includesAny(text, ['notification', 'notifications', 'alert', 'alerts'])) {
-    return `Notifications help:\n1. Open the bell icon in the top navbar for quick updates.\n2. Open the Notifications page for complete history.\n3. In Settings, adjust notification preferences and save.`;
+    return 'Notifications help:\n1. Open the bell icon in the top navbar for quick updates.\n2. Select View all notifications for complete history.\n3. Select a notification to open its related page when available.';
   }
 
   if (role === 'student') {
     if (includesAny(text, ['course', 'my course', 'enrolled', 'lessons', 'materials'])) {
-      return 'Trainee course navigation:\n1. Open My Courses from the sidebar.\n2. Select your enrolled course.\n3. Use Tasks and Calendar tabs to track deadlines.';
+      return 'Trainee class navigation:\n1. Open My Classes from the sidebar.\n2. Select an enrolled class.\n3. Use Tasks and Calendar to track deadlines.';
     }
     if (includesAny(text, ['certificate', 'certificates'])) {
-      return 'Certificates are not available yet — this feature is being finalized and will be enabled soon.';
+      return 'Certificate issuance is not enabled in this version of HYTech. Ask your administrator for the official completion document process.';
     }
     if (includesAny(text, ['task', 'assignment', 'deadline'])) {
       return 'Use Trainee > Tasks to view pending assignments and deadlines. You can also check Calendar for schedule-based reminders.';
@@ -100,10 +100,10 @@ const buildLocalFallbackReply = (userMessage, currentRole = 'guest') => {
 
   if (role === 'trainer') {
     if (includesAny(text, ['course', 'courses', 'manage course'])) {
-      return 'Trainor course flow:\n1. Go to /trainer.\n2. Open a course from My Courses.\n3. Manage tasks, materials, and learner progress inside the course.';
+      return 'Trainor class flow:\n1. Open Home.\n2. Select a class under Active Classes.\n3. Manage trainees, modules, materials, assessments, and progress inside the class.';
     }
     if (includesAny(text, ['sector', 'sectors'])) {
-      return 'Use Trainor > Sectors to view Training Regulations and sector details.';
+      return 'Open Sectors from the sidebar to browse available training programs and their regulations.';
     }
   }
 

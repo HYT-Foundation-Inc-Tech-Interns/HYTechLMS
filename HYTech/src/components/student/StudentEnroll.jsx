@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { BookOpen, ChevronDown, ChevronUp, X, Loader } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
-  getCourses,
+  getJoinableClasses,
   getSectors,
   queryActiveEnrollment,
-  applyCourse,
+  joinClassByCode,
 } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
 import { getPlaceholderColor, getGradientStyle } from '../../utils/courseColors';
@@ -60,7 +60,7 @@ const StudentEnroll = () => {
       try {
         setLoadingCourses(true);
         setErrorCourses(null);
-        const coursesData = await getCourses(
+        const coursesData = await getJoinableClasses(
           selectedSector ? { sectorId: selectedSector, status: 'Active' } : { status: 'Active' }
         );
         if (mounted) setCourses(coursesData || []);
@@ -79,8 +79,11 @@ const StudentEnroll = () => {
     if (!selectedCourse) return;
     try {
       setLoadingApply(true);
-      await applyCourse(user.uid, selectedCourse.id);
-      addToast(`Successfully applied to ${selectedCourse.name}. Awaiting trainor approval.`, 'success');
+      if (!selectedCourse.classCode) {
+        throw new Error('This class is missing an enrollment code. Ask the trainor to update it.');
+      }
+      await joinClassByCode(user.uid, selectedCourse.classCode);
+      addToast(`Request sent to join ${selectedCourse.name}. Awaiting trainor approval.`, 'success');
       setShowCourseModal(false);
       setSelectedCourse(null);
     } catch (error) {
@@ -94,8 +97,8 @@ const StudentEnroll = () => {
     <div className="p-4">
       <div className="space-y-6 mb-8">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2 sm:text-3xl">Enroll in a Course</h2>
-          <p className="text-gray-600">Browse available courses and apply. Your trainor will review your request.</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2 sm:text-3xl">Enroll in a Class</h2>
+          <p className="text-gray-600">Browse active classes and request admission. The class trainor will review your request.</p>
         </div>
 
         {/* Sector Filter */}
@@ -104,7 +107,7 @@ const StudentEnroll = () => {
             onClick={() => setShowSectorDropdown(!showSectorDropdown)}
             className="w-full md:w-96 bg-white border border-gray-300 rounded-lg px-4 py-3 text-left font-medium text-gray-900 hover:bg-gray-50 flex items-center justify-between"
           >
-            <span>{selectedSector ? sectors.find((s) => s.id === selectedSector)?.name : 'All Courses'}</span>
+            <span>{selectedSector ? sectors.find((s) => s.id === selectedSector)?.name : 'All Classes'}</span>
             {showSectorDropdown ? <ChevronUp /> : <ChevronDown />}
           </button>
 
@@ -120,7 +123,7 @@ const StudentEnroll = () => {
                     !selectedSector ? 'bg-blue-50 text-blue-700 font-medium' : 'hover:bg-gray-50 text-gray-700'
                   }`}
                 >
-                  All Courses
+                  All Classes
                 </button>
                 {loadingSectors ? (
                   <div className="flex items-center justify-center h-16">
@@ -160,7 +163,7 @@ const StudentEnroll = () => {
           </div>
         ) : !courses || courses.length === 0 ? (
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
-            <p className="text-gray-600">No courses available</p>
+            <p className="text-gray-600">No active classes available</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -233,11 +236,8 @@ const StudentEnroll = () => {
             <p className="text-gray-600 text-sm mb-4">{selectedCourse.description}</p>
             <div className="space-y-2 text-sm mb-6">
               <p><span className="font-medium">Level:</span> {selectedCourse.level}</p>
-              <p><span className="font-medium">Duration:</span> {selectedCourse.duration?.weeks} weeks</p>
-              <p>
-                <span className="font-medium">Available Slots:</span>{' '}
-                {selectedCourse.capacity - selectedCourse.currentEnrollments}
-              </p>
+              <p><span className="font-medium">Trainor:</span> {selectedCourse.trainerName || 'Not assigned'}</p>
+              <p><span className="font-medium">Class code:</span> Provided after you request admission</p>
             </div>
             {activeEnrollment && (
               <p className="text-xs text-orange-600 mb-3">

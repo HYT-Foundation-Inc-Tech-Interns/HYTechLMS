@@ -15,18 +15,9 @@ import {
   getAssessments,
   getAssignments,
   getStudentEnrollments,
+  createPersonalCalendarEvent,
+  subscribeToPersonalCalendarEvents,
 } from '../../utils/firestoreService';
-
-const PERSONAL_EVENTS_KEY = 'hyt:student-calendar:personal-events';
-
-const loadPersonalEvents = (uid) => {
-  try {
-    const stored = JSON.parse(localStorage.getItem(`${PERSONAL_EVENTS_KEY}:${uid}`) || '[]');
-    return stored.map((event) => ({ ...event, date: new Date(event.date) }));
-  } catch {
-    return [];
-  }
-};
 
 const StudentCalendar = () => {
   const { user } = useAuth();
@@ -46,11 +37,10 @@ const StudentCalendar = () => {
 
   const events = [...taskEvents, ...personalEvents];
 
-  // Personal events persist per user in localStorage
+  // Personal events are account data and follow the trainee across devices.
   useEffect(() => {
-    if (user?.uid) {
-      setPersonalEvents(loadPersonalEvents(user.uid));
-    }
+    if (!user?.uid) return undefined;
+    return subscribeToPersonalCalendarEvents(user.uid, setPersonalEvents);
   }, [user?.uid]);
 
   // Deadline events come from real assignments/assessments in enrolled classes
@@ -110,7 +100,7 @@ const StudentCalendar = () => {
     };
   }, [user?.uid]);
 
-  const handleAddEvent = () => {
+  const handleAddEvent = async () => {
     if (newEvent.title && newEvent.date && newEvent.startTime) {
       const [year, month, day] = newEvent.date.split('-').map(Number);
       const [hours, minutes] = newEvent.startTime.split(':').map(Number);
@@ -123,7 +113,6 @@ const StudentCalendar = () => {
       };
 
       const newEventData = {
-        id: `personal-${Date.now()}`,
         title: newEvent.title,
         date: new Date(year, month - 1, day, hours, minutes),
         endTime: newEvent.endTime || '',
@@ -132,13 +121,12 @@ const StudentCalendar = () => {
         color: eventColors[newEvent.type] || 'blue'
       };
 
-      const updated = [...personalEvents, newEventData];
-      setPersonalEvents(updated);
-      if (user?.uid) {
-        localStorage.setItem(
-          `${PERSONAL_EVENTS_KEY}:${user.uid}`,
-          JSON.stringify(updated.map((event) => ({ ...event, date: event.date.toISOString() })))
-        );
+      if (!user?.uid) return;
+      try {
+        await createPersonalCalendarEvent(user.uid, newEventData);
+      } catch (error) {
+        console.error('Unable to save personal calendar event:', error);
+        return;
       }
       setNewEvent({
         title: '',

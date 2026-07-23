@@ -6,22 +6,6 @@ import HytBot from '../hytbot/HytBot';
 import { getCourseByName, getCourseTemplateById } from '../../utils/firestoreService';
 import { formatCertification } from '../../utils/courseLabel';
 
-const TRAINER_COURSE_TITLES = {
-  1: 'AUTOMOTIVE SERVICES NCII',
-  2: 'PLUMBING NCII',
-  3: 'HILOT (WELLNESS)MASSAGE',
-  4: 'CAREGIVING NCII',
-  5: 'BEAUTY CARE (SKINCARE)',
-  6: 'BEAUTY CARE (NAIL CARE)',
-  7: 'VISUAL GRAPHICS DESIGN',
-  8: 'COMPUTER SYSTEM SERVICING',
-  9: 'BOOKKEEPING NCII',
-  10: 'HOUSEKEEPING NCII',
-  11: 'EVENT MANAGEMENT SERVICES',
-  12: 'BARISTA NCII',
-  13: 'FOOD AND BEVERAGE SERVICES',
-};
-
 const DashboardLayout = () => {
   const location = useLocation();
   const params = useParams();
@@ -53,12 +37,8 @@ const DashboardLayout = () => {
     if (path === '/trainer') {
       return { title: '', subtitle: '' };
     }
-    if (path.includes('/trainer/courses/')) {
-      const activeCourseTitle = TRAINER_COURSE_TITLES[Number(params.courseId)] || 'Course';
-      return { title: activeCourseTitle, subtitle: 'Your earned certifications and progress toward new ones.' };
-    }
     if (path === '/trainer/tasks') {
-      return { title: 'Tasks', subtitle: 'Your earned certifications and progress toward new ones.' };
+      return { title: 'Tasks', subtitle: 'Review assignments, assessments, and class deadlines.' };
     }
     if (path.includes('/trainer/sectors/')) {
       return { title: 'Sectors', subtitle: 'Training Regulations' };

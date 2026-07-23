@@ -18,9 +18,11 @@ import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
 import { compressAvatarImageToBase64 } from '../../utils/avatarStorage';
 import { normalizePhMobile, toStoredPhMobile } from '../../utils/phone';
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateProfile } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
+import { getUserPrivateProfile, saveUserPrivateProfile } from '../../utils/firestoreService';
+import { joinNameFields, normalizeEditedNameFields } from '../../utils/nameFormat';
 
 const Settings = () => {
   const { addToast } = useToast();
@@ -44,7 +46,7 @@ const Settings = () => {
     nameExtension: '',
     birthDate: '',
     emailAddress: '',
-    fullAddress: '167 Brgy. Yehey, Quezon City, Philippines',
+    fullAddress: '',
     contactNumber: '',
     email: '',
     password: '',
@@ -97,9 +99,6 @@ const Settings = () => {
 
   const tabs = [
     { id: 'account', label: 'Account', icon: User },
-    { id: 'access', label: 'Access and Notification', icon: Bell },
-    { id: 'system', label: 'System Preference', icon: SettingsIcon },
-    { id: 'security', label: 'Backup & Security', icon: Shield },
   ];
 
   useEffect(() => {
@@ -147,7 +146,10 @@ const Settings = () => {
 
     const loadProfile = async () => {
       try {
-        const userDoc = await getDoc(doc(db, 'users', uid));
+        const [userDoc, privateProfile] = await Promise.all([
+          getDoc(doc(db, 'users', uid)),
+          getUserPrivateProfile(uid),
+        ]);
         if (!userDoc.exists()) {
           return;
         }
@@ -162,9 +164,11 @@ const Settings = () => {
           middleName: data.middleName || p.middleName || prev.middleName,
           lastName: data.lastName || p.lastName || prev.lastName,
           nameExtension: data.nameExtension || p.nameExtension || prev.nameExtension,
-          birthDate: data.birthDate || p.dateOfBirth || prev.birthDate,
-          fullAddress: data.address || prev.fullAddress,
-          contactNumber: normalizePhMobile(data.phone || p.phoneNumber || prev.contactNumber),
+          birthDate: privateProfile?.birthDate || data.birthDate || p.dateOfBirth || prev.birthDate,
+          fullAddress: privateProfile?.address || data.address || prev.fullAddress,
+          contactNumber: normalizePhMobile(
+            privateProfile?.phone || data.phone || p.phoneNumber || prev.contactNumber
+          ),
           email: emailValue,
           emailAddress: emailValue,
         }));
@@ -266,35 +270,38 @@ const Settings = () => {
         avatarBase64 = null;
       }
 
-      await saveSettings({
-        avatarBase64,
-        accountForm,
-        accessSettings,
-        notificationSettings,
-        systemPrefs,
-        securitySettings,
-      });
+      await saveSettings({ avatarBase64 });
 
       if (uid && db) {
-        const fullName = `${accountForm.firstName.trim()} ${accountForm.middleName.trim()} ${accountForm.lastName.trim()}${accountForm.nameExtension.trim() ? ` ${accountForm.nameExtension.trim()}` : ''}`.replace(/\s+/g, ' ').trim();
+        const normalizedName = normalizeEditedNameFields(accountForm);
+        if (!normalizedName.firstName || !normalizedName.lastName) {
+          throw new Error('First name and last name are required.');
+        }
+        const fullName = joinNameFields(normalizedName);
         await setDoc(
           doc(db, 'users', uid),
           {
             uid,
-            firstName: accountForm.firstName.trim(),
-            middleName: accountForm.middleName.trim(),
-            lastName: accountForm.lastName.trim(),
-            nameExtension: accountForm.nameExtension.trim(),
-            birthDate: accountForm.birthDate,
+            firstName: normalizedName.firstName,
+            middleName: normalizedName.middleName,
+            lastName: normalizedName.lastName,
+            nameExtension: normalizedName.nameExtension,
             name: fullName,
+            displayName: fullName,
             email: auth?.currentUser?.email || accountForm.email,
-            phone: toStoredPhMobile(accountForm.contactNumber),
-            address: accountForm.fullAddress.trim(),
             updatedAt: serverTimestamp(),
             avatarBase64: avatarBase64 || null,
           },
           { merge: true }
         );
+        await saveUserPrivateProfile(uid, {
+          birthDate: accountForm.birthDate,
+          phone: toStoredPhMobile(accountForm.contactNumber),
+          address: accountForm.fullAddress.trim(),
+        });
+        if (auth?.currentUser && auth.currentUser.displayName !== fullName) {
+          await updateProfile(auth.currentUser, { displayName: fullName });
+        }
       }
 
       setAvatar(avatarBase64 || null);
@@ -897,12 +904,6 @@ const Settings = () => {
     switch (activeTab) {
       case 'account':
         return renderAccountTab();
-      case 'access':
-        return renderAccessTab();
-      case 'system':
-        return renderSystemTab();
-      case 'security':
-        return renderSecurityTab();
       default:
         return renderAccountTab();
     }

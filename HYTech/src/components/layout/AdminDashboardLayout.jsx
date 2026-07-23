@@ -20,6 +20,15 @@ const AdminDashboardLayout = () => {
     if (path === '/admin/sectors') {
       return { title: 'Sectors', subtitle: 'Training Regulations' };
     }
+    if (path === '/admin/classes') {
+      return { title: 'Classes', subtitle: 'Manage course templates and active classes' };
+    }
+    if (path === '/admin/id-requests') {
+      return { title: 'ID Requests', subtitle: 'Review trainee identification requests' };
+    }
+    if (path === '/admin/incident-forms') {
+      return { title: 'Incident Forms', subtitle: 'Review and manage reported incidents' };
+    }
     if (path === '/admin/logs') {
       return { title: 'System Logs', subtitle: 'View system activity and audit logs' };
     }

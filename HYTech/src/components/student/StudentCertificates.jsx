@@ -166,7 +166,11 @@ const StudentCertificates = () => {
         id: enrollment.id,
         course: enrollment.courseName || 'Course',
         estCompletion: formatIssuedDate(enrollment.expectedCompletionDate, 'TBD'),
-        progress: enrollment.progress?.percentage || 0,
+        progress:
+          enrollment.progress?.overallProgress
+          ?? enrollment.progress?.percentage
+          ?? enrollment.progress?.completionRate
+          ?? 0,
         enrollmentId: enrollment.id,
       }));
 

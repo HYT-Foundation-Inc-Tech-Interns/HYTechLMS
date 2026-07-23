@@ -19,9 +19,10 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-  "auth": {
-    "providers": {
-      "emailPassword": true
-    }
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "functions": {
+    "source": "functions"
   }
 }

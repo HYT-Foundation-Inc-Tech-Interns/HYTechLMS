@@ -277,7 +277,7 @@ const StudentHome = () => {
     if (!activeEnrollments || activeEnrollments.length === 0) {
       return (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
-          <p className="text-gray-600">No active enrollments yet. Apply to a course to get started!</p>
+          <p className="text-gray-600">No active enrollments yet. Enter a class code or browse active classes to get started.</p>
         </div>
       );
     }
@@ -351,7 +351,7 @@ const StudentHome = () => {
                   <div className="bg-gray-50 rounded-lg p-2">
                     <p className="text-xs text-gray-500 font-medium">Attendance</p>
                     <p className="text-lg font-bold text-navy-900">
-                      {enrollment.progress?.attendanceRate || '-'}%
+                      {enrollment.progress?.attendanceRate ?? '-'}%
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-2">
@@ -360,7 +360,12 @@ const StudentHome = () => {
                   </div>
                   <div className="bg-gray-50 rounded-lg p-2">
                     <p className="text-xs text-gray-500 font-medium">Progress</p>
-                    <p className="text-lg font-bold text-navy-900">{enrollment.progress?.completionRate || '0'}%</p>
+                    <p className="text-lg font-bold text-navy-900">
+                      {enrollment.progress?.overallProgress
+                        ?? enrollment.progress?.percentage
+                        ?? enrollment.progress?.completionRate
+                        ?? 0}%
+                    </p>
                   </div>
                 </div>
 

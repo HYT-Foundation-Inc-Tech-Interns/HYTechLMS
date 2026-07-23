@@ -16,10 +16,17 @@ import {
   RotateCcw,
   ArrowUpDown
 } from 'lucide-react';
-import { createUserWithEmailAndPassword, getAuth, sendPasswordResetEmail } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  deleteUser,
+  getAuth,
+  sendPasswordResetEmail,
+  updateProfile,
+} from 'firebase/auth';
 import { deleteApp, initializeApp } from 'firebase/app';
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -35,22 +42,22 @@ import { auth, db, firebaseConfig, firebaseInitError, hasValidFirebaseConfig } f
 import { useToast } from '../../context/ToastContext';
 import {
   createNotification,
+  adminUpdateUserAccount,
+  generateNextIdNumber,
   getUserPrivateProfile,
   logActivity,
+  saveUserPrivateProfile,
 } from '../../utils/firestoreService';
 
-// Build the temporary password from a last name + birth date.
-// Strips spaces/punctuation so names like "De la Cruz" yield a clean,
-// space-free password (e.g. "delacruz_hytech_1998").
+// Generate a cryptographically random temporary password after the required
+// identity fields are present. It is never derived from personal information.
 const buildTempPassword = (lastName, birthDate) => {
-  const cleanLast = String(lastName || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // strip accents (e.g. é -> e)
-    .replace(/[^a-z0-9]/g, ''); // drop spaces, hyphens, apostrophes, etc.
-  const year = birthDate ? new Date(`${birthDate}T00:00:00`).getFullYear() : '';
-  if (!cleanLast || !year || Number.isNaN(year)) return '';
-  return `${cleanLast}_hytech_${year}`;
+  if (!String(lastName || '').trim() || !birthDate) return '';
+  const values = globalThis.crypto?.getRandomValues?.(new Uint32Array(2));
+  const token = values
+    ? `${values[0].toString(36)}${values[1].toString(36)}`
+    : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+  return `HyT!${token.slice(0, 12)}`;
 };
 
 const UserManagement = () => {
@@ -338,24 +345,21 @@ const UserManagement = () => {
     setIsAddingUser(true);
 
     const fullName = `${newUser.firstName} ${newUser.middleName ? `${newUser.middleName} ` : ''}${newUser.lastName}${newUser.nameExtension ? ` ${newUser.nameExtension}` : ''}`.trim();
-    const numericIdNumbers = users
-      .map((u) => Number(u.idNumber))
-      .filter((idNum) => !Number.isNaN(idNum));
-    const nextIdNumber = numericIdNumbers.length > 0
-      ? String(Math.max(...numericIdNumbers) + 1)
-      : '5684236526';
+    const nextIdNumber = await generateNextIdNumber();
 
     let secondaryApp = null;
+    let credential = null;
 
     try {
       secondaryApp = initializeApp(firebaseConfig, `user-management-${Date.now()}`);
       const secondaryAuth = getAuth(secondaryApp);
 
-      const credential = await createUserWithEmailAndPassword(
+      credential = await createUserWithEmailAndPassword(
         secondaryAuth,
         newUser.email.trim().toLowerCase(),
         newUser.password
       );
+      await updateProfile(credential.user, { displayName: fullName });
 
       await setDoc(doc(db, 'users', credential.user.uid), {
         uid: credential.user.uid,
@@ -365,11 +369,15 @@ const UserManagement = () => {
         nameExtension: newUser.nameExtension.trim(),
         idNumber: nextIdNumber,
         name: fullName,
+        displayName: fullName,
         email: newUser.email.trim().toLowerCase(),
         role: newUser.role.trim().toLowerCase(),
         status: 'Active',
         createdAt: serverTimestamp(),
         createdBy: 'admin',
+      });
+      await saveUserPrivateProfile(credential.user.uid, {
+        birthDate: newUser.birthDate,
       });
 
       await secondaryAuth.signOut();
@@ -392,6 +400,17 @@ const UserManagement = () => {
       setShowAddModal(false);
       addToast('User account created in Firebase Authentication.', 'success');
     } catch (error) {
+      if (credential?.user) {
+        try {
+          await deleteUser(credential.user);
+        } catch (rollbackError) {
+          console.error('Unable to roll back incomplete user creation:', rollbackError);
+        }
+        await Promise.all([
+          deleteDoc(doc(db, 'users', credential.user.uid, 'private', 'profile')).catch(() => {}),
+          deleteDoc(doc(db, 'users', credential.user.uid)).catch(() => {}),
+        ]);
+      }
       const errorMessages = {
         'auth/email-already-in-use': 'This email already exists in Firebase Authentication.',
         'auth/invalid-email': 'Please enter a valid email address.',
@@ -404,12 +423,6 @@ const UserManagement = () => {
         await deleteApp(secondaryApp);
       }
       setIsAddingUser(false);
-    }
-  };
-
-  const handleDeleteUser = () => {
-    if (selectedUser) {
-      // Delete removed: replaced by deactivation toggle. Keep function stub removed.
     }
   };
 
@@ -499,7 +512,7 @@ const UserManagement = () => {
     ].map((part) => String(part || '').trim()).filter(Boolean).join(' ');
 
     try {
-      await updateDoc(doc(db, 'users', selectedUser.id), {
+      await adminUpdateUserAccount(selectedUser.id, {
         firstName: editUser.firstName.trim(),
         middleName: editUser.middleName.trim(),
         lastName: editUser.lastName.trim(),
@@ -508,7 +521,6 @@ const UserManagement = () => {
         displayName: fullName,
         email: editUser.email.trim().toLowerCase(),
         role: editUser.role.trim().toLowerCase(),
-        updatedAt: serverTimestamp(),
       });
 
       const newRole = editUser.role.trim().toLowerCase();
@@ -1051,12 +1063,12 @@ const UserManagement = () => {
                   type="text"
                   value={newUser.password}
                   readOnly
-                  placeholder="lastname_hytech_year-of-birth"
+                  placeholder="Generated secure temporary password"
                   className="input-field bg-gray-50 cursor-not-allowed"
                   required
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Format: lastname_hytech_year-of-birth
+                  Generated randomly. Share it securely and ask the user to change it immediately.
                 </p>
               </div>
               <div className="sm:col-span-2">

@@ -131,6 +131,7 @@ const ClassDetail = () => {
   const [quizHasTimeLimit, setQuizHasTimeLimit] = useState(false);
   const [quizTimeLimit, setQuizTimeLimit] = useState('');
   const [quizPoints, setQuizPoints] = useState('100');
+  const [quizPassingScore, setQuizPassingScore] = useState('60');
   const [quizAvailableDate, setQuizAvailableDate] = useState('');
   const [quizDueDate, setQuizDueDate] = useState('');
   const [isSubmittingQuiz, setIsSubmittingQuiz] = useState(false);
@@ -810,19 +811,18 @@ const ClassDetail = () => {
       if (materialFiles && materialFiles.length > 0) {
         try {
           for (const file of materialFiles) {
+            const uploadedFile = await compressAndStoreFile(file, classData.id);
             // Store attachment metadata
             const attachmentData = {
               name: file.name,
               size: file.size,
               type: file.type,
-              uploadedAt: new Date().toISOString()
+              uploadedAt: new Date().toISOString(),
+              url: uploadedFile.url,
+              storagePath: uploadedFile.storagePath,
             };
 
             materialData.attachments.push(attachmentData);
-
-            // Compress and get base64
-            const compressedFile = await compressAndStoreFile(file);
-            materialData.filesBase64.push(compressedFile.base64);
           }
         } catch (fileErr) {
           console.error('Error processing files:', fileErr);
@@ -1296,7 +1296,6 @@ const ClassDetail = () => {
       // If file selected, compress and upload
       if (announcementFile) {
         try {
-          const compressedFile = await compressAndStoreFile(announcementFile);
           await storeAnnouncementAttachment(classData.id, announcement.id, announcementFile);
           addToast('Announcement posted with attachment!', 'success');
         } catch (fileErr) {
@@ -1717,7 +1716,7 @@ const ClassDetail = () => {
 
   // Handle mark student as graduated
   const handleGraduateStudent = async (enrollmentId, studentName) => {
-    if (window.confirm(`Are you sure you want to mark ${studentName} as graduated? They will complete the course and receive a certificate.`)) {
+    if (window.confirm(`Mark ${studentName} as graduated? Their enrollment will be archived as completed.`)) {
       try {
         await updateEnrollmentStatus(enrollmentId, 'completed');
         
@@ -1726,7 +1725,7 @@ const ClassDetail = () => {
           e.id === enrollmentId ? { ...e, status: 'completed' } : e
         ));
         
-        addToast(`${studentName} has been marked as graduated and will receive a certificate!`, 'success');
+        addToast(`${studentName} has been marked as graduated.`, 'success');
       } catch (err) {
         console.error('Error graduating student:', err);
         addToast('Failed to mark trainee as graduated', 'error');
@@ -2021,6 +2020,7 @@ const ClassDetail = () => {
       setQuizHasTimeLimit(false);
       setQuizTimeLimit('');
       setQuizPoints('100');
+      setQuizPassingScore('60');
       setQuizAvailableDate('');
       setQuizDueDate('');
       setAssessmentSettings({
@@ -2078,6 +2078,7 @@ const ClassDetail = () => {
     setQuizHasTimeLimit(timeLimit > 0);
     setQuizTimeLimit(timeLimit > 0 ? String(timeLimit) : '');
     setQuizPoints(String(assessment.totalPoints || 100));
+    setQuizPassingScore(String(assessment.passingScore ?? 60));
     setQuizAvailableDate(toDateInputValue(assessment.availableDate));
     setQuizDueDate(toDateInputValue(assessment.dueDate));
     setQuizQuestions(assessment.questions || []);
@@ -2093,6 +2094,15 @@ const ClassDetail = () => {
       return undefined;
     }
     return minutes;
+  };
+
+  const validatedPassingScore = () => {
+    const score = Number(quizPassingScore);
+    if (!Number.isFinite(score) || score < 0 || score > 100) {
+      addToast('Passing score must be from 0 to 100 percent.', 'error');
+      return undefined;
+    }
+    return score;
   };
 
   const addQuestion = () => {
@@ -2181,6 +2191,8 @@ const ClassDetail = () => {
 
     const timeLimit = validatedQuizTimeLimit();
     if (timeLimit === undefined) return;
+    const passingScore = validatedPassingScore();
+    if (passingScore === undefined) return;
 
     setIsSubmittingQuiz(true);
     try {
@@ -2190,6 +2202,7 @@ const ClassDetail = () => {
         type: assessmentType,
         timeLimit,
         totalPoints: parseInt(quizPoints) || 100,
+        passingScore,
         questions: quizQuestions,
         settings: assessmentSettings,
         availableDate: quizAvailableDate ? new Date(new Date(quizAvailableDate).setHours(0, 0, 0, 0)).toISOString() : null,
@@ -2236,6 +2249,8 @@ const ClassDetail = () => {
 
     const timeLimit = validatedQuizTimeLimit();
     if (timeLimit === undefined) return;
+    const passingScore = validatedPassingScore();
+    if (passingScore === undefined) return;
 
     if (!currentQuizDraftId) {
       addToast('Please save draft first before publishing', 'warning');
@@ -2250,6 +2265,7 @@ const ClassDetail = () => {
         type: assessmentType,
         timeLimit,
         totalPoints: parseInt(quizPoints) || 100,
+        passingScore,
         questions: quizQuestions,
         settings: assessmentSettings,
         availableDate: quizAvailableDate ? new Date(new Date(quizAvailableDate).setHours(0, 0, 0, 0)).toISOString() : null,
@@ -2270,6 +2286,7 @@ const ClassDetail = () => {
       setQuizHasTimeLimit(false);
       setQuizTimeLimit('');
       setQuizPoints('100');
+      setQuizPassingScore('60');
       setQuizAvailableDate('');
       setQuizDueDate('');
       setQuizQuestions([]);
@@ -3640,6 +3657,27 @@ const ClassDetail = () => {
                                 )}
                               </div>
                             </div>
+                            {attachment.url && (
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <a
+                                  href={attachment.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2 text-sm"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  Open
+                                </a>
+                                <a
+                                  href={attachment.url}
+                                  download={attachment.name}
+                                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2 text-sm"
+                                >
+                                  <Download className="w-4 h-4" />
+                                  Download
+                                </a>
+                              </div>
+                            )}
                             {selectedMaterialForView.filesBase64 && selectedMaterialForView.filesBase64[idx] && (
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 {(() => {
@@ -4530,7 +4568,19 @@ const ClassDetail = () => {
                                 </p>
                                 {sub.text && <p className="text-sm text-gray-700 mt-2 whitespace-pre-wrap">{sub.text}</p>}
                                 {sub.attachments?.length > 0 && (
-                                  <p className="text-xs text-gray-500 mt-2">Files: {sub.attachments.map((a) => a.name).join(', ')}</p>
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    {sub.attachments.map((attachment) => (
+                                      <a
+                                        key={attachment.storagePath || attachment.name}
+                                        href={attachment.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-blue-600 hover:underline"
+                                      >
+                                        {attachment.name}
+                                      </a>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                               <span className={`px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${sub.status === 'graded' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
@@ -4626,7 +4676,7 @@ const ClassDetail = () => {
                                 </td>
                                 <td className="px-6 py-4 text-center">
                                   <div className="flex items-center justify-center gap-2">
-                                    <span className={`font-bold text-lg ${percentage >= 60 ? 'text-green-600' : 'text-red-600'}`}>
+                                    <span className={`font-bold text-lg ${response.passed ? 'text-green-600' : 'text-red-600'}`}>
                                       {percentage}%
                                     </span>
                                   </div>
@@ -6278,6 +6328,18 @@ const ClassDetail = () => {
                       value={quizPoints}
                       onChange={(e) => setQuizPoints(e.target.value)}
                       placeholder="100"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Passing Score (%)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={quizPassingScore}
+                      onChange={(e) => setQuizPassingScore(e.target.value)}
                       className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
                     />
                   </div>

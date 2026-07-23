@@ -1,62 +1,45 @@
-import React, { useEffect } from 'react';
+import React from 'react';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import LandingPage from './components/landing/LandingPage';
-import SignUp from './components/auth/SignUp';
-import SignIn from './components/auth/SignIn';
-import VerifyEmail from './components/auth/VerifyEmail';
 import RoleProtectedRoute from './components/auth/RoleProtectedRoute';
 import PublicOnlyRoute from './components/auth/PublicOnlyRoute';
 import AuthenticatedRoute from './components/auth/AuthenticatedRoute';
-import { migrateClassesCoursTemplateIdToCourseId } from './utils/firestoreService';
 
-// Admin imports
-import AdminDashboardLayout from './components/layout/AdminDashboardLayout';
-import Dashboard from './components/dashboard/Dashboard';
-import UserManagement from './components/users/UserManagement';
-import Sectors from './components/sectors/Sectors';
-import Classes from './components/admin/Classes';
-import SystemLogs from './components/logs/SystemLogs';
-import Settings from './components/settings/Settings';
-import NotificationsPage from './components/shared/NotificationsPage';
-import IdRequests from './components/shared/IdRequests';
-import IncidentForms from './components/shared/IncidentForms';
-import StudentRequestId from './components/student/StudentRequestId';
-
-// Trainor imports
-import DashboardLayout from './components/layout/DashboardLayout';
-import TrainerHome from './components/trainer/TrainerHome';
-import ClassDetail from './components/trainer/ClassDetail';
-import Tasks from './components/trainer/Tasks';
-import SectorDetail from './components/trainer/SectorDetail';
-import ArchivedCourses from './components/trainer/ArchivedCourses';
-import TrainerSettings from './components/trainer/TrainerSettings';
-
-// Trainee imports
-import StudentDashboardLayout from './components/student/StudentDashboardLayout';
-import StudentHome from './components/student/StudentHome';
-import StudentEnroll from './components/student/StudentEnroll';
-import StudentCourse from './components/student/StudentCourse';
-import StudentTasks from './components/student/StudentTasks';
-import StudentCertificates from './components/student/StudentCertificates';
-import StudentArchivedCourses from './components/student/StudentArchivedCourses';
-import StudentSettings from './components/student/StudentSettings';
-import StudentCalendar from './components/student/StudentCalendar';
+const LandingPage = lazy(() => import('./components/landing/LandingPage'));
+const SignUp = lazy(() => import('./components/auth/SignUp'));
+const SignIn = lazy(() => import('./components/auth/SignIn'));
+const VerifyEmail = lazy(() => import('./components/auth/VerifyEmail'));
+const AdminDashboardLayout = lazy(() => import('./components/layout/AdminDashboardLayout'));
+const Dashboard = lazy(() => import('./components/dashboard/Dashboard'));
+const UserManagement = lazy(() => import('./components/users/UserManagement'));
+const Sectors = lazy(() => import('./components/sectors/Sectors'));
+const Classes = lazy(() => import('./components/admin/Classes'));
+const SystemLogs = lazy(() => import('./components/logs/SystemLogs'));
+const Settings = lazy(() => import('./components/settings/Settings'));
+const NotificationsPage = lazy(() => import('./components/shared/NotificationsPage'));
+const IdRequests = lazy(() => import('./components/shared/IdRequests'));
+const IncidentForms = lazy(() => import('./components/shared/IncidentForms'));
+const StudentRequestId = lazy(() => import('./components/student/StudentRequestId'));
+const DashboardLayout = lazy(() => import('./components/layout/DashboardLayout'));
+const TrainerHome = lazy(() => import('./components/trainer/TrainerHome'));
+const ClassDetail = lazy(() => import('./components/trainer/ClassDetail'));
+const Tasks = lazy(() => import('./components/trainer/Tasks'));
+const SectorDetail = lazy(() => import('./components/trainer/SectorDetail'));
+const ArchivedCourses = lazy(() => import('./components/trainer/ArchivedCourses'));
+const TrainerSettings = lazy(() => import('./components/trainer/TrainerSettings'));
+const StudentDashboardLayout = lazy(() => import('./components/student/StudentDashboardLayout'));
+const StudentHome = lazy(() => import('./components/student/StudentHome'));
+const StudentEnroll = lazy(() => import('./components/student/StudentEnroll'));
+const StudentCourse = lazy(() => import('./components/student/StudentCourse'));
+const StudentTasks = lazy(() => import('./components/student/StudentTasks'));
+const StudentArchivedCourses = lazy(() => import('./components/student/StudentArchivedCourses'));
+const StudentSettings = lazy(() => import('./components/student/StudentSettings'));
+const StudentCalendar = lazy(() => import('./components/student/StudentCalendar'));
 
 function App() {
-  // Run one-time data migration on app load
-  useEffect(() => {
-    const runMigration = async () => {
-      try {
-        await migrateClassesCoursTemplateIdToCourseId();
-      } catch (error) {
-        console.error('Migration error (non-blocking):', error);
-      }
-    };
-    runMigration();
-  }, []);
-
   return (
     <Router>
+      <Suspense fallback={<div className="min-h-screen bg-gray-50" aria-label="Loading page" />}>
       <Routes>
         {/* Landing & Auth Routes */}
         <Route path="/" element={<LandingPage />} />
@@ -157,6 +140,7 @@ function App() {
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </Router>
   );
 }

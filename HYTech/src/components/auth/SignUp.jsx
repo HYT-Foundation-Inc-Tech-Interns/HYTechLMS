@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Lock, Eye, EyeOff } from 'lucide-react';
 import {
@@ -21,80 +21,22 @@ import { normalizePhMobile, isValidPhMobile, toStoredPhMobile } from '../../util
 import { buildFullName, normalizeNameFields } from '../../utils/nameFormat';
 
 const SignUp = () => {
-  const SIGN_UP_DRAFT_KEY = 'hyt:signup:draft';
   const navigate = useNavigate();
   const { addToast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-  const [rememberMe, setRememberMe] = useState(() => {
-    try {
-      const saved = localStorage.getItem(SIGN_UP_DRAFT_KEY);
-      return saved ? Boolean(JSON.parse(saved)?.rememberMe) : false;
-    } catch {
-      return false;
-    }
-  });
-  const [formData, setFormData] = useState(() => {
-    try {
-      const saved = localStorage.getItem(SIGN_UP_DRAFT_KEY);
-      if (!saved) {
-        return {
-          firstName: '',
-          middleName: '',
-          lastName: '',
-          nameExtension: '',
-          birthDate: '',
-          email: '',
-          phone: '',
-          password: '',
-        };
-      }
-      const parsed = JSON.parse(saved);
-      return {
-        firstName: parsed?.firstName || '',
-        middleName: parsed?.middleName || '',
-        lastName: parsed?.lastName || '',
-        nameExtension: parsed?.nameExtension || '',
-        birthDate: parsed?.birthDate || '',
-        email: parsed?.email || '',
-        phone: parsed?.phone || '',
-        password: '',
-      };
-    } catch {
-      return {
-        firstName: '',
-        middleName: '',
-        lastName: '',
-        nameExtension: '',
-        birthDate: '',
-        email: '',
-        phone: '',
-        password: '',
-      };
-    }
+  const [rememberMe, setRememberMe] = useState(false);
+  const [formData, setFormData] = useState({
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    nameExtension: '',
+    birthDate: '',
+    email: '',
+    phone: '',
+    password: '',
   });
   const [isLoading, setIsLoading] = useState(false);
-
-  // Clear form on page load/refresh
-  useEffect(() => {
-    localStorage.removeItem(SIGN_UP_DRAFT_KEY);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(
-      SIGN_UP_DRAFT_KEY,
-      JSON.stringify({
-        firstName: formData.firstName,
-        middleName: formData.middleName,
-        lastName: formData.lastName,
-        nameExtension: formData.nameExtension,
-        birthDate: formData.birthDate,
-        email: formData.email,
-        phone: formData.phone,
-        rememberMe,
-      })
-    );
-  }, [formData, rememberMe]);
 
   const clearForm = () => {
     setFormData({
@@ -108,7 +50,6 @@ const SignUp = () => {
       password: '',
     });
     setCurrentStep(1);
-    localStorage.removeItem(SIGN_UP_DRAFT_KEY);
     addToast('Form cleared successfully!', 'success');
   };
 
@@ -241,7 +182,6 @@ const SignUp = () => {
           : `Account created, but we couldn't send the verification email automatically. You can resend it on the next screen.`,
         emailSent ? 'success' : 'warning'
       );
-      localStorage.removeItem(SIGN_UP_DRAFT_KEY);
       navigate('/verify-email', { state: { email: normalizedEmail, emailSent } });
     } catch (error) {
       // Roll back a brand-new Auth account when its required profile bundle

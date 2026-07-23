@@ -57,12 +57,24 @@ export const compressAvatarImageToBase64 = async (file) => {
   const inputType = (file && file.type) || '';
   const preserveAlpha = inputType.includes('png') || inputType.includes('gif') || inputType.includes('webp');
   const mimeType = preserveAlpha ? 'image/png' : 'image/jpeg';
-  // Convert to base64 string
-  const base64 = mimeType === 'image/jpeg' ? canvas.toDataURL(mimeType, IMAGE_QUALITY) : canvas.toDataURL(mimeType);
+  if (!storage || !auth?.currentUser?.uid) {
+    throw new Error('You must be signed in to upload a profile photo.');
+  }
+  const blob = await toBlob(canvas, mimeType, mimeType === 'image/jpeg' ? IMAGE_QUALITY : undefined);
+  const extension = mimeType === 'image/png' ? 'png' : 'jpg';
+  const path = `userAvatars/${auth.currentUser.uid}/profile/avatar.${extension}`;
+  const avatarRef = ref(storage, path);
+  await uploadBytes(avatarRef, blob, { contentType: mimeType });
+  const url = await getDownloadURL(avatarRef);
   return {
-    base64,
+    // Kept for call-site compatibility; this is now a compact Storage URL,
+    // not an embedded Base64 payload.
+    base64: url,
+    url,
     width,
     height,
     originalSize: file.size,
   };
 };
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { auth, storage } from '../firebase';

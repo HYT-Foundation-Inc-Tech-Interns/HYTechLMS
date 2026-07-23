@@ -2,16 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { 
   Archive,
   Eye,
-  Trash2,
   CheckCircle2,
   Clock,
-  Star,
-  Users,
   X,
   BookOpen,
-  Award,
   FileText,
-  BarChart3,
   Loader
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -20,9 +15,7 @@ import { getStudentEnrollments, getCoursesTemplates } from '../../utils/firestor
 
 const StudentArchivedCourses = () => {
   const [uid, setUid] = useState('guest');
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
-  const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [archivedCourses, setArchivedCourses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +62,9 @@ const StudentArchivedCourses = () => {
             id: enrollment.id,
             name: enrollment.className || 'Graduated Class',
             courseName: courseTemplate?.name || enrollment.courseName || 'Course',
-            instructor: courseTemplate?.trainerName || 'Trainor',
+            instructor: enrollment.trainerName || 'Not recorded',
+            description: courseTemplate?.description || enrollment.description || '',
+            modules: Array.isArray(courseTemplate?.subjects) ? courseTemplate.subjects : [],
             completedDate: enrollment.completedAt 
               ? new Date(enrollment.completedAt.toDate?.() || enrollment.completedAt).toLocaleDateString('en-US', {
                   year: 'numeric',
@@ -77,17 +72,13 @@ const StudentArchivedCourses = () => {
                   day: 'numeric'
                 })
               : 'Recently completed',
-            rating: 5,
-            students: 0,
             image: courseTemplate?.bgImage || null,
-            finalGrade: enrollment.finalGrade || 'Pass',
-            recipientName: uid,
-            credentialId: enrollment.certificateId || `CERT-${enrollment.id.substring(0, 8).toUpperCase()}`,
-            scores: {
-              quizzes: 0,
-              assignments: 0,
-              exams: 0,
-            },
+            finalGrade: enrollment.finalGrade || '',
+            progress:
+              enrollment.progress?.overallProgress
+              ?? enrollment.progress?.percentage
+              ?? enrollment.progress?.completionRate
+              ?? 100,
           };
         });
 
@@ -104,28 +95,12 @@ const StudentArchivedCourses = () => {
   }, [uid]);
 
   const getOverallProgress = (course) => {
-    const values = [course?.scores?.quizzes, course?.scores?.assignments, course?.scores?.exams]
-      .map((value) => Number(value || 0));
-    const total = values.reduce((sum, value) => sum + value, 0);
-    return Math.round(total / values.length);
-  };
-
-  const handleDelete = (course) => {
-    setSelectedCourse(course);
-    setShowDeleteModal(true);
+    return Math.min(100, Math.max(0, Number(course?.progress) || 0));
   };
 
   const handleView = (course) => {
     setSelectedCourse(course);
     setShowViewModal(true);
-  };
-
-  const confirmDelete = () => {
-    if (selectedCourse) {
-      setArchivedCourses((prev) => prev.filter((course) => course.id !== selectedCourse.id));
-    }
-    setShowDeleteModal(false);
-    setSelectedCourse(null);
   };
 
   return (
@@ -180,27 +155,17 @@ const StudentArchivedCourses = () => {
               </div>
 
               {/* Grade Badge */}
-              <div className="absolute top-3 right-3 px-3 py-1.5 bg-white text-[#0D4291] text-sm font-bold rounded-full">
-                Grade: {course.finalGrade}
-              </div>
+              {course.finalGrade && (
+                <div className="absolute top-3 right-3 px-3 py-1.5 bg-white text-[#0D4291] text-sm font-bold rounded-full">
+                  Grade: {course.finalGrade}
+                </div>
+              )}
             </div>
 
             {/* Course Details */}
             <div className="p-4 space-y-3">
               <h3 className="font-bold text-gray-900 text-lg">{course.name}</h3>
               <p className="text-sm text-gray-500">{course.instructor}</p>
-
-              {/* Stats */}
-              <div className="flex items-center gap-4 text-sm text-gray-500">
-                <div className="flex items-center gap-1">
-                  <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                  <span>{course.rating}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Users className="w-4 h-4 text-gray-400" />
-                  <span>{course.students} trainees</span>
-                </div>
-              </div>
 
               {/* Completion Date */}
               <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -254,9 +219,11 @@ const StudentArchivedCourses = () => {
                     <CheckCircle2 className="w-3 h-3" />
                     Completed
                   </span>
-                  <span className="px-3 py-1 bg-white text-[#0D4291] text-sm font-bold rounded-full">
-                    Grade: {selectedCourse.finalGrade}
-                  </span>
+                  {selectedCourse.finalGrade && (
+                    <span className="px-3 py-1 bg-white text-[#0D4291] text-sm font-bold rounded-full">
+                      Grade: {selectedCourse.finalGrade}
+                    </span>
+                  )}
                 </div>
                 <h2 className="text-2xl font-bold text-white">{selectedCourse.name}</h2>
                 <p className="text-white/80">Instructor: {selectedCourse.instructor}</p>
@@ -266,27 +233,17 @@ const StudentArchivedCourses = () => {
             {/* Modal Content */}
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-12rem)]">
               {/* Course Stats */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="bg-gray-50 rounded-xl p-4 text-center">
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-                    <span className="text-xl font-bold text-gray-900">{selectedCourse.rating}</span>
-                  </div>
-                  <p className="text-sm text-gray-500">Course Rating</p>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-4 text-center">
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <Users className="w-5 h-5 text-blue-500" />
-                    <span className="text-xl font-bold text-gray-900">{selectedCourse.students}</span>
-                  </div>
-                  <p className="text-sm text-gray-500">Trainees</p>
-                </div>
+              <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-gray-50 rounded-xl p-4 text-center">
                   <div className="flex items-center justify-center gap-1 mb-1">
                     <Clock className="w-5 h-5 text-green-500" />
-                    <span className="text-xl font-bold text-gray-900">100%</span>
+                    <span className="text-xl font-bold text-gray-900">{selectedCourse.completedDate}</span>
                   </div>
-                  <p className="text-sm text-gray-500">Completed</p>
+                  <p className="text-sm text-gray-500">Completion date</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4 text-center">
+                  <p className="text-xl font-bold text-gray-900">{getOverallProgress(selectedCourse)}%</p>
+                  <p className="text-sm text-gray-500">Recorded progress</p>
                 </div>
               </div>
 
@@ -297,34 +254,8 @@ const StudentArchivedCourses = () => {
                   Course Overview
                 </h3>
                 <p className="text-gray-600 leading-relaxed">
-                  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+                  {selectedCourse.description || 'No course description was recorded.'}
                 </p>
-              </div>
-
-              {/* Learning Outcomes */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <Award className="w-5 h-5 text-[#0D4291]" />
-                  What You Learned
-                </h3>
-                <ul className="space-y-2">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-600">Lorem ipsum dolor sit amet, consectetur adipiscing elit</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-600">Sed do eiusmod tempor incididunt ut labore et dolore</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-600">Ut enim ad minim veniam, quis nostrud exercitation</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-600">Duis aute irure dolor in reprehenderit in voluptate</span>
-                  </li>
-                </ul>
               </div>
 
               {/* Course Modules */}
@@ -334,7 +265,7 @@ const StudentArchivedCourses = () => {
                   Course Modules
                 </h3>
                 <div className="space-y-2">
-                  {['Module 1: Introduction', 'Module 2: Fundamentals', 'Module 3: Advanced Concepts', 'Module 4: Practical Application', 'Module 5: Final Assessment'].map((module, index) => (
+                  {selectedCourse.modules.map((module, index) => (
                     <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
                       <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                         <CheckCircle2 className="w-4 h-4 text-green-500" />
@@ -343,6 +274,9 @@ const StudentArchivedCourses = () => {
                       <span className="ml-auto text-sm text-gray-500">Completed</span>
                     </div>
                   ))}
+                  {selectedCourse.modules.length === 0 && (
+                    <p className="text-sm text-gray-500">No module list was recorded for this course.</p>
+                  )}
                 </div>
               </div>
 
@@ -352,138 +286,14 @@ const StudentArchivedCourses = () => {
                   <p className="text-sm text-green-600 font-medium">Completion Date</p>
                   <p className="text-lg font-bold text-green-700">{selectedCourse.completedDate}</p>
                 </div>
-                {/* Certificates feature hidden for now — restore this button to re-enable. */}
-                {/* <button
-                  onClick={() => setShowCertificateModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#0D4291] text-white rounded-xl font-medium hover:bg-[#0a3577] transition-colors"
-                >
-                  <Award className="w-4 h-4" />
-                  View Certificate
-                </button> */}
               </div>
 
-              <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
-                <div className="flex items-center gap-2 mb-3">
-                  <BarChart3 className="w-5 h-5 text-blue-700" />
-                  <h4 className="font-bold text-blue-900">Overall Progress Statistics</h4>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <div className="bg-white rounded-lg p-3 border border-blue-100">
-                    <p className="text-xs text-gray-500">Quizzes</p>
-                    <p className="text-xl font-bold text-gray-900">{selectedCourse.scores?.quizzes || 0}%</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-3 border border-blue-100">
-                    <p className="text-xs text-gray-500">Assignments</p>
-                    <p className="text-xl font-bold text-gray-900">{selectedCourse.scores?.assignments || 0}%</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-3 border border-blue-100">
-                    <p className="text-xs text-gray-500">Exams</p>
-                    <p className="text-xl font-bold text-gray-900">{selectedCourse.scores?.exams || 0}%</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-3 border border-blue-100">
-                    <p className="text-xs text-gray-500">Overall</p>
-                    <p className="text-xl font-bold text-blue-700">{getOverallProgress(selectedCourse)}%</p>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
           </div>
         </div>
       )}
 
-      {showCertificateModal && selectedCourse && (
-        <div className="fixed inset-0 z-[10000] overflow-y-auto p-4 sm:p-6">
-          <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm"
-            onClick={() => setShowCertificateModal(false)}
-          />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-          <div className="relative bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">Certificate of Completion</h3>
-              <button
-                onClick={() => setShowCertificateModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-full"
-              >
-                <X className="w-5 h-5 text-gray-600" />
-              </button>
-            </div>
-            <div className="p-6 bg-white">
-              <div className="border-4 border-[#1e3a8a] rounded-xl p-6">
-                <div className="border border-[#1e3a8a] rounded-lg p-8 text-center">
-                  <Award className="w-12 h-12 text-[#1e3a8a] mx-auto mb-3" />
-                  <h4 className="text-2xl font-black text-[#1e3a8a] tracking-wide">CERTIFICATE OF COMPLETION</h4>
-                  <p className="text-sm text-gray-500 mt-4">This certifies that</p>
-                  <p className="text-3xl text-[#1e3a8a] mt-1" style={{ fontFamily: "'Pinyon Script', cursive" }}>
-                    {selectedCourse.recipientName || 'Trainee'}
-                  </p>
-                  <p className="text-sm text-gray-500 mt-4">has successfully completed</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1">{selectedCourse.name}</p>
-                  <div className="grid grid-cols-2 gap-4 mt-8 text-sm text-left">
-                    <div>
-                      <p className="text-gray-500">Date Issued</p>
-                      <p className="font-semibold text-gray-900">{selectedCourse.completedDate}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Credential ID</p>
-                      <p className="font-semibold text-gray-900">{selectedCourse.credentialId || `CERT-${selectedCourse.id}`}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
-              <button
-                onClick={() => setShowCertificateModal(false)}
-                className="px-5 py-2.5 bg-[#0D4291] text-white rounded-xl font-medium hover:bg-[#0a3577] transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && selectedCourse && (
-        <div className="fixed inset-0 z-[9999] overflow-y-auto p-4 sm:p-6">
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => { setShowDeleteModal(false); setSelectedCourse(null); }}
-          />
-          <div className="relative mx-auto my-auto flex min-h-full items-center justify-center">
-          <div className="relative bg-white rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-8 h-8 text-red-500" />
-              </div>
-              
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Archived Course?</h3>
-              <p className="text-gray-500 mb-6">
-                Are you sure you want to remove <span className="font-semibold text-gray-700">{selectedCourse.name}</span> from your archives? This action cannot be undone.
-              </p>
-
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => { setShowDeleteModal(false); setSelectedCourse(null); }}
-                  className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={confirmDelete}
-                  className="flex-1 px-4 py-2.5 bg-red-500 text-white rounded-xl font-medium hover:bg-red-600 transition-colors"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -3,6 +3,7 @@ import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -27,6 +28,7 @@ let app = null;
 let auth = null;
 let db = null;
 let storage = null;
+let functions = null;
 
 export let firebaseInitError = '';
 
@@ -55,10 +57,11 @@ if (hasValidFirebaseConfig) {
   auth = getAuth(app);
   db = getFirestore(app);
   storage = getStorage(app);
+  functions = getFunctions(app, 'asia-southeast1');
 } else {
   firebaseInitError =
     'Firebase config is missing. Add VITE_FIREBASE_* values in .env.local and restart the dev server.';
   console.error(firebaseInitError);
 }
 
-export { app, auth, db, storage, firebaseConfig, hasValidFirebaseConfig };
+export { app, auth, db, storage, functions, firebaseConfig, hasValidFirebaseConfig };

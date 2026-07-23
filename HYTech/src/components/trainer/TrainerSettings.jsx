@@ -162,19 +162,7 @@ const handleSave = async () => {
       avatarBase64 = null;
     }
 
-    // Keep PII out of the world-readable userSettings copy.
-    const publicProfileForm = {
-      ...profileForm,
-      ...normalizedName,
-      phone: '',
-      birthDate: '',
-    };
-    await saveSettings({
-      profileForm: publicProfileForm,
-      trainerNotificationSettings,
-      privacySettings,
-      avatarBase64,
-    });
+    await saveSettings({ avatarBase64 });
 
     if (uid && db) {
       const fullName = joinNameFields(normalizedName);
@@ -269,7 +257,6 @@ const handleSave = async () => {
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: Shield },
   ];
 
@@ -493,7 +480,7 @@ const handleSave = async () => {
         </div>
       </div>
 
-      <div className="pt-6 border-t border-gray-200">
+      {false && <div className="pt-6 border-t border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Privacy Settings</h3>
         <div className="space-y-3">
           <label className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
@@ -529,9 +516,9 @@ const handleSave = async () => {
             </button>
           </div>
         </div>
-      </div>
+      </div>}
 
-      <div className="pt-6 border-t border-gray-200">
+      {false && <div className="pt-6 border-t border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Two-Factor Authentication</h3>
         <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
           <div>
@@ -542,7 +529,7 @@ const handleSave = async () => {
             Enable
           </button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 
@@ -600,7 +587,6 @@ const handleSave = async () => {
 
         <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6">
           {activeTab === 'profile' && renderProfileSettings()}
-          {activeTab === 'notifications' && renderNotificationSettings()}
           {activeTab === 'security' && renderSecuritySettings()}
         </div>
 
@@ -610,7 +596,7 @@ const handleSave = async () => {
           </div>
         )}
 
-        <div className="flex justify-end mt-6">
+        {activeTab === 'profile' && <div className="flex justify-end mt-6">
           <button
             onClick={handleSave}
             disabled={isSaving}
@@ -628,7 +614,7 @@ const handleSave = async () => {
               </>
             )}
           </button>
-        </div>
+        </div>}
       </div>
     </div>
   );

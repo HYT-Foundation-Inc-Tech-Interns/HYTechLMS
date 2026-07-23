@@ -19,6 +19,8 @@ import {
   Layers,
   Filter,
   ArrowUpDown,
+  Eye,
+  Copy,
 } from 'lucide-react';
 import {
   getCourses,
@@ -34,6 +36,11 @@ import {
   setCourseAvailability,
   seedTesdaCatalog,
   updateCourseTemplate,
+  getClassTopics,
+  getClassMaterials,
+  getAssessments,
+  getAssignments,
+  promoteClassToTemplate,
 } from '../../utils/firestoreService';
 import { catalogTotals } from '../../data/tesdaCatalog';
 import SubjectListEditor from '../shared/SubjectListEditor';
@@ -71,6 +78,16 @@ const Classes = () => {
   const [editingClassId, setEditingClassId] = useState(null);
   const [editFormData, setEditFormData] = useState({});
   const [savingClassId, setSavingClassId] = useState(null);
+  const [previewingClass, setPreviewingClass] = useState(null);
+  const [previewContent, setPreviewContent] = useState({
+    topics: [],
+    materials: [],
+    assessments: [],
+    assignments: [],
+  });
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [showPromoteWarning, setShowPromoteWarning] = useState(false);
+  const [promotingTemplate, setPromotingTemplate] = useState(false);
 
   // New Course (template) modal
   const [showAddCourse, setShowAddCourse] = useState(false);
@@ -128,6 +145,77 @@ const Classes = () => {
   const trainerName = (trainerId) => {
     const t = trainerFor(trainerId);
     return t?.name || t?.displayName || t?.email || (trainerId ? 'Unknown trainer' : 'Unassigned');
+  };
+  const programFor = (courseId) => courses.find((course) => course.id === courseId);
+
+  const closeTemplatePreview = () => {
+    if (promotingTemplate) return;
+    setPreviewingClass(null);
+    setShowPromoteWarning(false);
+    setPreviewContent({ topics: [], materials: [], assessments: [], assignments: [] });
+  };
+
+  const openTemplatePreview = async (classItem) => {
+    if (!classItem?.courseId) {
+      addToast('This class is not linked to a program and cannot be promoted.', 'error');
+      return;
+    }
+    setPreviewingClass(classItem);
+    setShowPromoteWarning(false);
+    setPreviewLoading(true);
+    try {
+      const [topics, materials, assessments, assignments] = await Promise.all([
+        getClassTopics(classItem.id),
+        getClassMaterials(classItem.id),
+        getAssessments(classItem.id),
+        getAssignments(classItem.id),
+      ]);
+      setPreviewContent({
+        topics: topics || [],
+        materials: materials || [],
+        assessments: assessments || [],
+        assignments: assignments || [],
+      });
+    } catch (err) {
+      console.error('Error loading class template preview:', err);
+      addToast(err?.message || 'Could not load the class content preview.', 'error');
+      setPreviewingClass(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handlePromoteClass = async () => {
+    if (!previewingClass?.courseId) return;
+    try {
+      setPromotingTemplate(true);
+      const result = await promoteClassToTemplate(previewingClass.id);
+      const promotedAt = new Date();
+      setCourses((prev) => prev.map((course) => (
+        course.id === previewingClass.courseId
+          ? {
+              ...course,
+              hasContent: true,
+              sourceClassId: previewingClass.id,
+              promotedAt,
+            }
+          : course
+      )));
+      addToast(
+        `“${previewingClass.name}” is now the default template for ${
+          programFor(previewingClass.courseId)?.name || 'this program'
+        }. ${result?.counts?.copiedDocuments || 0} content items copied.`,
+        'success'
+      );
+      setPreviewingClass(null);
+      setShowPromoteWarning(false);
+      setPreviewContent({ topics: [], materials: [], assessments: [], assignments: [] });
+    } catch (err) {
+      console.error('Error promoting class to template:', err);
+      addToast(err?.message || 'Could not replace the program template.', 'error');
+    } finally {
+      setPromotingTemplate(false);
+    }
   };
 
   // ---- Manage students (admin) ----
@@ -435,6 +523,29 @@ const Classes = () => {
       {status || 'Active'}
     </span>
   );
+  const previewTopicIds = new Set(previewContent.topics.map((topic) => topic.id));
+  const matchesPreviewTopic = (item, topicId) => {
+    const itemTopicId = item.topicId || null;
+    return topicId === null
+      ? itemTopicId === null || !previewTopicIds.has(itemTopicId)
+      : itemTopicId === topicId;
+  };
+  const previewItemsForTopic = (topicId) => [
+    ...previewContent.materials
+      .filter((item) => matchesPreviewTopic(item, topicId))
+      .map((item) => ({ ...item, previewKind: 'Material' })),
+    ...previewContent.assessments
+      .filter((item) => matchesPreviewTopic(item, topicId))
+      .map((item) => ({ ...item, previewKind: 'Quiz' })),
+    ...previewContent.assignments
+      .filter((item) => matchesPreviewTopic(item, topicId))
+      .map((item) => ({ ...item, previewKind: 'Assignment' })),
+  ];
+  const previewItemCount =
+    previewContent.topics.length
+    + previewContent.materials.length
+    + previewContent.assessments.length
+    + previewContent.assignments.length;
 
   return (
     <div className="min-h-screen bg-gray-50 pt-6 px-4 sm:px-6 lg:px-8">
@@ -619,6 +730,12 @@ const Classes = () => {
                       </div>
                       <p className="text-xs text-gray-500 uppercase tracking-wide mt-1">{sectorName(course.sectorId)}</p>
                       <p className="text-sm text-gray-600 mt-2 line-clamp-2">{course.description || 'No description'}</p>
+                      {course.hasContent === true && (
+                        <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700">
+                          <Check className="h-3.5 w-3.5" />
+                          Full-content template ready
+                        </div>
+                      )}
                       <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
                         <button
                           onClick={() => openSubjectsEditor(course)}
@@ -700,7 +817,20 @@ const Classes = () => {
                     {expandedClassId === course.id && (
                       <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 space-y-4">
                         {!editingClassId && (
-                          <div className="flex justify-end gap-2">
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <button
+                              onClick={() => openTemplatePreview(course)}
+                              disabled={!course.courseId}
+                              title={
+                                course.courseId
+                                  ? 'Preview and promote this class as the program default'
+                                  : 'This class is not linked to a program'
+                              }
+                              className="flex items-center gap-2 px-4 py-2 border border-violet-200 bg-violet-50 text-violet-700 rounded-lg hover:bg-violet-100 transition-colors text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Copy className="w-4 h-4" />
+                              Use as Default Template
+                            </button>
                             <button
                               onClick={() => openManageStudents(course)}
                               className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
@@ -951,6 +1081,173 @@ const Classes = () => {
                 {savingCourse ? 'Creating…' : 'Create Course'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Read-only class content preview before replacing a program template */}
+      {previewingClass && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-6">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={closeTemplatePreview} />
+          <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 p-5 sm:p-6">
+              <div>
+                <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-violet-700">
+                  <Eye className="h-4 w-4" />
+                  Read-only content preview
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">{previewingClass.name}</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Program: {programFor(previewingClass.courseId)?.name || 'Unknown program'}
+                </p>
+              </div>
+              <button
+                onClick={closeTemplatePreview}
+                disabled={promotingTemplate}
+                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+                aria-label="Close preview"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6">
+              {previewLoading ? (
+                <div className="flex min-h-64 items-center justify-center gap-3 text-gray-600">
+                  <Loader className="h-6 w-6 animate-spin text-violet-600" />
+                  Loading class content…
+                </div>
+              ) : showPromoteWarning ? (
+                <div className="mx-auto max-w-2xl py-6">
+                  <div className="rounded-2xl border border-amber-300 bg-amber-50 p-6">
+                    <AlertCircle className="mb-4 h-9 w-9 text-amber-600" />
+                    <h3 className="text-xl font-bold text-amber-950">Replace the current default template?</h3>
+                    <p className="mt-3 leading-7 text-amber-900">
+                      This will replace all current default content for{' '}
+                      <strong>{programFor(previewingClass.courseId)?.name || 'this program'}</strong>{' '}
+                      with the content from <strong>{previewingClass.name}</strong>.
+                    </p>
+                    <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-amber-800">
+                      <li>Future classes created from this template will receive the new content.</li>
+                      <li>Existing classes are unaffected because their content was copied when they were created.</li>
+                      <li>Topics, files, quizzes, protected answer keys, and assignments are replaced together.</li>
+                      <li>Attempts and trainee submissions are never copied.</li>
+                    </ul>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {[
+                      ['Topics', previewContent.topics.length],
+                      ['Materials', previewContent.materials.length],
+                      ['Quizzes', previewContent.assessments.length],
+                      ['Assignments', previewContent.assignments.length],
+                    ].map(([label, count]) => (
+                      <div key={label} className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-center">
+                        <p className="text-2xl font-bold text-gray-900">{count}</p>
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {previewItemCount === 0 ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+                      <p className="font-semibold text-amber-900">This class has no reusable content yet.</p>
+                      <p className="mt-1 text-sm text-amber-700">
+                        Add a topic, material, quiz, or assignment before promoting it.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {previewContent.topics.map((topic, index) => {
+                        const items = previewItemsForTopic(topic.id);
+                        return (
+                          <section key={topic.id} className="overflow-hidden rounded-xl border border-gray-200">
+                            <div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
+                              <p className="font-semibold text-gray-900">
+                                {index + 1}. {topic.title || 'Untitled topic'}
+                              </p>
+                              {topic.description && (
+                                <p className="mt-1 text-sm text-gray-500">{topic.description}</p>
+                              )}
+                            </div>
+                            <div className="divide-y divide-gray-100">
+                              {items.length === 0 ? (
+                                <p className="px-4 py-3 text-sm text-gray-400">No content assigned to this topic.</p>
+                              ) : items.map((item) => (
+                                <div key={`${item.previewKind}-${item.id}`} className="flex items-center justify-between gap-3 px-4 py-3">
+                                  <span className="min-w-0 truncate text-sm font-medium text-gray-800">
+                                    {item.title || 'Untitled item'}
+                                  </span>
+                                  <span className="shrink-0 rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-700">
+                                    {item.previewKind}
+                                    {item.previewKind === 'Quiz' && Array.isArray(item.questions)
+                                      ? ` · ${item.questions.length} questions`
+                                      : ''}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </section>
+                        );
+                      })}
+
+                      {previewItemsForTopic(null).length > 0 && (
+                        <section className="overflow-hidden rounded-xl border border-gray-200">
+                          <div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
+                            <p className="font-semibold text-gray-900">Unassigned content</p>
+                          </div>
+                          <div className="divide-y divide-gray-100">
+                            {previewItemsForTopic(null).map((item) => (
+                              <div key={`${item.previewKind}-${item.id}`} className="flex items-center justify-between gap-3 px-4 py-3">
+                                <span className="min-w-0 truncate text-sm font-medium text-gray-800">
+                                  {item.title || 'Untitled item'}
+                                </span>
+                                <span className="shrink-0 rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-700">
+                                  {item.previewKind}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {!previewLoading && (
+              <div className="flex flex-col-reverse gap-2 border-t border-gray-100 bg-gray-50 p-4 sm:flex-row sm:justify-end sm:p-5">
+                <button
+                  onClick={showPromoteWarning ? () => setShowPromoteWarning(false) : closeTemplatePreview}
+                  disabled={promotingTemplate}
+                  className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                >
+                  {showPromoteWarning ? 'Back to preview' : 'Cancel'}
+                </button>
+                {showPromoteWarning ? (
+                  <button
+                    onClick={handlePromoteClass}
+                    disabled={promotingTemplate}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    {promotingTemplate ? <Loader className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                    {promotingTemplate ? 'Replacing template…' : 'Replace Default Template'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setShowPromoteWarning(true)}
+                    disabled={previewItemCount === 0}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Copy className="h-4 w-4" />
+                    Use this Class as Default Template
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

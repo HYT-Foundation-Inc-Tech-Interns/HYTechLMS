@@ -2,12 +2,46 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    function canUseLms() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.status == 'Active';
+    }
+
+    function isAdmin() {
+      return canUseLms()
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function classTrainer(classId) {
+      return canUseLms()
+        && firestore.exists(/databases/(default)/documents/classes/$(classId))
+        && (
+          firestore.get(/databases/(default)/documents/classes/$(classId)).data.trainerId == request.auth.uid
+          || request.auth.uid in firestore.get(/databases/(default)/documents/classes/$(classId)).data.get('coTrainerIds', [])
+        );
+    }
+
+    function classMember(classId) {
+      return canUseLms()
+        && firestore.exists(/databases/(default)/documents/classes/$(classId)/members/$(request.auth.uid));
+    }
+
     match /userAvatars/{uid}/{role}/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
+      allow read: if canUseLms();
+      allow write: if canUseLms()
         && request.auth.uid == uid
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+    }
+    match /lmsFiles/{classId}/{uid}/{allPaths=**} {
+      allow read: if isAdmin()
+        || classTrainer(classId)
+        || classMember(classId);
+      allow write: if canUseLms()
+        && request.auth.uid == uid
+        && (isAdmin() || classTrainer(classId) || classMember(classId))
+        && request.resource.size < 25 * 1024 * 1024;
     }
     match /{allPaths=**} {
       allow read, write: if false;

@@ -2,7 +2,13 @@ export const getNotificationDestination = (notification, role = 'student') => {
   const basePath = role === 'admin' ? '/admin' : role === 'trainer' ? '/trainer' : '/student';
   const metadata = notification?.metadata || {};
 
-  if (metadata.link) return metadata.link;
+  if (
+    typeof metadata.link === 'string'
+    && metadata.link.startsWith(`${basePath}/`)
+    && !metadata.link.startsWith('//')
+  ) {
+    return metadata.link;
+  }
 
   switch (notification?.type) {
     case 'id_request':
@@ -11,7 +17,9 @@ export const getNotificationDestination = (notification, role = 'student') => {
     case 'id_request_completed':
       return role === 'admin' ? '/admin/id-requests' : `${basePath}/request-id`;
     case 'incident_filed':
-      return `${basePath}/incident-forms`;
+      return role === 'student'
+        ? '/student/incident-form'
+        : `${basePath}/incident-forms`;
     case 'join_request':
     case 'student_waiting':
     case 'notify_trainer':

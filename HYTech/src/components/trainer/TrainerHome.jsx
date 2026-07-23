@@ -8,7 +8,6 @@ import {
   Archive, 
   Edit2, 
   Trash2, 
-  Check, 
   X, 
   Loader, 
   AlertCircle, 
@@ -25,15 +24,13 @@ import {
   getCourses,
   getClassesForTrainer,
   getCoursesTemplates,
-  getCourseApplications,
   getCourseEnrollments,
-  approveApplication,
-  rejectApplication,
   updateEnrollmentStatus,
   updateCourse,
   getSectors,
   getSectorById,
   createCourse,
+  generateUniqueClassCode,
   reconcileSectorStatuses,
 } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
@@ -65,21 +62,18 @@ const TrainerHome = () => {
 
   // State Management
   const [courses, setCourses] = useState([]);
-  const [applications, setApplications] = useState([]);
   const [enrollments, setEnrollments] = useState({});
   
   const [activeMenu, setActiveMenu] = useState(null);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
-  const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [editingClass, setEditingClass] = useState(null);
   const [editClassName, setEditClassName] = useState('');
   const [isUpdatingClass, setIsUpdatingClass] = useState(false);
-  const [selectedApp, setSelectedApp] = useState(null);
-  const [rejectReason, setRejectReason] = useState('');
 
   // Create Class States
   const [showCreateClassModal, setShowCreateClassModal] = useState(false);
+  const [creationPath, setCreationPath] = useState(null);
   const [sectors, setSectors] = useState([]);
   const [availableCourses, setAvailableCourses] = useState([]);
   const [selectedFilterSector, setSelectedFilterSector] = useState('');
@@ -95,8 +89,6 @@ const TrainerHome = () => {
 
   // Loading & Error States
   const [loadingCourses, setLoadingCourses] = useState(true);
-  const [loadingApplications, setLoadingApplications] = useState(false);
-  const [loadingApprove, setLoadingApprove] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
 
   // Initialize: Load trainer's courses and available courses
@@ -134,13 +126,6 @@ const TrainerHome = () => {
         const sectorsData = await getSectors();
         setSectors(sectorsData || []);
 
-        // Load pending applications for trainer's courses
-        const appsData = await getCourseApplications({
-          trainerId: user.uid,
-          status: 'pending',
-        });
-        setApplications(appsData || []);
-
         // Load enrollments for each course
         if (coursesData && coursesData.length > 0) {
           const enrollmentsMap = {};
@@ -161,44 +146,6 @@ const TrainerHome = () => {
 
     loadTrainerData();
   }, [user?.uid]);
-
-  // Handle approve application
-  const handleApproveApplication = async (appId) => {
-    try {
-      setLoadingApprove(true);
-      await approveApplication(appId);
-      addToast('Application approved! Enrollment will be created shortly.', 'success');
-      
-      // Remove from pending list immediately (reactive update)
-      setApplications(applications.filter(a => a.id !== appId));
-      setShowApplicationModal(false);
-      setSelectedApp(null);
-    } catch (error) {
-      console.error('Error approving application:', error);
-      addToast(error.message || 'Failed to approve application', 'error');
-    } finally {
-      setLoadingApprove(false);
-    }
-  };
-
-  // Handle reject application
-  const handleRejectApplication = async (appId) => {
-    try {
-      setLoadingApprove(true);
-      await rejectApplication(appId, rejectReason);
-      addToast('Application rejected.', 'success');
-      
-      setApplications(applications.filter(a => a.id !== appId));
-      setShowApplicationModal(false);
-      setSelectedApp(null);
-      setRejectReason('');
-    } catch (error) {
-      console.error('Error rejecting application:', error);
-      addToast(error.message || 'Failed to reject application', 'error');
-    } finally {
-      setLoadingApprove(false);
-    }
-  };
 
   // Handle archive class
   const handleArchiveCourse = async (courseId) => {
@@ -264,6 +211,7 @@ const TrainerHome = () => {
   const handleOpenCreateClass = () => {
     // Open modal first
     setShowCreateClassModal(true);
+    setCreationPath(null);
     setSelectedSector(null);
     setSectorClasses([]);
     setSelectedClassDetails(null);
@@ -295,7 +243,11 @@ const TrainerHome = () => {
       setLoadingSectors(true);
       setSelectedSector(sector);
       const coursesData = await getCoursesTemplates({ sectorId: sector.id, availableOnly: true });
-      setSectorClasses(coursesData || []);
+      setSectorClasses(
+        creationPath === 'template'
+          ? (coursesData || []).filter((course) => course.hasContent === true)
+          : (coursesData || [])
+      );
       setSelectedClassDetails(null);
     } catch (error) {
       console.error('Error loading courses:', error);
@@ -313,7 +265,11 @@ const TrainerHome = () => {
     });
     // Pre-fill the editable subject list from the program template. The trainer
     // can rename/reorder/add/remove before these become the class's modules.
-    setClassSubjects(Array.isArray(courseItem.subjects) ? [...courseItem.subjects] : []);
+    setClassSubjects(
+      creationPath === 'empty' && Array.isArray(courseItem.subjects)
+        ? [...courseItem.subjects]
+        : []
+    );
   };
 
   // Handle create class
@@ -333,8 +289,7 @@ const TrainerHome = () => {
 
     try {
       setLoadingSectors(true);
-      // Generate unique class code
-      const classCode = `CLASS-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      const classCode = await generateUniqueClassCode();
       
       await createCourse({
         name: newClassForm.name,
@@ -344,13 +299,14 @@ const TrainerHome = () => {
         classCode: classCode,
         courseId: selectedClassDetails.id,
         bgImage: selectedClassDetails.bgImage || '',
-        // Trainer-customized module list for this class (falls back to the
-        // template's subjects inside createCourse if empty).
-        subjects: classSubjects,
+        templateMode: creationPath,
+        templateHasContent: selectedClassDetails.hasContent === true,
+        subjects: creationPath === 'empty' ? classSubjects : [],
       }, { sectorId: selectedSector.id, trainerId: user.uid });
       
       addToast(`Class created successfully! Code: ${classCode}`, 'success');
       setShowCreateClassModal(false);
+      setCreationPath(null);
       setSelectedSector(null);
       setSectorClasses([]);
       setSelectedClassDetails(null);
@@ -376,9 +332,16 @@ const TrainerHome = () => {
 
   // Reset modal to sectors view
   const handleBackToSectors = () => {
-    setSelectedSector(null);
-    setSectorClasses([]);
-    setSelectedClassDetails(null);
+    if (selectedClassDetails) {
+      setSelectedClassDetails(null);
+      return;
+    }
+    if (selectedSector) {
+      setSelectedSector(null);
+      setSectorClasses([]);
+      return;
+    }
+    setCreationPath(null);
   };
 
   // Toast notification
@@ -394,7 +357,7 @@ const TrainerHome = () => {
         <div className="bg-white rounded-lg w-full max-w-2xl max-h-[85vh] overflow-y-auto">
           <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
             <div className="flex items-center gap-3">
-              {selectedSector && (
+              {creationPath && (
                 <button
                   onClick={handleBackToSectors}
                   className="p-1 hover:bg-gray-100 rounded"
@@ -407,8 +370,10 @@ const TrainerHome = () => {
                 {selectedClassDetails
                   ? 'Create Class'
                   : selectedSector
-                  ? `Courses in ${selectedSector.name}`
-                  : 'Select a Sector'}
+                  ? `Programs in ${selectedSector.name}`
+                  : creationPath
+                  ? 'Select a Sector'
+                  : 'How do you want to start?'}
               </h2>
             </div>
             <button
@@ -441,14 +406,28 @@ const TrainerHome = () => {
                   />
                   <p className="mt-1 text-xs text-gray-500">Use a distinct name for this class or batch. You can change it later.</p>
                 </div>
-                <div className="pt-2 border-t border-gray-100">
-                  <SubjectListEditor
-                    subjects={classSubjects}
-                    onChange={setClassSubjects}
-                    label="Modules for this class"
-                    hint="Copied from the program's subjects. Edit them for this class — the shared program template stays unchanged."
-                  />
-                </div>
+                {creationPath === 'empty' ? (
+                  <div className="pt-2 border-t border-gray-100">
+                    <SubjectListEditor
+                      subjects={classSubjects}
+                      onChange={setClassSubjects}
+                      label="Module outline"
+                      hint="These titles create empty module sections. Materials, quizzes, and assignments will not be copied."
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                    <div className="flex items-start gap-3">
+                      <Copy className="mt-0.5 h-5 w-5 text-blue-700" />
+                      <div>
+                        <p className="font-semibold text-blue-900">Full teaching content included</p>
+                        <p className="mt-1 text-sm text-blue-700">
+                          Topics, study materials, quizzes, protected answer keys, and assignments will be copied into this class.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="flex gap-2 pt-4">
                   <button
                     onClick={() => setSelectedClassDetails(null)}
@@ -469,7 +448,18 @@ const TrainerHome = () => {
               // Courses List View - Select a course to create a class from it
               <div className="space-y-2">
                 {sectorClasses.length === 0 ? (
-                  <p className="text-gray-600 text-center py-4">No courses in this sector yet.</p>
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-center">
+                    <p className="font-medium text-amber-900">
+                      {creationPath === 'template'
+                        ? 'No full-content templates are ready in this sector.'
+                        : 'No available programs are in this sector yet.'}
+                    </p>
+                    {creationPath === 'template' && (
+                      <p className="mt-1 text-sm text-amber-700">
+                        Create an empty class first. After its content is built, an administrator can promote it as this program’s default template.
+                      </p>
+                    )}
+                  </div>
                 ) : (
                   sectorClasses.map((classItem) => (
                     <div
@@ -480,6 +470,11 @@ const TrainerHome = () => {
                       <h4 className="font-semibold text-gray-900">{classItem.name}</h4>
                       <p className="text-sm text-gray-600 mt-1">{classItem.description}</p>
                       <div className="flex gap-2 mt-2">
+                        {classItem.hasContent === true && (
+                          <span className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded">
+                            Includes materials &amp; quizzes
+                          </span>
+                        )}
                         <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
                           {classItem.level || 'NC'}
                         </span>
@@ -495,7 +490,7 @@ const TrainerHome = () => {
                   ))
                 )}
               </div>
-            ) : (
+            ) : creationPath ? (
               // Sectors List View
               <div className="space-y-2">
                 {sectors.length === 0 ? (
@@ -519,6 +514,41 @@ const TrainerHome = () => {
                     </div>
                   ))
                 )}
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setCreationPath('template')}
+                  className="group rounded-2xl border-2 border-blue-200 bg-blue-50 p-6 text-left transition hover:border-blue-500 hover:bg-blue-100"
+                >
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-white">
+                    <Copy className="h-6 w-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">Use a Template</h3>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">
+                    Start with the program’s admin-approved topics, materials, quizzes, answer keys, and assignments.
+                  </p>
+                  <span className="mt-4 inline-flex text-sm font-semibold text-blue-700">
+                    Choose template
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreationPath('empty')}
+                  className="group rounded-2xl border-2 border-gray-200 bg-white p-6 text-left transition hover:border-gray-400 hover:bg-gray-50"
+                >
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gray-800 text-white">
+                    <Plus className="h-6 w-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">Create Empty Class</h3>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">
+                    Link the class to a program and create only its module outline, then build the teaching content yourself.
+                  </p>
+                  <span className="mt-4 inline-flex text-sm font-semibold text-gray-700">
+                    Start empty
+                  </span>
+                </button>
               </div>
             )}
           </div>
@@ -839,95 +869,6 @@ const TrainerHome = () => {
                 </button>
               </div>
             </form>
-          </div>
-        )}
-
-        {/* Applications Review Modal */}
-        {showApplicationModal && selectedCourse && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">
-                Pending Applications - {selectedCourse.name}
-              </h2>
-
-              <div className="space-y-4 max-h-[60dvh] overflow-y-auto mb-6">
-                {applications
-                  .filter(a => a.courseId === selectedCourse.id)
-                  .map((app) => (
-                    <div key={app.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <p className="font-bold text-gray-900">Applicant ID: {app.studentId}</p>
-                          <p className="text-sm text-gray-600 mt-1">
-                            Applied: {new Date(app.appliedAt.seconds * 1000).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2 mt-3">
-                        <button
-                          onClick={() => handleApproveApplication(app.id)}
-                          disabled={loadingApprove}
-                          className="px-4 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
-                        >
-                          <Check className="w-4 h-4" />
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedApp(app);
-                            setShowApplicationModal(false);
-                          }}
-                          disabled={loadingApprove}
-                          className="px-4 py-2 bg-red-600 text-white rounded text-sm hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
-                        >
-                          <X className="w-4 h-4" />
-                          Reject
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-
-              <button
-                onClick={() => setShowApplicationModal(false)}
-                className="w-full px-4 py-2 text-gray-700 border border-gray-300 rounded hover:bg-gray-50"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Rejection Modal */}
-        {selectedApp && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-sm w-full p-4 sm:p-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">Reject Application</h2>
-              
-              <textarea
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Reason for rejection (optional)"
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-4 h-24"
-              />
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setSelectedApp(null)}
-                  className="flex-1 px-4 py-2 text-gray-700 border border-gray-300 rounded hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleRejectApplication(selectedApp.id)}
-                  disabled={loadingApprove}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-                >
-                  {loadingApprove ? 'Rejecting...' : 'Reject'}
-                </button>
-              </div>
-            </div>
           </div>
         )}
 

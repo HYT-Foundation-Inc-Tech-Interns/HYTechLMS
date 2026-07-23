@@ -192,7 +192,7 @@ const StudentSettings = () => {
 
       // Preferences belong in userSettings; identity fields live only in the
       // users document/private profile to avoid two sources overwriting them.
-      await saveSettings({ notifications, privacyForm, avatarBase64 });
+      await saveSettings({ avatarBase64 });
       setProfileForm((prev) => ({ ...prev, ...normalizedName }));
       setEditedNameFields({});
       setAvatar(avatarBase64 || null);
@@ -252,8 +252,7 @@ const StudentSettings = () => {
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'security', label: 'Security & Privacy', icon: Shield },
+    { id: 'security', label: 'Security', icon: Shield },
   ];
 
   // Derive real account dates from Firebase Auth metadata (no hardcoded values).
@@ -505,7 +504,7 @@ const StudentSettings = () => {
         </div>
       </div>
 
-      <div className="pt-6 border-t border-gray-200">
+      {false && <div className="pt-6 border-t border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Privacy Settings</h3>
         <div className="space-y-3">
           <label className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
@@ -541,7 +540,7 @@ const StudentSettings = () => {
             </button>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 
@@ -567,8 +566,8 @@ const StudentSettings = () => {
           {tabs.map((tab) => (
             <option key={tab.id} value={tab.id}>{tab.label}</option>
           ))}
-        </select>
-      </div>
+          </select>
+        </div>
 
       <div className="mb-6 hidden gap-2 overflow-x-auto border-b border-gray-200 sm:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((tab) => (
@@ -589,7 +588,6 @@ const StudentSettings = () => {
 
       <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6">
         {activeTab === 'profile' && renderProfileSettings()}
-        {activeTab === 'notifications' && renderNotificationSettings()}
         {activeTab === 'security' && renderSecuritySettings()}
       </div>
 
@@ -599,7 +597,7 @@ const StudentSettings = () => {
         </div>
       )}
 
-      {(activeTab === 'profile' || activeTab === 'notifications') && (
+      {activeTab === 'profile' && (
         <div className="flex justify-end mt-6">
           <button
             onClick={handleSave}

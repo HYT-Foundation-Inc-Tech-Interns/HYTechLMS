@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang xml:lang>
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>HYTech LMS Comprehensive Audit Report</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="data:text/css,%40page%20%7B%0Asize%3A%20A4%3B%0Amargin%3A%2018mm%2016mm%2018mm%2016mm%3B%0A%7D%0A%3Aroot%20%7B%0A%2D%2Dink%3A%20%23172033%3B%0A%2D%2Dmuted%3A%20%23596579%3B%0A%2D%2Dnavy%3A%20%2314213d%3B%0A%2D%2Dblue%3A%20%231d4ed8%3B%0A%2D%2Dorange%3A%20%23e56b1f%3B%0A%2D%2Dred%3A%20%23b42318%3B%0A%2D%2Damber%3A%20%23b54708%3B%0A%2D%2Dline%3A%20%23d8dee9%3B%0A%2D%2Dsoft%3A%20%23f4f7fb%3B%0A%7D%0Ahtml%20%7B%0Afont%2Dsize%3A%2010%2E2pt%3B%0A%7D%0Abody%20%7B%0Acolor%3A%20var%28%2D%2Dink%29%3B%0Afont%2Dfamily%3A%20%22Segoe%20UI%22%2C%20Arial%2C%20Helvetica%2C%20sans%2Dserif%3B%0Aline%2Dheight%3A%201%2E48%3B%0Amax%2Dwidth%3A%20100%25%3B%0Amargin%3A%200%3B%0Apadding%3A%200%3B%0Abackground%3A%20white%3B%0A%7D%0Ah1%2C%20h2%2C%20h3%2C%20h4%20%7B%0Acolor%3A%20var%28%2D%2Dnavy%29%3B%0Afont%2Dweight%3A%20700%3B%0Aline%2Dheight%3A%201%2E18%3B%0Apage%2Dbreak%2Dafter%3A%20avoid%3B%0A%7D%0Ah1%20%7B%0Amargin%3A%202rem%200%200%2E85rem%3B%0Apadding%2Dbottom%3A%200%2E32rem%3B%0Aborder%2Dbottom%3A%202px%20solid%20var%28%2D%2Dorange%29%3B%0Afont%2Dsize%3A%2020pt%3B%0A%7D%0Abody%20%3E%20h1%3Afirst%2Dchild%20%7B%0Amargin%2Dtop%3A%2034mm%3B%0Aborder%2Dbottom%3A%200%3B%0Acolor%3A%20var%28%2D%2Dnavy%29%3B%0Afont%2Dsize%3A%2029pt%3B%0Aletter%2Dspacing%3A%20%2D0%2E5px%3B%0A%7D%0Abody%20%3E%20h1%3Afirst%2Dchild%20%2B%20h2%20%7B%0Amargin%2Dtop%3A%200%2E2rem%3B%0Amax%2Dwidth%3A%20165mm%3B%0Acolor%3A%20var%28%2D%2Dorange%29%3B%0Afont%2Dsize%3A%2018pt%3B%0Afont%2Dweight%3A%20600%3B%0A%7D%0Ah2%20%7B%0Amargin%3A%201%2E55rem%200%200%2E65rem%3B%0Afont%2Dsize%3A%2015pt%3B%0A%7D%0Ah3%20%7B%0Amargin%3A%201%2E25rem%200%200%2E45rem%3B%0Afont%2Dsize%3A%2012%2E3pt%3B%0A%7D%0Ap%20%7B%0Amargin%3A%200%2E35rem%200%200%2E7rem%3B%0Aorphans%3A%203%3B%0Awidows%3A%203%3B%0A%7D%0Aul%2C%20ol%20%7B%0Amargin%3A%200%2E4rem%200%200%2E8rem%201%2E35rem%3B%0Apadding%3A%200%3B%0A%7D%0Ali%20%7B%0Amargin%3A%200%2E18rem%200%3B%0A%7D%0Astrong%20%7B%0Acolor%3A%20%23111827%3B%0A%7D%0Aa%20%7B%0Acolor%3A%20var%28%2D%2Dblue%29%3B%0Atext%2Ddecoration%3A%20none%3B%0Aoverflow%2Dwrap%3A%20anywhere%3B%0A%7D%0Acode%20%7B%0Acolor%3A%20%237c2d12%3B%0Abackground%3A%20%23fff7ed%3B%0Aborder%2Dradius%3A%203px%3B%0Apadding%3A%200%2E08rem%200%2E24rem%3B%0Afont%2Dfamily%3A%20Consolas%2C%20%22Courier%20New%22%2C%20monospace%3B%0Afont%2Dsize%3A%208%2E7pt%3B%0Aoverflow%2Dwrap%3A%20anywhere%3B%0A%7D%0Ablockquote%20%7B%0Amargin%3A%200%2E8rem%200%3B%0Apadding%3A%200%2E7rem%200%2E9rem%3B%0Aborder%2Dleft%3A%204px%20solid%20var%28%2D%2Dorange%29%3B%0Abackground%3A%20%23fff8f1%3B%0Acolor%3A%20%23374151%3B%0A%7D%0Ahr%20%7B%0Amargin%3A%201%2E4rem%200%3B%0Aborder%3A%200%3B%0Aborder%2Dtop%3A%201px%20solid%20var%28%2D%2Dline%29%3B%0A%7D%0Atable%20%7B%0Awidth%3A%20100%25%3B%0Amargin%3A%200%2E65rem%200%201rem%3B%0Aborder%2Dcollapse%3A%20collapse%3B%0Atable%2Dlayout%3A%20auto%3B%0Afont%2Dsize%3A%208%2E6pt%3B%0Apage%2Dbreak%2Dinside%3A%20auto%3B%0A%7D%0Athead%20%7B%0Adisplay%3A%20table%2Dheader%2Dgroup%3B%0A%7D%0Atr%20%7B%0Apage%2Dbreak%2Dinside%3A%20avoid%3B%0Apage%2Dbreak%2Dafter%3A%20auto%3B%0A%7D%0Ath%20%7B%0Apadding%3A%200%2E43rem%200%2E5rem%3B%0Acolor%3A%20white%3B%0Abackground%3A%20var%28%2D%2Dnavy%29%3B%0Aborder%3A%201px%20solid%20var%28%2D%2Dnavy%29%3B%0Atext%2Dalign%3A%20left%3B%0Avertical%2Dalign%3A%20top%3B%0A%7D%0Atd%20%7B%0Apadding%3A%200%2E42rem%200%2E5rem%3B%0Aborder%3A%201px%20solid%20var%28%2D%2Dline%29%3B%0Atext%2Dalign%3A%20left%3B%0Avertical%2Dalign%3A%20top%3B%0Aoverflow%2Dwrap%3A%20anywhere%3B%0A%7D%0Atbody%20tr%3Anth%2Dchild%28even%29%20td%20%7B%0Abackground%3A%20var%28%2D%2Dsoft%29%3B%0A%7D%0Ah1%3Anot%28%3Afirst%2Dchild%29%20%7B%0Abreak%2Dbefore%3A%20page%3B%0A%7D%0Ah1%20%2B%20h2%2C%0Ah2%20%2B%20h3%2C%0Ah3%20%2B%20p%2C%0Ah3%20%2B%20table%20%7B%0Abreak%2Dbefore%3A%20avoid%3B%0A%7D%0A%40media%20print%20%7B%0Abody%20%7B%0Aprint%2Dcolor%2Dadjust%3A%20exact%3B%0A%2Dwebkit%2Dprint%2Dcolor%2Dadjust%3A%20exact%3B%0A%7D%0Aa%20%7B%0Acolor%3A%20var%28%2D%2Dblue%29%3B%0A%7D%0Abody%20%3E%20h1%3Afirst%2Dchild%20%7B%0Abreak%2Dbefore%3A%20auto%3B%0A%7D%0A%7D%0A" />
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+</head>
+<body>
+<h1 id="hytech-learning-management-system">HYTech Learning Management System</h1>
+<h2 id="comprehensive-technical-security-scalability-turnover-and-compliance-audit">Comprehensive Technical, Security, Scalability, Turnover, and Compliance Audit</h2>
+<p><strong>Report date:</strong> 23 July 2026<br />
+<strong>System reviewed:</strong> HYTech Learning Management System (HYTech LMS)<br />
+<strong>Repository location:</strong> <code>HYTechLMS/HYTech</code><br />
+<strong>Assessment type:</strong> Read-only source, configuration, architecture, build, dependency, and governance review<br />
+<strong>Document classification:</strong> Internal / Confidential</p>
+<hr />
+<h2 id="document-purpose">Document purpose</h2>
+<p>This report consolidates the findings from a read-only review of the HYTech LMS. It assesses whether the system is ready to operate as a complete learning management system and examines security, privacy, academic integrity, feature completeness, mobile and accessibility quality, performance, scalability, developer and staff turnover, operational resilience, and Philippine compliance readiness.</p>
+<p>This is an engineering and operational risk assessment, not a formal penetration test, financial audit, certification, or legal opinion. Compliance conclusions require confirmation by the institution&#39;s Data Protection Officer (DPO), legal counsel, TESDA compliance personnel, and other responsible officers.</p>
+<p>No source code was changed during the assessment. No Git command was executed. A production build was generated outside the repository solely to validate build health and bundle characteristics.</p>
+<hr />
+<h1 id="contents">Contents</h1>
+<ol type="1">
+<li><a href="#1-executive-summary">Executive summary</a></li>
+<li><a href="#2-scope-and-methodology">Scope and methodology</a></li>
+<li><a href="#3-severity-model">Severity model</a></li>
+<li><a href="#4-critical-security-and-academic-integrity-findings">Critical security and academic-integrity findings</a></li>
+<li><a href="#5-backend-deployment-and-data-lifecycle-findings">Backend, deployment, and data-lifecycle findings</a></li>
+<li><a href="#6-lms-completeness-and-correctness">LMS completeness and correctness</a></li>
+<li><a href="#7-scalability-performance-and-cost">Scalability, performance, and cost</a></li>
+<li><a href="#8-mobile-usability-and-accessibility">Mobile usability and accessibility</a></li>
+<li><a href="#9-developer-administrator-and-vendor-turnover">Developer, administrator, and vendor turnover</a></li>
+<li><a href="#10-philippine-privacy-and-compliance-readiness">Philippine privacy and compliance readiness</a></li>
+<li><a href="#11-operational-resilience-and-enterprise-readiness">Operational resilience and enterprise readiness</a></li>
+<li><a href="#12-dependency-and-engineering-health">Dependency and engineering health</a></li>
+<li><a href="#13-prioritized-remediation-roadmap">Prioritized remediation roadmap</a></li>
+<li><a href="#14-suggested-ownership-model">Suggested ownership model</a></li>
+<li><a href="#15-consolidated-finding-register">Consolidated finding register</a></li>
+<li><a href="#appendix-a--turnover-and-handover-checklist">Appendix A — Turnover and handover checklist</a></li>
+<li><a href="#appendix-b--minimum-scalability-test-scenarios">Appendix B — Minimum scalability test scenarios</a></li>
+<li><a href="#appendix-c--key-external-references">Appendix C — Key external references</a></li>
+<li><a href="#appendix-d--final-acceptance-statement-template">Appendix D — Final acceptance statement template</a></li>
+</ol>
+<hr />
+<h1 id="1-executive-summary">1. Executive summary</h1>
+<h2 id="11-overall-conclusion">1.1 Overall conclusion</h2>
+<p><strong>The HYTech LMS is not ready for production use with real academic or personal data.</strong></p>
+<p>The system is not merely unfinished at the user-interface level. Its current backend trust model permits authenticated users to bypass essential LMS controls. Assessment answers can be exposed to students, grades and completion information can be submitted from the browser, class membership is not consistently enforced in Firestore rules, and deactivated users are restricted mainly by frontend routing rather than authoritative backend controls.</p>
+<p>The system also has significant privacy exposure, unreliable enrollment Functions, incomplete deployment automation, non-authoritative certificates, inconsistent grading rules, unbounded client-side database reads, no verified backup or recovery workflow, no automated test suite, and weak turnover documentation.</p>
+<p>Using the system for official grades, completion decisions, certificates, regulated training records, or sensitive learner information would create material security, privacy, academic-integrity, operational, and reputational risk.</p>
+<h2 id="12-overall-posture">1.2 Overall posture</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Domain</th>
+<th style="text-align: right;">Assessment</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Authentication and authorization</td>
+<td style="text-align: right;">Critical</td>
+<td>Backend rules do not consistently enforce active status, verified identity, or class membership.</td>
+</tr>
+<tr class="even">
+<td>Assessment and grading integrity</td>
+<td style="text-align: right;">Critical</td>
+<td>Answer keys are student-readable and grades are calculated and submitted by the client.</td>
+</tr>
+<tr class="odd">
+<td>Privacy and personal data</td>
+<td style="text-align: right;">Critical</td>
+<td>Sensitive and identifying data is overexposed and privacy governance workflows are absent.</td>
+</tr>
+<tr class="even">
+<td>Academic records and certificates</td>
+<td style="text-align: right;">Critical</td>
+<td>Progress, attempts, and certificates are not sufficiently authoritative or tamper-resistant.</td>
+</tr>
+<tr class="odd">
+<td>Backend reliability</td>
+<td style="text-align: right;">Critical</td>
+<td>Enrollment Functions are stale, structurally inconsistent, and unsafe under transaction or retry behavior.</td>
+</tr>
+<tr class="even">
+<td>Feature completeness</td>
+<td style="text-align: right;">High risk</td>
+<td>Numerous controls are incomplete, misleading, hardcoded, or local-only.</td>
+</tr>
+<tr class="odd">
+<td>Scalability and cost</td>
+<td style="text-align: right;">High risk</td>
+<td>Whole-collection reads, unbounded listeners, N+1 queries, and large documents increase cost and latency linearly.</td>
+</tr>
+<tr class="even">
+<td>Mobile and accessibility</td>
+<td style="text-align: right;">High risk</td>
+<td>Responsive behavior exists in places, but touch, keyboard, focus, labeling, and small-screen issues remain.</td>
+</tr>
+<tr class="odd">
+<td>Developer and staff turnover</td>
+<td style="text-align: right;">Critical</td>
+<td>Large monoliths, stale documentation, no automated tests, and incomplete offboarding create severe continuity risk.</td>
+</tr>
+<tr class="even">
+<td>Operations and resilience</td>
+<td style="text-align: right;">High risk</td>
+<td>No demonstrated staging model, restore drill, monitoring, alerting, incident workflow, or service objectives.</td>
+</tr>
+<tr class="odd">
+<td>Philippine compliance readiness</td>
+<td style="text-align: right;">Critical</td>
+<td>The codebase does not demonstrate the controls needed for DPA accountability or trustworthy regulated training records.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="13-most-urgent-risks">1.3 Most urgent risks</h2>
+<ol type="1">
+<li>Students can read assessment answer keys and submit client-generated scores.</li>
+<li>Signed-in users can read classes and course content without consistent enrollment checks.</li>
+<li>Deactivated and unverified users are not authoritatively blocked by backend rules.</li>
+<li>Progress, quiz attempts, submissions, and activity records can be client-controlled.</li>
+<li>Personal, educational, and incident information is accessible more broadly than necessary.</li>
+<li>Privileged test credentials are published and used by a script targeting the named Firebase project.</li>
+<li>Cloud Functions and the current class/enrollment model are incompatible and unreliable.</li>
+<li>CI deploys only hosting, allowing frontend and backend authorization/data models to become version-skewed.</li>
+<li>There is no credible privacy-notice, retention, data-subject-rights, breach-response, or vendor-governance implementation.</li>
+<li>The system has no automated regression or security-rules test suite.</li>
+</ol>
+<h2 id="14-positive-observations">1.4 Positive observations</h2>
+<p>The review did identify useful foundations:</p>
+<ul>
+<li>The application builds successfully.</li>
+<li>Firebase is configured in the <code>asia-southeast1</code> Firestore location, which is geographically sensible for a primarily Philippine user base.</li>
+<li>Firestore default-deny behavior is retained for unmatched paths.</li>
+<li>Some private profile data has been separated into a restricted subcollection.</li>
+<li>Auto-generated Firestore document IDs are used in several areas.</li>
+<li>Several screens already use role-based routing and real-time listeners.</li>
+<li>A manual acceptance checklist exists, although it is unexecuted and incomplete as a release control.</li>
+<li>The code contains an initial attempt at App Check integration.</li>
+</ul>
+<p>These foundations do not offset the critical defects, but they provide a starting point for remediation.</p>
+<hr />
+<h1 id="2-scope-and-methodology">2. Scope and methodology</h1>
+<h2 id="21-reviewed-areas">2.1 Reviewed areas</h2>
+<p>The review covered:</p>
+<ul>
+<li>React routes, layouts, components, and user workflows.</li>
+<li>Firebase initialization, Authentication use, Firestore access, Storage rules, and App Check initialization.</li>
+<li>Firestore security rules and indexes.</li>
+<li>Cloud Functions source and Functions dependencies.</li>
+<li>Deployment workflow and Firebase project configuration.</li>
+<li>Assessment, assignment, enrollment, progress, notification, incident, user-management, settings, and certificate behavior.</li>
+<li>Hardcoded values, dead controls, stale artifacts, and documentation claims.</li>
+<li>Mobile and accessibility patterns visible from the source.</li>
+<li>Dependency vulnerability audit results.</li>
+<li>Scalability, cost, availability, backup, turnover, and governance readiness.</li>
+<li>Philippine Data Privacy Act and education/TVET compliance risk at a technical-control level.</li>
+</ul>
+<h2 id="22-validation-performed">2.2 Validation performed</h2>
+<ul>
+<li>Read-only source and configuration inspection.</li>
+<li>Search for data-access patterns, hardcoded values, unfinished controls, and privacy/security mechanisms.</li>
+<li>Production build directed outside the repository.</li>
+<li>Dependency audit for the frontend and Functions packages.</li>
+<li>Comparison of implementation behavior with Firestore rules and documented application claims.</li>
+<li>Review of current official National Privacy Commission, Firebase, and TESDA guidance.</li>
+</ul>
+<h2 id="23-limitations">2.3 Limitations</h2>
+<p>The review did not include:</p>
+<ul>
+<li>Login to the production Firebase or Google Cloud consoles.</li>
+<li>Inspection of deployed rules, Functions, indexes, backups, billing, IAM, Auth users, logs, or App Check enforcement.</li>
+<li>Active exploitation, destructive testing, or production data access.</li>
+<li>Network penetration testing or external endpoint scanning.</li>
+<li>Interviews with developers, trainers, administrators, learners, the DPO, or management.</li>
+<li>Confirmation of TESDA program registration, institutional licenses, vendor contracts, or policy documents held outside the repository.</li>
+<li>A formal WCAG conformance audit using assistive technology.</li>
+</ul>
+<p>Where repository evidence is absent, this report says that a control is <strong>not demonstrated</strong> rather than asserting that the organization has never implemented it elsewhere.</p>
+<hr />
+<h1 id="3-severity-model">3. Severity model</h1>
+<table>
+<thead>
+<tr class="header">
+<th>Severity</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Critical</td>
+<td>Enables material unauthorized access, grade/record manipulation, privacy exposure, or systemic failure; blocks production use.</td>
+</tr>
+<tr class="even">
+<td>High</td>
+<td>Likely to cause significant operational, compliance, availability, usability, or maintenance harm.</td>
+</tr>
+<tr class="odd">
+<td>Medium</td>
+<td>Important weakness that should be corrected but is not independently a production blocker.</td>
+</tr>
+<tr class="even">
+<td>Low</td>
+<td>Quality, consistency, or hygiene issue with limited immediate impact.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1 id="4-critical-security-and-academic-integrity-findings">4. Critical security and academic-integrity findings</h1>
+<h2 id="sec-01--assessment-answer-keys-are-exposed-and-grades-are-forgeable">SEC-01 — Assessment answer keys are exposed and grades are forgeable</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>Firestore rules permit any authenticated account to read assessment documents:</p>
+<ul>
+<li><code>firestore.rules:206-208</code></li>
+</ul>
+<p>Assessment documents include the full question set and <code>correctAnswer</code> values:</p>
+<ul>
+<li><code>src/utils/firestoreService.js:3307-3318</code></li>
+</ul>
+<p>The student browser compares answers with <code>correctAnswer</code>, calculates points and percentage, and sends the result back to Firestore:</p>
+<ul>
+<li><code>src/components/student/StudentCourse.jsx:50-78</code></li>
+<li><code>src/components/student/StudentCourse.jsx:1561-1634</code></li>
+</ul>
+<p>The service accepts client-provided <code>score</code>, <code>earnedPoints</code>, <code>passed</code>, counts, and timing information:</p>
+<ul>
+<li><code>src/utils/firestoreService.js:3913-3931</code></li>
+</ul>
+<p>The rules for attempts verify only limited identity information. They do not authoritatively enforce enrollment, assessment existence, publication state, opening/closing time, attempt count, answer validity, or score bounds:</p>
+<ul>
+<li><code>firestore.rules:210-219</code></li>
+</ul>
+<p><strong>Impact:</strong> A student can bypass the UI, retrieve answer keys, submit arbitrary results, attempt assessments repeatedly, and submit outside the allowed schedule. Grades, statistics, completion, and certificates derived from these values cannot be trusted.</p>
+<p><strong>Required remediation:</strong> Store student-visible questions separately from protected answer keys. Grade on trusted server code. Use deterministic attempt identities or transactional attempt reservations. Enforce enrollment, publication, schedule, attempt count, question version, and score calculations server-side.</p>
+<h2 id="sec-02--class-and-tenant-isolation-is-not-consistently-enforced">SEC-02 — Class and tenant isolation is not consistently enforced</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>Any signed-in account can read all class documents and much of their content:</p>
+<ul>
+<li>Classes and class codes: <code>firestore.rules:114-147</code></li>
+<li>Announcements: <code>firestore.rules:170-190</code></li>
+<li>Assessments: <code>firestore.rules:206-208</code></li>
+<li>Course templates/materials: <code>firestore.rules:102-110</code></li>
+</ul>
+<p>There is no consistent backend helper requiring an active enrollment before accessing class content. A class code is therefore not a meaningful access secret because signed-in users can retrieve the class document containing it.</p>
+<p><strong>Impact:</strong> Students may enumerate classes, retrieve content and answer keys, and interact with classes in which they are not enrolled. This violates least privilege and undermines commercial and academic separation.</p>
+<p><strong>Required remediation:</strong> Create rule helpers for active user, verified identity, trainer ownership, and active class membership. Separate class discovery/join-code lookup into a narrow, non-sensitive server-mediated workflow.</p>
+<h2 id="iam-01--deactivated-and-unverified-users-are-blocked-primarily-by-frontend-code">IAM-01 — Deactivated and unverified users are blocked primarily by frontend code</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>Firestore role helpers check authentication and a role stored in the user&#39;s document, but not <code>status</code> or verified email:</p>
+<ul>
+<li><code>firestore.rules:8-25</code></li>
+</ul>
+<p>Frontend route components sign users out based on status or verification:</p>
+<ul>
+<li><code>src/components/auth/RoleProtectedRoute.jsx:53-79</code></li>
+</ul>
+<p>However, frontend routing cannot prevent direct Firebase SDK or REST access. The authenticated-route handler also permits a fallback path when profile/status listening fails:</p>
+<ul>
+<li><code>src/components/auth/AuthenticatedRoute.jsx:61-65</code></li>
+</ul>
+<p><strong>Impact:</strong> An inactive trainer or administrator can potentially retain backend permissions. An account believed to be disabled may continue reading or changing data using a valid Firebase session.</p>
+<p><strong>Required remediation:</strong> Disable users through Firebase Admin SDK, revoke refresh tokens, enforce active/verified claims in backend controls, and design a documented offboarding flow that also removes trainer/class assignments.</p>
+<h2 id="data-01--progress-submissions-and-activity-evidence-can-be-client-controlled">DATA-01 — Progress, submissions, and activity evidence can be client-controlled</h2>
+<p><strong>Severity: Critical</strong></p>
+<ul>
+<li>Students can write their own progress documents: <code>firestore.rules:344-348</code>.</li>
+<li>Enrollment progress updates do not validate type or range: <code>firestore.rules:247-252</code>.</li>
+<li>Progress counts an attempted quiz as completed even when failed: <code>src/components/student/StudentCourse.jsx:1057-1080</code>.</li>
+<li>Submission update rules do not adequately freeze identity, state, and timestamp fields: <code>firestore.rules:150-164</code>.</li>
+<li>Client-created activity logs accept arbitrary action/entity/metadata for the caller: <code>firestore.rules:331-341</code> and <code>src/utils/firestoreService.js:1971-1994</code>.</li>
+</ul>
+<p><strong>Impact:</strong> Completion, academic progress, submission state, and audit evidence can be falsified or become internally inconsistent.</p>
+<p><strong>Required remediation:</strong> Make academic state server-authoritative. Define strict field schemas and immutable identity fields. Derive completion from authoritative events. Separate security/audit logs from user activity feeds.</p>
+<h2 id="priv-01--personal-and-educational-data-is-overexposed">PRIV-01 — Personal and educational data is overexposed</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>Every signed-in account can read every top-level user profile:</p>
+<ul>
+<li><code>firestore.rules:60-64</code></li>
+</ul>
+<p>Administrative settings can write birth date, phone, address, email, and profile information:</p>
+<ul>
+<li><code>src/components/settings/Settings.jsx:278-295</code></li>
+</ul>
+<p>All signed-in users may read <code>/userSettings/{uid}</code> even though settings documents contain profile, privacy, account, security, and notification bundles:</p>
+<ul>
+<li><code>firestore.rules:89-94</code></li>
+<li><code>src/context/useUserSettings.js:78-100</code></li>
+</ul>
+<p>Enrollment records are broadly readable, and incident-form access is overly broad for trainers:</p>
+<ul>
+<li><code>firestore.rules:224-230</code></li>
+<li><code>firestore.rules:293-305</code></li>
+</ul>
+<p><strong>Impact:</strong> Names, contact information, enrollment status, progress, preferences, incident information, and other learner data may be available to users without a legitimate need.</p>
+<p><strong>Required remediation:</strong> Split public display profiles from private records, apply field minimization, scope records by role and class, and move sensitive workflows behind server-authorized endpoints.</p>
+<h2 id="sec-03--privileged-test-credentials-are-published">SEC-03 — Privileged test credentials are published</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>The project README publishes admin, trainer, and student usernames/passwords and describes them as development Firebase accounts:</p>
+<ul>
+<li><code>README.md:260-269</code></li>
+</ul>
+<p>The rules test script contains the same passwords and calls the named Firebase project&#39;s REST endpoint rather than a local emulator:</p>
+<ul>
+<li><code>scripts/test-rules.ps1:8-9</code></li>
+<li><code>scripts/test-rules.ps1:48-51</code></li>
+</ul>
+<p><strong>Impact:</strong> If the accounts exist or ever existed in a reachable environment, they should be treated as compromised. The script also creates a risk of tests changing live data.</p>
+<p><strong>Required remediation:</strong> Rotate/delete the accounts, review authentication and Firestore logs, perform a breach assessment, remove working credentials from documentation, and move all rules tests to the Firebase emulator with isolated fixtures.</p>
+<h2 id="sec-04--user-profiles-and-identities-are-insufficiently-protected">SEC-04 — User profiles and identities are insufficiently protected</h2>
+<p><strong>Severity: High</strong></p>
+<p>Users may update their own top-level profile fields as long as <code>role</code> and <code>status</code> are unchanged:</p>
+<ul>
+<li><code>firestore.rules:72-74</code></li>
+</ul>
+<p>This permits changes to fields such as ID number, UID-like fields, creation metadata, email display, and other identity attributes unless separately constrained.</p>
+<p>Administrative email editing updates Firestore but not Firebase Authentication:</p>
+<ul>
+<li><code>src/components/users/UserManagement.jsx:471-485</code></li>
+</ul>
+<p><strong>Impact:</strong> Display identity can be manipulated, and the LMS email may diverge from the actual sign-in and password-reset identity.</p>
+<p><strong>Required remediation:</strong> Define an allow-list of self-editable fields. Move official identity/ID updates to privileged server workflows. Synchronize Auth and profile changes atomically or through a controlled recovery process.</p>
+<hr />
+<h1 id="5-backend-deployment-and-data-lifecycle-findings">5. Backend, deployment, and data-lifecycle findings</h1>
+<h2 id="be-01--enrollment-functions-are-broken-and-based-on-a-stale-data-model">BE-01 — Enrollment Functions are broken and based on a stale data model</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>The application-approval transaction writes an enrollment and then performs another transaction read:</p>
+<ul>
+<li><code>functions/src/index.js:40-110</code></li>
+<li>Write at <code>functions/src/index.js:73</code></li>
+<li>Later read at <code>functions/src/index.js:77</code></li>
+</ul>
+<p>It creates enrollment data containing <code>courseId</code> but no <code>classId</code>, while current class screens query by <code>classId</code>:</p>
+<ul>
+<li><code>functions/src/index.js:54-71</code></li>
+<li><code>src/utils/firestoreService.js:1762-1775</code></li>
+</ul>
+<p>It updates template-course counters rather than the current class-instance model. The project retains both course applications and class-code enrollment flows.</p>
+<p><strong>Impact:</strong> Approvals may fail, create invisible enrollments, or corrupt counts. Different screens may disagree about whether a student is enrolled.</p>
+<p><strong>Required remediation:</strong> Define one canonical model: course template → class instance → class enrollment. Replace stale triggers with idempotent, tested server workflows.</p>
+<h2 id="be-02--functions-are-unsafe-under-retries-and-high-volume-cleanup">BE-02 — Functions are unsafe under retries and high-volume cleanup</h2>
+<p><strong>Severity: High</strong></p>
+<p>The approval Function generates enrollment IDs with <code>Date.now()</code>:</p>
+<ul>
+<li><code>functions/src/index.js:55</code></li>
+</ul>
+<p>An event retry can generate another ID and increment counters again. Cleanup operations load arbitrary numbers of enrollments/applications/materials into a transaction:</p>
+<ul>
+<li><code>functions/src/index.js:225-271</code></li>
+<li><code>functions/src/index.js:286-339</code></li>
+</ul>
+<p><strong>Impact:</strong> Duplicate enrollments, counter drift, transaction failures, partial cleanup, and repeated events are possible.</p>
+<p><strong>Required remediation:</strong> Use deterministic idempotency keys, event records, bounded pages, queues/bulk writers, checkpoints, retry policies, and reconciliation jobs.</p>
+<h2 id="dep-01--ci-deploys-only-the-frontend">DEP-01 — CI deploys only the frontend</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>The deployment workflow installs dependencies, builds, and deploys only Firebase Hosting:</p>
+<ul>
+<li><code>.github/workflows/deploy.yml:27-47</code></li>
+</ul>
+<p>It does not deploy or validate:</p>
+<ul>
+<li>Firestore rules.</li>
+<li>Firestore indexes.</li>
+<li>Cloud Functions.</li>
+<li>Storage rules.</li>
+<li>App Check enforcement.</li>
+</ul>
+<p>It also runs no tests, linting, type checking, dependency gate, or rules-emulator checks; deploys on pushes to <code>main</code>; uses <code>firebase-tools@latest</code>; and relies on a legacy Firebase token.</p>
+<p><strong>Impact:</strong> A frontend can be deployed against incompatible rules, indexes, or Functions. Releases are not reproducible or safely gated.</p>
+<p><strong>Required remediation:</strong> Create environment-gated, version-pinned, full-stack deployments with automated verification, staged rollout, approval, rollback, and workload-identity-based authentication.</p>
+<h2 id="data-02--class-and-course-deletion-leaves-orphaned-records">DATA-02 — Class and course deletion leaves orphaned records</h2>
+<p><strong>Severity: High</strong></p>
+<p>Class deletion removes only the parent class document:</p>
+<ul>
+<li><code>src/utils/firestoreService.js:1091-1101</code></li>
+</ul>
+<p>Firestore does not automatically delete subcollections. Materials, assessments, attempts, assignments, submissions, announcements, comments, and activity can remain orphaned. Existing cleanup Functions target the stale <code>courses</code> model rather than complete class subtrees.</p>
+<p><strong>Impact:</strong> Privacy retention failures, inconsistent reports, unrecoverable records, unnecessary cost, and inaccessible orphaned content.</p>
+<p><strong>Required remediation:</strong> Prefer archival for official records. Implement server-side, resumable lifecycle workflows with retention checks, legal holds, deletion manifests, and verification.</p>
+<h2 id="data-03--ids-are-generated-through-a-race-prone-full-scan">DATA-03 — IDs are generated through a race-prone full scan</h2>
+<p><strong>Severity: High</strong></p>
+<p>The service reads the complete users collection, determines the maximum numeric ID, and adds one:</p>
+<ul>
+<li><code>src/utils/firestoreService.js:35-50</code></li>
+</ul>
+<p><strong>Impact:</strong> Two concurrent signups can receive the same ID. Read cost grows with every user. Failure falls back to inconsistent values.</p>
+<p><strong>Required remediation:</strong> Use a transactional allocator, randomized institutional ID, or server-generated identifier with a unique reservation document.</p>
+<h2 id="data-04--routing-by-class-name-is-ambiguous">DATA-04 — Routing by class name is ambiguous</h2>
+<p><strong>Severity: High</strong></p>
+<p>Class routing resolves a class by its name and returns the first match:</p>
+<ul>
+<li><code>src/components/trainer/ClassDetail.jsx:273-280</code></li>
+<li><code>src/utils/firestoreService.js:589-591</code></li>
+</ul>
+<p><strong>Impact:</strong> Duplicate or renamed classes can route users to the wrong record.</p>
+<p><strong>Required remediation:</strong> Use immutable class document IDs in routes and treat display names as non-unique labels.</p>
+<hr />
+<h1 id="6-lms-completeness-and-correctness">6. LMS completeness and correctness</h1>
+<h2 id="lms-01--grading-policy-is-internally-inconsistent">LMS-01 — Grading policy is internally inconsistent</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>The gradebook combines quiz percentages and raw assignment points, then averages them without a consistent weighting model:</p>
+<ul>
+<li><code>src/utils/firestoreService.js:4025-4032</code></li>
+<li><code>src/utils/firestoreService.js:4104-4121</code></li>
+</ul>
+<p>Passing thresholds disagree:</p>
+<ul>
+<li>Quiz submission uses 60%: <code>src/components/student/StudentCourse.jsx:1590-1600</code>.</li>
+<li>Quiz statistics treat 70% as passing: <code>src/utils/firestoreService.js:4184-4193</code>.</li>
+<li>Settings claim competency-based grading: <code>src/components/settings/Settings.jsx:83-84</code>.</li>
+</ul>
+<p><strong>Impact:</strong> Learners may receive different pass/fail outcomes depending on the screen or calculation path.</p>
+<p><strong>Required remediation:</strong> Establish one versioned grading policy supporting weighted categories, competencies, reassessment, manual override with approval, finalization, and a complete change history.</p>
+<h2 id="lms-02--certificates-are-not-authoritative">LMS-02 — Certificates are not authoritative</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>Certificate data is manufactured in the browser using enrollment-derived IDs and a default grade of “Pass”:</p>
+<ul>
+<li><code>src/components/student/StudentCertificates.jsx:145-159</code></li>
+<li><code>src/components/student/StudentArchivedCourses.jsx:63-85</code></li>
+</ul>
+<p>The certificate is generated as a client-side image:</p>
+<ul>
+<li><code>src/components/student/StudentCertificates.jsx:182-200</code></li>
+</ul>
+<p>There is no issuance record, authorized approver, signature, verification endpoint, revocation status, certificate version, or evidence bundle.</p>
+<p><strong>Impact:</strong> Certificates can be fabricated and cannot serve as defensible institutional credentials.</p>
+<p><strong>Required remediation:</strong> Use server-authorized issuance tied to finalized completion, a unique credential ID, signed/verifiable record, public minimal verification, revocation, reissue, and complete audit history.</p>
+<h2 id="lms-03--completion-is-based-on-activity-rather-than-mastery">LMS-03 — Completion is based on activity rather than mastery</h2>
+<p><strong>Severity: High</strong></p>
+<p>Progress calculations count attempted/submitted items and do not reliably require passing or trainer validation:</p>
+<ul>
+<li><code>src/components/student/StudentCourse.jsx:1057-1080</code></li>
+</ul>
+<p><strong>Impact:</strong> A learner may appear complete without demonstrating the required competencies.</p>
+<p><strong>Required remediation:</strong> Define completion as a server-derived policy over mandatory activities, passing assessments, attendance/training hours, trainer sign-off, and competency evidence.</p>
+<h2 id="lms-04--settings-advertise-controls-that-are-not-enforced">LMS-04 — Settings advertise controls that are not enforced</h2>
+<p><strong>Severity: High</strong></p>
+<p>Settings include self-registration, admin approval, session timeout, lockout, email/SMS, 2FA, password expiry, forced changes, upload limits, and grading options:</p>
+<ul>
+<li><code>src/components/settings/Settings.jsx:55-96</code></li>
+<li><code>src/components/settings/Settings.jsx:560-592</code></li>
+<li><code>src/components/settings/Settings.jsx:840-887</code></li>
+</ul>
+<p>Most are saved as preference data but are not consumed by authentication or backend policy. The trainer “Enable 2FA” control has no handler:</p>
+<ul>
+<li><code>src/components/trainer/TrainerSettings.jsx:533-543</code></li>
+</ul>
+<p><strong>Impact:</strong> Administrators may believe controls are active when they are not.</p>
+<p><strong>Required remediation:</strong> Remove or visibly label unavailable controls. Implement security policy on trusted backend systems and add verification tests for every exposed setting.</p>
+<h2 id="lms-05--hardcoded-and-incomplete-behavior-remains-in-normal-workflows">LMS-05 — Hardcoded and incomplete behavior remains in normal workflows</h2>
+<p><strong>Severity: High</strong></p>
+<p>Examples include:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Issue</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Every class uses the same Google Meet room</td>
+<td><code>src/components/trainer/ClassDetail.jsx:1945-1974</code></td>
+</tr>
+<tr class="even">
+<td><code>weeksLeft</code> is fixed at 9</td>
+<td><code>src/components/student/StudentCourse.jsx:997-1001</code></td>
+</tr>
+<tr class="odd">
+<td>Download filename references <code>Barista_NC2</code></td>
+<td><code>src/components/student/StudentCourse.jsx:1694-1697</code></td>
+</tr>
+<tr class="even">
+<td>Download fallback only shows a toast</td>
+<td><code>src/components/student/StudentCourse.jsx:1782-1789</code></td>
+</tr>
+<tr class="odd">
+<td>Temporary password is based on surname and birth year</td>
+<td><code>src/components/users/UserManagement.jsx:38-49</code></td>
+</tr>
+<tr class="even">
+<td>Student “View assignment” action only logs to console</td>
+<td><code>src/components/student/StudentCourse.jsx:2287-2298</code></td>
+</tr>
+<tr class="odd">
+<td>Student comment delete can show success without deletion</td>
+<td><code>src/components/student/StudentCourse.jsx:3821-3835</code></td>
+</tr>
+<tr class="even">
+<td>Personal calendar events use only local storage</td>
+<td><code>src/components/student/StudentCalendar.jsx:20-24,113-138</code></td>
+</tr>
+<tr class="odd">
+<td>Certificates route is disabled/hidden</td>
+<td><code>src/App.jsx:139-141</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Impact:</strong> Inconsistent behavior, data loss between devices, security weakness, misleading success messages, and loss of user trust.</p>
+<h2 id="lms-06--attendance-competency-reporting-and-official-record-workflows-are-incomplete">LMS-06 — Attendance, competency, reporting, and official record workflows are incomplete</h2>
+<p><strong>Severity: High</strong></p>
+<p>The codebase does not demonstrate complete, authoritative workflows for:</p>
+<ul>
+<li>Attendance and training-hour capture.</li>
+<li>Competency evidence and assessor sign-off.</li>
+<li>Reassessment and remediation.</li>
+<li>Grade finalization and appeal.</li>
+<li>Curriculum/version assignment to a class cohort.</li>
+<li>Certificate approval, verification, and revocation.</li>
+<li>Institutional and regulator reporting.</li>
+<li>Guardian or minor-specific workflows.</li>
+<li>Bulk roster import with validation and reconciliation.</li>
+<li>Data corrections with approval and history.</li>
+</ul>
+<p>These are essential LMS/TVET capabilities, not optional polish.</p>
+<hr />
+<h1 id="7-scalability-performance-and-cost">7. Scalability, performance, and cost</h1>
+<h2 id="scl-01--whole-collection-reads-and-unbounded-listeners-grow-linearly">SCL-01 — Whole-collection reads and unbounded listeners grow linearly</h2>
+<p><strong>Severity: High</strong></p>
+<p>Examples:</p>
+<ul>
+<li>Dashboard reads all users and enrollments: <code>src/components/dashboard/Dashboard.jsx:89-101</code>.</li>
+<li>User management subscribes to all users and paginates client-side: <code>src/components/users/UserManagement.jsx:135-233</code>.</li>
+<li>Notifications listen to all documents for a user: <code>src/utils/firestoreService.js:2070-2086</code>.</li>
+<li>“Clear all” notifications retrieves all documents: <code>src/utils/firestoreService.js:2139-2149</code>.</li>
+<li>Announcement and comment subscriptions commonly have no page boundary.</li>
+</ul>
+<p>The source contains approximately 53 <code>getDocs()</code> calls and 17 <code>onSnapshot()</code> calls, while only a minority of data-access paths use <code>limit()</code>.</p>
+<p><strong>Impact:</strong> Latency, browser memory, mobile data use, and Firestore billing increase with the number of users and historical records.</p>
+<p><strong>Required remediation:</strong> Add server-filtered queries, cursor pagination, bounded listeners, archival boundaries, TTL where appropriate, and institutional aggregate documents.</p>
+<h2 id="scl-02--gradebook-and-profile-loading-create-n1-request-patterns">SCL-02 — Gradebook and profile loading create N+1 request patterns</h2>
+<p><strong>Severity: High</strong></p>
+<p>Gradebook creation retrieves attempts/submissions for multiple activities and then fetches profiles individually:</p>
+<ul>
+<li><code>src/utils/firestoreService.js:4034-4087</code></li>
+</ul>
+<p>Class roster and activity views also load avatars/profiles separately.</p>
+<p><strong>Impact:</strong> A class with many students and assessments can generate hundreds or thousands of reads for one screen.</p>
+<p><strong>Required remediation:</strong> Store bounded display snapshots where appropriate, query in batches, maintain grade summary documents, and move heavy report generation to server-side jobs.</p>
+<h2 id="scl-03--a-global-migration-runs-in-every-client-session">SCL-03 — A global migration runs in every client session</h2>
+<p><strong>Severity: High</strong></p>
+<p><code>App.jsx</code> invokes a “one-time” migration on every app load:</p>
+<ul>
+<li><code>src/App.jsx:45-56</code></li>
+</ul>
+<p>The migration reads every class and performs sequential updates:</p>
+<ul>
+<li><code>src/utils/firestoreService.js:4201-4236</code></li>
+</ul>
+<p><strong>Impact:</strong> Repeated global reads, unnecessary cost, startup work, permission errors, and uncontrolled production mutation.</p>
+<p><strong>Required remediation:</strong> Use versioned administrative migrations with dry-run output, backup, batch boundaries, observability, and rollback planning.</p>
+<h2 id="scl-04--large-firestore-documents-create-hard-limits-and-expensive-reads">SCL-04 — Large Firestore documents create hard limits and expensive reads</h2>
+<p><strong>Severity: High</strong></p>
+<p>Attachments are stored as base64 in Firestore:</p>
+<ul>
+<li><code>src/utils/firestoreService.js:2573-2657</code></li>
+</ul>
+<p>Assessment questions and answer keys are stored together as arrays in one document:</p>
+<ul>
+<li><code>src/utils/firestoreService.js:3305-3327</code></li>
+</ul>
+<p><code>firestore.indexes.json</code> has no field overrides, so large fields are not explicitly exempted from indexing where appropriate.</p>
+<p><strong>Impact:</strong> Documents may approach the Firestore 1 MiB limit, unnecessary bytes are downloaded repeatedly, and index/storage cost increases.</p>
+<p><strong>Required remediation:</strong> Use Cloud Storage for files; normalize large/repeated entities; isolate protected answers; add index exemptions for non-query fields; enforce file and document size server-side.</p>
+<h2 id="scl-05--frontend-bundle-and-component-size-impede-performance">SCL-05 — Frontend bundle and component size impede performance</h2>
+<p><strong>Severity: High</strong></p>
+<p>The production build succeeded but generated a single JavaScript chunk of approximately:</p>
+<ul>
+<li><strong>1.58 MB minified</strong></li>
+<li><strong>368 KB gzip</strong></li>
+</ul>
+<p>Vite warned that the chunk exceeded 500 KB. All main routes are statically imported in <code>src/App.jsx</code>, with no meaningful route-level lazy loading.</p>
+<p>Large files include approximately:</p>
+<ul>
+<li><code>ClassDetail.jsx</code>: 6,600 lines.</li>
+<li><code>firestoreService.js</code>: 4,080 lines.</li>
+<li><code>StudentCourse.jsx</code>: 3,700 lines.</li>
+</ul>
+<p><strong>Impact:</strong> Slow initial loads, more parsing on low-end devices, difficult testing, high regression risk, and poor maintainability.</p>
+<p><strong>Required remediation:</strong> Add route-level lazy loading, split feature modules, remove dead dependencies/assets, and enforce bundle budgets in CI.</p>
+<h2 id="scl-06--no-capacity-model-load-testing-or-cost-governance-is-demonstrated">SCL-06 — No capacity model, load testing, or cost governance is demonstrated</h2>
+<p><strong>Severity: High</strong></p>
+<p>There is no defined or tested capacity for:</p>
+<ul>
+<li>Concurrent logins.</li>
+<li>Simultaneous assessment submissions.</li>
+<li>Students per class.</li>
+<li>Classes per trainer.</li>
+<li>Historical notifications/comments/attempts.</li>
+<li>Bulk enrollment, graduation, or archival.</li>
+<li>Read/write cost per active learner.</li>
+</ul>
+<p><strong>Required remediation:</strong> Establish load scenarios, service objectives, budget alerts, query dashboards, and a capacity review before every major enrollment increase.</p>
+<hr />
+<h1 id="8-mobile-usability-and-accessibility">8. Mobile usability and accessibility</h1>
+<h2 id="ux-01--layout-assumptions-remain-unsafe-for-mobile-browsers">UX-01 — Layout assumptions remain unsafe for mobile browsers</h2>
+<p><strong>Severity: High</strong></p>
+<p>Role layouts use combinations of <code>h-screen</code>, <code>w-screen</code>, fixed maximum heights, and overflow clipping:</p>
+<ul>
+<li><code>src/components/student/StudentDashboardLayout.jsx:130-143</code></li>
+</ul>
+<p>These patterns are fragile with mobile browser address bars, virtual keyboards, orientation changes, and screens taller than the fixed maximum.</p>
+<p>Some fixed notifications use a minimum width near the width of a 320 px device:</p>
+<ul>
+<li><code>src/components/student/StudentCourse.jsx:1839</code></li>
+</ul>
+<h2 id="ux-02--hover-only-controls-are-inaccessible-on-touch-and-keyboard">UX-02 — Hover-only controls are inaccessible on touch and keyboard</h2>
+<p><strong>Severity: High</strong></p>
+<p>Actions are sometimes hidden using <code>opacity-0 group-hover</code>:</p>
+<ul>
+<li>Student course activity action: <code>src/components/student/StudentCourse.jsx:2288</code>.</li>
+<li>Trainer task action: <code>src/components/trainer/Tasks.jsx:193</code>.</li>
+</ul>
+<p>Touch users may never discover these actions, while keyboard visibility and focus styling are inconsistent.</p>
+<h2 id="ux-03--form-labeling-and-control-semantics-are-incomplete">UX-03 — Form labeling and control semantics are incomplete</h2>
+<p><strong>Severity: High</strong></p>
+<p>Many visible labels are not connected to inputs with <code>htmlFor</code>/<code>id</code>. Numerous icon buttons lack an accessible name. Mobile menu buttons lack complete <code>aria-label</code>, <code>aria-expanded</code>, and <code>aria-controls</code> state:</p>
+<ul>
+<li><code>src/components/student/StudentSidebar.jsx:167-175</code></li>
+<li><code>src/components/layout/AdminSidebar.jsx:66-74</code></li>
+</ul>
+<p>Custom modals do not consistently demonstrate focus trapping, Escape handling, initial focus, or focus restoration.</p>
+<p><strong>Required remediation:</strong> Adopt WCAG 2.2 AA as the engineering target; implement semantic components; test keyboard-only, screen reader, 200% zoom, reduced motion, color contrast, and common mobile widths.</p>
+<hr />
+<h1 id="9-developer-administrator-and-vendor-turnover">9. Developer, administrator, and vendor turnover</h1>
+<h2 id="tov-01--extreme-bus-factor-concentration">TOV-01 — Extreme bus-factor concentration</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>Essential behavior is concentrated in a few very large files. Enrollment, assessment, notifications, files, progress, comments, and grading share one service module, while trainer and student workflows are monolithic components.</p>
+<p><strong>Impact:</strong> A departing developer takes undocumented knowledge with them. New developers cannot safely isolate changes and are more likely to introduce cross-feature regressions.</p>
+<p><strong>Required remediation:</strong> Decompose by bounded domain, define service interfaces and schemas, create maintainers/owners, and require tests before extraction or rewrite.</p>
+<h2 id="tov-02--documentation-is-stale-and-contradicts-the-implementation">TOV-02 — Documentation is stale and contradicts the implementation</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>The README schema documents a <code>supervisor</code> role and data shapes that do not match the current class/subcollection implementation:</p>
+<ul>
+<li><code>README.md:437-500</code></li>
+</ul>
+<p>The README also claims production readiness, responsive design, accessibility, and code splitting that are not demonstrated by the implementation.</p>
+<p><strong>Impact:</strong> A replacement developer may build against the wrong schema or assume controls exist when they do not.</p>
+<p><strong>Required remediation:</strong> Replace feature-marketing documentation with an authoritative architecture guide, live data dictionary, permissions matrix, and known-limitations register.</p>
+<h2 id="tov-03--no-automated-regression-safety-net">TOV-03 — No automated regression safety net</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>The frontend scripts include only <code>dev</code>, <code>build</code>, and <code>preview</code>:</p>
+<ul>
+<li><code>package.json:19-23</code></li>
+</ul>
+<p>No repository test suite was identified. The acceptance checklist is manual and appears unsigned/unexecuted:</p>
+<ul>
+<li><code>TESTING_CHECKLIST.md:1-353</code></li>
+</ul>
+<p><strong>Required remediation:</strong> Add Firestore emulator rules tests, unit tests, component tests, Playwright role journeys, accessibility checks, dependency scanning, linting, formatting, type checking, and release gates.</p>
+<h2 id="tov-04--environment-and-production-ownership-are-insufficiently-separated">TOV-04 — Environment and production ownership are insufficiently separated</h2>
+<p><strong>Severity: High</strong></p>
+<p><code>.firebaserc</code> defines one default Firebase project:</p>
+<ul>
+<li><code>.firebaserc:1-5</code></li>
+</ul>
+<p>There is no documented development/staging/production topology, anonymized test dataset, or safe migration environment.</p>
+<p><strong>Impact:</strong> New staff can accidentally test, seed, migrate, or deploy against production.</p>
+<p><strong>Required remediation:</strong> Separate cloud projects and IAM groups; use least-privilege service identities; provide <code>.env.example</code>; prohibit personal owner accounts; document access approval and recovery.</p>
+<h2 id="tov-05--staff-offboarding-does-not-remove-real-authority">TOV-05 — Staff offboarding does not remove real authority</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>Deactivation updates a profile status but does not disable Firebase Auth, revoke tokens, remove co-trainer access, transfer ownership, or invalidate active sessions.</p>
+<p><strong>Required remediation:</strong> Create an offboarding workflow covering Auth disablement, token revocation, class transfer, group/role removal, API/integration access, active session review, device recovery, and audit evidence.</p>
+<h2 id="tov-06--no-vendor-exit-or-tested-data-portability-strategy">TOV-06 — No vendor exit or tested data portability strategy</h2>
+<p><strong>Severity: High</strong></p>
+<p>The system is closely coupled to Firestore document paths and client SDK behavior. No complete export/import, schema versioning, restoration, or cloud-exit process is demonstrated.</p>
+<p><strong>Required remediation:</strong> Define an institution-owned canonical export format, scheduled exports, restoration testing, media export, integrity hashes, dependency inventory, and a documented Firebase/vendor exit plan.</p>
+<hr />
+<h1 id="10-philippine-privacy-and-compliance-readiness">10. Philippine privacy and compliance readiness</h1>
+<h2 id="101-applicable-baseline">10.1 Applicable baseline</h2>
+<p>Assuming the institution operates in the Philippines, the primary privacy baseline is Republic Act No. 10173, the Data Privacy Act of 2012, its Implementing Rules and Regulations, and National Privacy Commission issuances.</p>
+<p>Education records are sensitive personal information under the NPC&#39;s definition. The LMS processes identity, birth date, contact data, enrollment, grades, assessment responses, progress, incident reports, and certificate information. This requires a higher level of organizational, physical, and technical control.</p>
+<h2 id="cmp-01--no-adequate-privacy-notice-or-processing-explanation-at-registration">CMP-01 — No adequate privacy notice or processing explanation at registration</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>Signup collects full name, birth date, email, and mobile number:</p>
+<ul>
+<li><code>src/components/auth/SignUp.jsx:383-525</code></li>
+</ul>
+<p>No user-facing privacy notice, DPO contact, processing-purpose summary, recipient/vendor disclosure, retention information, rights explanation, or terms acceptance is presented.</p>
+<p>The DPA requires transparency, legitimate purpose, proportionality, and information about processing and rights. Consent is not necessarily the correct basis for every educational record; the institution must document the applicable lawful basis per purpose.</p>
+<p><strong>Required remediation:</strong> Create layered, plain-language privacy notices reviewed by the DPO/counsel. Maintain a processing inventory mapping each field and purpose to lawful basis, retention, recipients, access roles, and disposal.</p>
+<h2 id="cmp-02--signup-drafts-persist-personal-data-in-local-storage">CMP-02 — Signup drafts persist personal data in local storage</h2>
+<p><strong>Severity: High</strong></p>
+<p>The form stores name, birth date, email, and phone in browser <code>localStorage</code>:</p>
+<ul>
+<li><code>src/components/auth/SignUp.jsx:17-90</code></li>
+</ul>
+<p>The “clear on load” effect is followed by another effect that writes the state back.</p>
+<p><strong>Impact:</strong> Personal data can remain accessible on a shared device.</p>
+<p><strong>Required remediation:</strong> Do not persist sensitive registration drafts by default. If draft recovery is genuinely needed, use explicit consent, short expiry, minimal fields, secure server association, and a visible clear mechanism.</p>
+<h2 id="cmp-03--data-minimization-and-least-privilege-are-not-met">CMP-03 — Data minimization and least privilege are not met</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>The broad reads described in PRIV-01 conflict with the DPA principles of transparency, legitimate purpose, and proportionality. User and educational data is accessible beyond the minimum role/class need.</p>
+<p><strong>Required remediation:</strong> Perform a field-level access review and redesign the database around data classification and purpose-limited access.</p>
+<h2 id="cmp-04--data-subject-rights-are-not-operationalized">CMP-04 — Data-subject rights are not operationalized</h2>
+<p><strong>Severity: High</strong></p>
+<p>No complete workflow exists for access, source/recipient disclosure, correction across duplicate records, objection, withdrawal where applicable, erasure/blocking, portability, or complaint escalation.</p>
+<p><strong>Required remediation:</strong> Establish authenticated request workflows, identity verification, case tracking, deadlines, approvals, export format, exception handling, and evidence of fulfillment.</p>
+<h2 id="cmp-05--retention-archival-disposal-and-legal-hold-are-undefined">CMP-05 — Retention, archival, disposal, and legal hold are undefined</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>Some records accumulate indefinitely, some deletions leave orphans, and administrators can export and purge activity logs to a workstation CSV:</p>
+<ul>
+<li><code>src/components/logs/SystemLogs.jsx:305-325</code></li>
+<li><code>src/utils/firestoreService.js:2282-2295</code></li>
+</ul>
+<p><strong>Required remediation:</strong> Approve retention categories for applicant data, user profiles, academic records, attempts, submissions, incidents, certificates, communications, notifications, and security logs. Implement archive, legal hold, secure disposal, and deletion verification.</p>
+<h2 id="cmp-06--audit-and-breach-response-evidence-is-inadequate">CMP-06 — Audit and breach-response evidence is inadequate</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>Activity logs are partially client-created and can be purged. No centralized alerting, breach case management, evidence preservation, or notification workflow is demonstrated.</p>
+<p>Qualifying Philippine personal-data breaches may require notification to the NPC and affected data subjects within 72 hours of knowledge or reasonable belief. The institution cannot reliably meet that obligation without monitoring, ownership, triage, communication templates, and rehearsed procedures.</p>
+<p><strong>Required remediation:</strong> Establish a security incident response plan, trusted server logs, alerting, event classification, DPO escalation, evidence preservation, breach assessment, notification templates, and annual exercises.</p>
+<h2 id="cmp-07--dpo-registration-pia-and-annual-reporting-controls-require-verification">CMP-07 — DPO, registration, PIA, and annual reporting controls require verification</h2>
+<p><strong>Severity: High</strong></p>
+<p>The repository does not demonstrate:</p>
+<ul>
+<li>An appointed and reachable DPO.</li>
+<li>A privacy management program/manual.</li>
+<li>A Privacy Impact Assessment for the LMS.</li>
+<li>Registration of the DPO/data processing system where required.</li>
+<li>Annual Security Incident Report ownership.</li>
+<li>Employee privacy training.</li>
+<li>Vendor privacy review.</li>
+</ul>
+<p>These may exist outside the repository and must be verified organizationally.</p>
+<h2 id="cmp-08--firebase-ai-and-other-vendors-require-processor-governance">CMP-08 — Firebase, AI, and other vendors require processor governance</h2>
+<p><strong>Severity: High</strong></p>
+<p>The chatbot can use a client Gemini key or send messages and a client-supplied role to a configured proxy:</p>
+<ul>
+<li><code>src/components/hytbot/HytBot.jsx:8-17</code></li>
+<li><code>src/components/hytbot/HytBot.jsx:310-340</code></li>
+</ul>
+<p>No Firebase authentication token is shown in the proxy call. Chat messages may contain learner or institutional information.</p>
+<p><strong>Required remediation:</strong> Authenticate the proxy, enforce rate limits and role server-side, minimize and redact data, define AI retention/training rules, publish clear notice, and execute appropriate vendor processing/security agreements. The institution remains accountable for transferred data.</p>
+<h2 id="cmp-09--minor-and-guardian-safeguards-are-absent">CMP-09 — Minor and guardian safeguards are absent</h2>
+<p><strong>Severity: High</strong></p>
+<p>Signup accepts any birth date up to the current date:</p>
+<ul>
+<li><code>src/components/auth/SignUp.jsx:462-475</code></li>
+</ul>
+<p>No minimum-age policy, guardian process, age-appropriate notice, recording/webcam rules, or minor-specific incident handling is shown.</p>
+<p><strong>Required remediation:</strong> Determine the learner population and applicable guardian requirements. Implement age-appropriate notices and controls with DPO/legal review.</p>
+<h2 id="cmp-10--accessibility-compliance-is-not-demonstrated">CMP-10 — Accessibility compliance is not demonstrated</h2>
+<p><strong>Severity: High</strong></p>
+<p>The accessibility issues in Section 8 contradict documentation claims. The exact legal requirement depends on institutional status and contracts, but WCAG 2.2 AA should be the engineering acceptance standard.</p>
+<h2 id="cmp-11--tesdatvet-compliance-is-unproven">CMP-11 — TESDA/TVET compliance is unproven</h2>
+<p><strong>Severity: Critical if used for official TVET records</strong></p>
+<p>The repository includes a hardcoded TESDA-like catalog, but catalog names do not establish program registration or compliance. If the LMS supports TESDA-registered programs, it must map current registered programs, qualifications, competency standards, trainers, learning evidence, attendance/training hours, learner record books, assessment outcomes, and required reports.</p>
+<p>Current client-controlled grades, approximate progress, and non-authoritative certificates are unsuitable as official evidence.</p>
+<p><strong>Required remediation:</strong> Conduct a joint requirements mapping with TESDA compliance personnel. Treat the LMS as non-authoritative until every required record, approval, retention, correction, and report has a tested control.</p>
+<hr />
+<h1 id="11-operational-resilience-and-enterprise-readiness">11. Operational resilience and enterprise readiness</h1>
+<h2 id="ops-01--no-verified-backup-restore-or-disaster-recovery-process">OPS-01 — No verified backup, restore, or disaster-recovery process</h2>
+<p><strong>Severity: Critical</strong></p>
+<p>The repository contains no evidence of scheduled Firestore backups, point-in-time recovery, Storage backup, recovery objectives, restoration scripts, or restore exercises.</p>
+<p><strong>Required remediation:</strong> Define RPO/RTO values, enable appropriate backups/PITR, include media and configuration, document recovery, and perform periodic restoration drills into an isolated project.</p>
+<h2 id="ops-02--monitoring-and-alerting-are-insufficient">OPS-02 — Monitoring and alerting are insufficient</h2>
+<p><strong>Severity: High</strong></p>
+<p>Error handling is dominated by browser <code>console.error</code>/<code>console.warn</code>. No centralized application monitoring, structured logs, trace/correlation IDs, uptime checks, function failure alerts, security alerts, or data-quality reconciliation dashboard is demonstrated.</p>
+<p><strong>Required remediation:</strong> Add client and server error monitoring, structured audit/security logs, cloud alerts, synthetic role journeys, data integrity checks, and operational dashboards.</p>
+<h2 id="ops-03--no-service-objectives-or-support-model">OPS-03 — No service objectives or support model</h2>
+<p><strong>Severity: High</strong></p>
+<p>No uptime objective, support hours, incident severity definitions, escalation matrix, maintenance window, response target, or learner communication process is documented.</p>
+<h2 id="ops-04--hosting-security-hardening-is-incomplete">OPS-04 — Hosting security hardening is incomplete</h2>
+<p><strong>Severity: High</strong></p>
+<p><code>firebase.json</code> contains no Content Security Policy, Referrer Policy, Permissions Policy, HSTS, anti-framing policy, or other explicit hosting security headers:</p>
+<ul>
+<li><code>firebase.json:1-27</code></li>
+</ul>
+<p>App Check initialization is optional and CI does not provide the production key:</p>
+<ul>
+<li><code>src/firebase.js:39-52</code></li>
+</ul>
+<p><strong>Required remediation:</strong> Define tested security headers, enforce App Check where suitable, restrict API keys by API/referrer as appropriate, and add server-side abuse/rate controls.</p>
+<h2 id="ops-05--csv-exports-permit-spreadsheet-formula-injection">OPS-05 — CSV exports permit spreadsheet formula injection</h2>
+<p><strong>Severity: High</strong></p>
+<p>CSV values are quoted but not neutralized when beginning with <code>=</code>, <code>+</code>, <code>-</code>, or <code>@</code>:</p>
+<ul>
+<li><code>src/components/logs/SystemLogs.jsx:60-71</code></li>
+<li><code>src/components/trainer/ClassDetail.jsx:1925-1942</code></li>
+</ul>
+<p><strong>Impact:</strong> Opening exported data in spreadsheet software can evaluate a malicious learner-controlled value as a formula.</p>
+<p><strong>Required remediation:</strong> Prefix dangerous cells, use a safe export library, restrict formulas, and warn administrators about untrusted exports.</p>
+<hr />
+<h1 id="12-dependency-and-engineering-health">12. Dependency and engineering health</h1>
+<h2 id="121-dependency-audit-results">12.1 Dependency audit results</h2>
+<p>The dependency scanner reported:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Package area</th>
+<th style="text-align: right;">Total</th>
+<th style="text-align: right;">Critical</th>
+<th style="text-align: right;">High</th>
+<th style="text-align: right;">Moderate</th>
+<th style="text-align: right;">Low</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Frontend</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td>Cloud Functions</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table>
+<p>Reported dependency families include <code>protobufjs</code>, <code>websocket-driver</code>, Vite, gRPC, React Router, PostCSS, and <code>firebase-admin</code>.</p>
+<p>Scanner results require dependency-tree and exploitability triage; they do not prove that every advisory is reachable. Nevertheless, critical/high findings and old Functions dependencies are unacceptable without documented resolution or risk acceptance.</p>
+<h2 id="122-runtime-and-maintenance-concerns">12.2 Runtime and maintenance concerns</h2>
+<p>The Functions package specifies Node 18 and older Firebase Admin/Functions generations:</p>
+<ul>
+<li><code>functions/package.json:6-19</code></li>
+</ul>
+<p>There is no automated dependency update service, software bill of materials, license scan, or security release SLA.</p>
+<hr />
+<h1 id="13-prioritized-remediation-roadmap">13. Prioritized remediation roadmap</h1>
+<h2 id="phase-0--containment-immediately-to-7-days">Phase 0 — Containment: immediately to 7 days</h2>
+<ol type="1">
+<li><strong>Stop production-readiness and compliance claims.</strong> Clearly label the system as development/pilot only.</li>
+<li><strong>Rotate/delete published accounts.</strong> Review Auth, Firestore, Hosting, and Function logs and perform a DPO-led incident assessment.</li>
+<li><strong>Freeze official grading and certificate use.</strong> Do not use current results for formal decisions.</li>
+<li><strong>Restrict Firestore access.</strong> Introduce active-user and class-membership controls; separate private profiles/settings.</li>
+<li><strong>Protect answer keys.</strong> Remove them from student-readable documents and disable client-authoritative scoring.</li>
+<li><strong>Disable inactive accounts in Firebase Auth</strong> and revoke tokens.</li>
+<li><strong>Preserve evidence.</strong> Pause ad hoc audit-log purging and define interim retention.</li>
+<li><strong>Create separate development/staging/production cloud projects.</strong> Prevent tests and migrations from reaching production.</li>
+</ol>
+<h2 id="phase-1--trust-foundation-8-to-30-days">Phase 1 — Trust foundation: 8 to 30 days</h2>
+<ol type="1">
+<li>Define the canonical course-template, class, enrollment, assessment, attempt, grade, completion, and certificate models.</li>
+<li>Implement server-authoritative enrollment and grading workflows.</li>
+<li>Rewrite Firestore rules with emulator tests for every role and attack case.</li>
+<li>Move files to Cloud Storage with membership-aware rules and server validation.</li>
+<li>Implement trusted security/audit logs separate from user activity feeds.</li>
+<li>Add full-stack CI: lint, type check, unit tests, rules tests, build, dependency gate, end-to-end smoke tests, staged deployment.</li>
+<li>Create privacy notice, data inventory, PIA, retention schedule, and data-subject request process with the DPO.</li>
+<li>Establish monitoring, alerting, incident response, and backup configuration.</li>
+</ol>
+<h2 id="phase-2--complete-the-lms-31-to-90-days">Phase 2 — Complete the LMS: 31 to 90 days</h2>
+<ol type="1">
+<li>Implement the approved grading/competency policy.</li>
+<li>Add attendance/training-hour and competency evidence workflows.</li>
+<li>Implement authoritative completion, certificate issuance, verification, revocation, and reissue.</li>
+<li>Add grade finalization, appeals, corrections, and audit history.</li>
+<li>Add pagination, aggregates, bounded listeners, queues, and reconciliation jobs.</li>
+<li>Remove hardcoded/dead controls and make feature status explicit.</li>
+<li>Conduct mobile, browser, keyboard, screen-reader, contrast, and zoom testing.</li>
+<li>Produce current architecture, schema, operations, recovery, and turnover documentation.</li>
+</ol>
+<h2 id="phase-3--production-qualification">Phase 3 — Production qualification</h2>
+<p>The system should not be approved for production until all of the following are independently demonstrated:</p>
+<ul>
+<li>No open Critical findings.</li>
+<li>High findings have been remediated or formally accepted by accountable management.</li>
+<li>Firestore rules pass deny/allow tests for all roles and cross-class attacks.</li>
+<li>Server-side grading cannot be altered by the client.</li>
+<li>Load tests meet approved SLOs and cost expectations.</li>
+<li>Backup restoration succeeds within approved RPO/RTO.</li>
+<li>DPO signs off the PIA, notices, retention, rights, vendor, and breach controls.</li>
+<li>TESDA/regulatory requirements are mapped and accepted where applicable.</li>
+<li>WCAG acceptance testing is completed.</li>
+<li>End-to-end role journeys pass in staging.</li>
+<li>Deployment and rollback are rehearsed.</li>
+<li>Administrator and trainer offboarding is tested.</li>
+</ul>
+<hr />
+<h1 id="14-suggested-ownership-model">14. Suggested ownership model</h1>
+<table>
+<thead>
+<tr class="header">
+<th>Workstream</th>
+<th>Accountable owner</th>
+<th>Required participants</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Security rules and IAM</td>
+<td>Technical lead / Security owner</td>
+<td>Firebase engineer, QA, DPO</td>
+</tr>
+<tr class="even">
+<td>Assessment and grading</td>
+<td>Academic director</td>
+<td>Trainers, registrar, developer, QA</td>
+</tr>
+<tr class="odd">
+<td>Privacy compliance</td>
+<td>DPO</td>
+<td>Legal counsel, technical lead, records officer</td>
+</tr>
+<tr class="even">
+<td>TESDA mapping</td>
+<td>Compliance/registrar</td>
+<td>Academic director, trainers, DPO, developer</td>
+</tr>
+<tr class="odd">
+<td>Infrastructure and deployment</td>
+<td>Platform owner</td>
+<td>Developer, security owner, QA</td>
+</tr>
+<tr class="even">
+<td>Backup and disaster recovery</td>
+<td>Platform owner</td>
+<td>Management, records officer, DPO</td>
+</tr>
+<tr class="odd">
+<td>Accessibility</td>
+<td>Product owner</td>
+<td>Learners with disabilities, QA, frontend developer</td>
+</tr>
+<tr class="even">
+<td>Turnover and documentation</td>
+<td>Engineering manager</td>
+<td>All system owners</td>
+</tr>
+<tr class="odd">
+<td>Incident response</td>
+<td>Incident commander / DPO</td>
+<td>Security, legal, management, communications</td>
+</tr>
+</tbody>
+</table>
+<p>No critical production capability should be owned only by one individual.</p>
+<hr />
+<h1 id="15-consolidated-finding-register">15. Consolidated finding register</h1>
+<table>
+<thead>
+<tr class="header">
+<th>ID</th>
+<th>Severity</th>
+<th>Finding</th>
+<th style="text-align: right;">Production blocker</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>SEC-01</td>
+<td>Critical</td>
+<td>Answer keys exposed and grades forgeable</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>SEC-02</td>
+<td>Critical</td>
+<td>Missing class-membership isolation</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>IAM-01</td>
+<td>Critical</td>
+<td>Inactive/unverified users not blocked authoritatively</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>DATA-01</td>
+<td>Critical</td>
+<td>Client-controlled academic and activity records</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>PRIV-01</td>
+<td>Critical</td>
+<td>Personal/educational data overexposure</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>SEC-03</td>
+<td>Critical</td>
+<td>Published privileged credentials</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>SEC-04</td>
+<td>High</td>
+<td>Insufficient user-field and Auth/profile identity controls</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>BE-01</td>
+<td>Critical</td>
+<td>Broken/stale enrollment Functions</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>BE-02</td>
+<td>High</td>
+<td>Non-idempotent retries and unbounded cleanup</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>DEP-01</td>
+<td>Critical</td>
+<td>Hosting-only deployment and missing release gates</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>DATA-02</td>
+<td>High</td>
+<td>Orphaned records on deletion</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>DATA-03</td>
+<td>High</td>
+<td>Race-prone ID allocation</td>
+<td style="text-align: right;">No</td>
+</tr>
+<tr class="odd">
+<td>DATA-04</td>
+<td>High</td>
+<td>Ambiguous name-based routing</td>
+<td style="text-align: right;">No</td>
+</tr>
+<tr class="even">
+<td>LMS-01</td>
+<td>Critical</td>
+<td>Inconsistent grading policy</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>LMS-02</td>
+<td>Critical</td>
+<td>Non-authoritative certificates</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>LMS-03</td>
+<td>High</td>
+<td>Completion not based on mastery</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>LMS-04</td>
+<td>High</td>
+<td>Security/settings controls not enforced</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>LMS-05</td>
+<td>High</td>
+<td>Hardcoded and incomplete workflows</td>
+<td style="text-align: right;">No</td>
+</tr>
+<tr class="odd">
+<td>LMS-06</td>
+<td>High</td>
+<td>Missing core academic/TVET workflows</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>SCL-01</td>
+<td>High</td>
+<td>Unbounded reads/listeners</td>
+<td style="text-align: right;">No</td>
+</tr>
+<tr class="odd">
+<td>SCL-02</td>
+<td>High</td>
+<td>N+1 gradebook/profile queries</td>
+<td style="text-align: right;">No</td>
+</tr>
+<tr class="even">
+<td>SCL-03</td>
+<td>High</td>
+<td>Client-run global migration</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>SCL-04</td>
+<td>High</td>
+<td>Large Firestore documents/base64 files</td>
+<td style="text-align: right;">No</td>
+</tr>
+<tr class="even">
+<td>SCL-05</td>
+<td>High</td>
+<td>Large single bundle and monoliths</td>
+<td style="text-align: right;">No</td>
+</tr>
+<tr class="odd">
+<td>SCL-06</td>
+<td>High</td>
+<td>No capacity/load/cost model</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>UX-01</td>
+<td>High</td>
+<td>Unsafe mobile layout assumptions</td>
+<td style="text-align: right;">No</td>
+</tr>
+<tr class="odd">
+<td>UX-02</td>
+<td>High</td>
+<td>Hover-only controls</td>
+<td style="text-align: right;">No</td>
+</tr>
+<tr class="even">
+<td>UX-03</td>
+<td>High</td>
+<td>Incomplete accessibility semantics</td>
+<td style="text-align: right;">No</td>
+</tr>
+<tr class="odd">
+<td>TOV-01</td>
+<td>Critical</td>
+<td>Extreme bus factor</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>TOV-02</td>
+<td>Critical</td>
+<td>Stale/contradictory documentation</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>TOV-03</td>
+<td>Critical</td>
+<td>No automated regression suite</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>TOV-04</td>
+<td>High</td>
+<td>Weak environment separation</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>TOV-05</td>
+<td>Critical</td>
+<td>Unsafe staff offboarding</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>TOV-06</td>
+<td>High</td>
+<td>No vendor exit/data portability plan</td>
+<td style="text-align: right;">No</td>
+</tr>
+<tr class="odd">
+<td>CMP-01</td>
+<td>Critical</td>
+<td>No adequate registration privacy notice</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>CMP-02</td>
+<td>High</td>
+<td>PII stored in local signup draft</td>
+<td style="text-align: right;">No</td>
+</tr>
+<tr class="odd">
+<td>CMP-03</td>
+<td>Critical</td>
+<td>Minimization/least privilege deficiencies</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>CMP-04</td>
+<td>High</td>
+<td>No operational data-subject rights workflow</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>CMP-05</td>
+<td>Critical</td>
+<td>Undefined retention/disposal/legal hold</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>CMP-06</td>
+<td>Critical</td>
+<td>Inadequate audit and breach response</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>CMP-07</td>
+<td>High</td>
+<td>DPO/PIA/registration/reporting not demonstrated</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>CMP-08</td>
+<td>High</td>
+<td>Vendor/AI processing governance gaps</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>CMP-09</td>
+<td>High</td>
+<td>Minor/guardian safeguards absent</td>
+<td style="text-align: right;">Conditional</td>
+</tr>
+<tr class="even">
+<td>CMP-10</td>
+<td>High</td>
+<td>Accessibility compliance not demonstrated</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>CMP-11</td>
+<td>Critical</td>
+<td>TESDA/TVET compliance unproven</td>
+<td style="text-align: right;">Conditional</td>
+</tr>
+<tr class="even">
+<td>OPS-01</td>
+<td>Critical</td>
+<td>No verified backup/restore/DR</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="odd">
+<td>OPS-02</td>
+<td>High</td>
+<td>Insufficient monitoring and alerting</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>OPS-03</td>
+<td>High</td>
+<td>No SLO/support model</td>
+<td style="text-align: right;">No</td>
+</tr>
+<tr class="odd">
+<td>OPS-04</td>
+<td>High</td>
+<td>Missing hosting/App Check hardening</td>
+<td style="text-align: right;">Yes</td>
+</tr>
+<tr class="even">
+<td>OPS-05</td>
+<td>High</td>
+<td>CSV formula injection</td>
+<td style="text-align: right;">No</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1 id="appendix-a--turnover-and-handover-checklist">Appendix A — Turnover and handover checklist</h1>
+<p>Before responsibility is transferred to a new developer, administrator, or vendor, the institution should possess:</p>
+<ul>
+<li>System context, container, component, and data-flow diagrams.</li>
+<li>Current collection and document schema with field types and classification.</li>
+<li>Role/permission matrix including backend rule tests.</li>
+<li>Environment inventory and cloud project ownership.</li>
+<li>Deployment, rollback, migration, backup, and restore runbooks.</li>
+<li>Dependency and software bill of materials inventory.</li>
+<li>Secrets/API key inventory and rotation schedule.</li>
+<li>Vendor contracts, processor roles, data locations, and exit procedures.</li>
+<li>Current finding/risk register and accepted exceptions.</li>
+<li>Support and incident escalation matrix.</li>
+<li>Named owners for grading, certificates, privacy, records, infrastructure, and security.</li>
+<li>Test accounts and test data that exist only in non-production environments.</li>
+<li>Automated acceptance suite and last successful release evidence.</li>
+<li>Staff offboarding and class-ownership transfer workflow.</li>
+<li>Data retention, legal hold, archive, and disposal procedures.</li>
+</ul>
+<hr />
+<h1 id="appendix-b--minimum-scalability-test-scenarios">Appendix B — Minimum scalability test scenarios</h1>
+<ol type="1">
+<li>Simultaneous login and dashboard load for expected peak active users.</li>
+<li>Full class opening with the maximum roster, modules, materials, announcements, and assessments.</li>
+<li>Simultaneous quiz start and submission at class and institution peak.</li>
+<li>Trainer gradebook loading for the largest expected class and assessment count.</li>
+<li>Bulk class enrollment, transfer, completion, and archival.</li>
+<li>Notification fan-out to all learners and subsequent read/clear behavior.</li>
+<li>Large permitted file upload/download over slow mobile connections.</li>
+<li>Function retry, duplicate event, partial failure, and reconciliation.</li>
+<li>Backup restoration into an isolated project.</li>
+<li>Rules/index deployment rollback.</li>
+<li>Loss of a trainer/admin account during an active class.</li>
+<li>Data-subject export and erasure request across all collections and media.</li>
+</ol>
+<p>Each scenario should record latency percentiles, error rate, document reads/writes, function duration/retries, client memory, bundle/load timings, and estimated cost.</p>
+<hr />
+<h1 id="appendix-c--key-external-references">Appendix C — Key external references</h1>
+<ul>
+<li>National Privacy Commission, <strong>Data Privacy Act of 2012</strong>: <a href="https://privacy.gov.ph/data-privacy-act/">https://privacy.gov.ph/data-privacy-act/</a></li>
+<li>National Privacy Commission, <strong>Implementing Rules and Regulations</strong>: <a href="https://privacy.gov.ph/implementing-rules-regulations-data-privacy-act-2012/">https://privacy.gov.ph/implementing-rules-regulations-data-privacy-act-2012/</a></li>
+<li>National Privacy Commission, <strong>Data Subject Rights</strong>: <a href="https://privacy.gov.ph/data-subject-rights/">https://privacy.gov.ph/data-subject-rights/</a></li>
+<li>National Privacy Commission, <strong>Retention and Disposal Guidance</strong>: <a href="https://privacy.gov.ph/day-to-day/">https://privacy.gov.ph/day-to-day/</a></li>
+<li>National Privacy Commission, <strong>Appointing a Data Protection Officer</strong>: <a href="https://privacy.gov.ph/appointing-a-data-protection-officer/">https://privacy.gov.ph/appointing-a-data-protection-officer/</a></li>
+<li>National Privacy Commission, <strong>Breach Reporting Procedures</strong>: <a href="https://privacy.gov.ph/exercising-breach-reporting-procedures/">https://privacy.gov.ph/exercising-breach-reporting-procedures/</a></li>
+<li>National Privacy Commission, <strong>Education Sector Advisory No. 2020-1</strong>: <a href="https://privacy.gov.ph/wp-content/uploads/2020/10/DP-Council-Education-Sector-Advisory-No.-2020-1.pdf">https://privacy.gov.ph/wp-content/uploads/2020/10/DP-Council-Education-Sector-Advisory-No.-2020-1.pdf</a></li>
+<li>Firebase, <strong>Cloud Firestore Best Practices</strong>: <a href="https://firebase.google.com/docs/firestore/best-practices">https://firebase.google.com/docs/firestore/best-practices</a></li>
+<li>Firebase, <strong>Cloud Firestore Usage and Limits</strong>: <a href="https://firebase.google.com/docs/firestore/quotas">https://firebase.google.com/docs/firestore/quotas</a></li>
+<li>Firebase, <strong>Cloud Firestore Pricing and Billing</strong>: <a href="https://firebase.google.com/docs/firestore/pricing">https://firebase.google.com/docs/firestore/pricing</a></li>
+<li>Firebase, <strong>Aggregation Guidance</strong>: <a href="https://firebase.google.com/docs/firestore/solutions/aggregation">https://firebase.google.com/docs/firestore/solutions/aggregation</a></li>
+<li>TESDA, <strong>Program Registration and Accreditation</strong>: <a href="https://tesda.gov.ph/About/TESDA/26">https://tesda.gov.ph/About/TESDA/26</a></li>
+</ul>
+<hr />
+<h1 id="appendix-d--final-acceptance-statement-template">Appendix D — Final acceptance statement template</h1>
+<p>The following should be signed only after evidence is reviewed:</p>
+<blockquote>
+<p>Management acknowledges that the HYTech LMS has completed security, privacy, academic-integrity, accessibility, scalability, disaster-recovery, and regulatory acceptance testing. Critical findings are closed. Residual risks are documented with accountable owners and expiry dates. The DPO has approved the privacy controls, and academic/TESDA owners have approved the authoritative record workflows applicable to the institution.</p>
+</blockquote>
+<table>
+<thead>
+<tr class="header">
+<th>Role</th>
+<th>Name</th>
+<th>Signature</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Executive sponsor</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>Technical owner</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>Security owner</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>Data Protection Officer</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>Academic/registrar owner</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>TESDA compliance owner, if applicable</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>QA/release approver</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><strong>End of report</strong></p>
+</body>
+</html>

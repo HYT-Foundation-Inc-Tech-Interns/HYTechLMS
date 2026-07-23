@@ -1,0 +1,184 @@
+@page {
+  size: A4;
+  margin: 18mm 16mm 18mm 16mm;
+}
+
+:root {
+  --ink: #172033;
+  --muted: #596579;
+  --navy: #14213d;
+  --blue: #1d4ed8;
+  --orange: #e56b1f;
+  --red: #b42318;
+  --amber: #b54708;
+  --line: #d8dee9;
+  --soft: #f4f7fb;
+}
+
+html {
+  font-size: 10.2pt;
+}
+
+body {
+  color: var(--ink);
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+  line-height: 1.48;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  background: white;
+}
+
+h1, h2, h3, h4 {
+  color: var(--navy);
+  font-weight: 700;
+  line-height: 1.18;
+  page-break-after: avoid;
+}
+
+h1 {
+  margin: 2rem 0 0.85rem;
+  padding-bottom: 0.32rem;
+  border-bottom: 2px solid var(--orange);
+  font-size: 20pt;
+}
+
+body > h1:first-child {
+  margin-top: 34mm;
+  border-bottom: 0;
+  color: var(--navy);
+  font-size: 29pt;
+  letter-spacing: -0.5px;
+}
+
+body > h1:first-child + h2 {
+  margin-top: 0.2rem;
+  max-width: 165mm;
+  color: var(--orange);
+  font-size: 18pt;
+  font-weight: 600;
+}
+
+h2 {
+  margin: 1.55rem 0 0.65rem;
+  font-size: 15pt;
+}
+
+h3 {
+  margin: 1.25rem 0 0.45rem;
+  font-size: 12.3pt;
+}
+
+p {
+  margin: 0.35rem 0 0.7rem;
+  orphans: 3;
+  widows: 3;
+}
+
+ul, ol {
+  margin: 0.4rem 0 0.8rem 1.35rem;
+  padding: 0;
+}
+
+li {
+  margin: 0.18rem 0;
+}
+
+strong {
+  color: #111827;
+}
+
+a {
+  color: var(--blue);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+code {
+  color: #7c2d12;
+  background: #fff7ed;
+  border-radius: 3px;
+  padding: 0.08rem 0.24rem;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 8.7pt;
+  overflow-wrap: anywhere;
+}
+
+blockquote {
+  margin: 0.8rem 0;
+  padding: 0.7rem 0.9rem;
+  border-left: 4px solid var(--orange);
+  background: #fff8f1;
+  color: #374151;
+}
+
+hr {
+  margin: 1.4rem 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+table {
+  width: 100%;
+  margin: 0.65rem 0 1rem;
+  border-collapse: collapse;
+  table-layout: auto;
+  font-size: 8.6pt;
+  page-break-inside: auto;
+}
+
+thead {
+  display: table-header-group;
+}
+
+tr {
+  page-break-inside: avoid;
+  page-break-after: auto;
+}
+
+th {
+  padding: 0.43rem 0.5rem;
+  color: white;
+  background: var(--navy);
+  border: 1px solid var(--navy);
+  text-align: left;
+  vertical-align: top;
+}
+
+td {
+  padding: 0.42rem 0.5rem;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+tbody tr:nth-child(even) td {
+  background: var(--soft);
+}
+
+h1:not(:first-child) {
+  break-before: page;
+}
+
+h1 + h2,
+h2 + h3,
+h3 + p,
+h3 + table {
+  break-before: avoid;
+}
+
+@media print {
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  a {
+    color: var(--blue);
+  }
+
+  body > h1:first-child {
+    break-before: auto;
+  }
+}

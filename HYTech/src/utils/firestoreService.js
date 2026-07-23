@@ -22,7 +22,9 @@ import {
   arrayRemove,
   deleteField,
 } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
+import { db, auth, functions, storage } from '../firebase';
 import { TESDA_CATALOG, parseLevel } from '../data/tesdaCatalog';
 
 // ==================== USER OPERATIONS ====================
@@ -35,19 +37,31 @@ import { TESDA_CATALOG, parseLevel } from '../data/tesdaCatalog';
 // Next sequential trainee/user ID number, mirroring the admin "Add User" flow
 // (max existing numeric idNumber + 1, else a base seed). Used so self-registered
 // trainees get an ID number too — not just admin-created accounts.
-const ID_NUMBER_SEED = '5684236526';
 export const generateNextIdNumber = async () => {
-  try {
-    const snapshot = await getDocs(collection(db, 'users'));
-    const numeric = snapshot.docs
-      .map((d) => Number(d.data()?.idNumber))
-      .filter((n) => !Number.isNaN(n));
-    return numeric.length > 0 ? String(Math.max(...numeric) + 1) : ID_NUMBER_SEED;
-  } catch (error) {
-    console.warn('Could not generate next ID number:', error?.message);
-    // Fall back to a timestamp-based value so the field is never blank.
-    return String(Date.now());
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi?.getRandomValues) {
+    const values = cryptoApi.getRandomValues(new Uint32Array(2));
+    const combined = (BigInt(values[0]) << 32n) | BigInt(values[1]);
+    return String(1000000000n + (combined % 9000000000n));
   }
+  return String(Date.now()).slice(-10).padStart(10, '0');
+};
+
+export const generateUniqueClassCode = async () => {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const bytes = new Uint8Array(10);
+    if (!globalThis.crypto?.getRandomValues) {
+      throw new Error('Secure class-code generation is unavailable in this browser.');
+    }
+    globalThis.crypto.getRandomValues(bytes);
+    const code = `CLASS-${Array.from(bytes, (value) => alphabet[value % alphabet.length]).join('')}`;
+    const existing = await getDocs(
+      query(collection(db, 'classes'), where('classCode', '==', code), limit(1))
+    );
+    if (existing.empty) return code;
+  }
+  throw new Error('Unable to generate a unique class code. Please try again.');
 };
 
 export const createUserProfile = async (userId, userData) => {
@@ -79,6 +93,12 @@ export const createUserProfile = async (userId, userData) => {
     console.error('Error creating user profile:', error);
     throw error;
   }
+};
+
+export const adminUpdateUserAccount = async (userId, account) => {
+  const updateAccount = httpsCallable(functions, 'adminUpdateUserAccount');
+  const result = await updateAccount({ userId, ...account });
+  return result.data || { updated: true };
 };
 
 /**
@@ -438,18 +458,8 @@ export const updateSector = async (sectorId, updates) => {
  */
 export const deleteSector = async (sectorId) => {
   try {
-    // Check if any classes exist in this sector
-    const classesRef = collection(db, 'classes');
-    const q = query(classesRef, where('sectorId', '==', sectorId), limit(1));
-    const snapshot = await getDocs(q);
-    
-    if (!snapshot.empty) {
-      throw new Error('Cannot delete sector with existing classes. Please delete classes first.');
-    }
-    
-    const sectorRef = doc(db, 'sectors', sectorId);
-    await deleteDoc(sectorRef);
-
+    const deleteSecurely = httpsCallable(functions, 'deleteSectorSecure');
+    await deleteSecurely({ sectorId });
     return true;
   } catch (error) {
     console.error('Error deleting sector:', error);
@@ -790,6 +800,7 @@ export const createCourseTemplate = async (courseData, { sectorId = null } = {})
       sectorId: sectorId || null,
       status: courseData.status || 'Active',
       available: courseData.available ?? String(courseData.status || 'Active').toLowerCase() === 'active',
+      hasContent: courseData.hasContent === true,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -810,6 +821,18 @@ export const createCourseTemplate = async (courseData, { sectorId = null } = {})
     console.error('Error creating course template:', error);
     throw error;
   }
+};
+
+export const promoteClassToTemplate = async (classId) => {
+  const promote = httpsCallable(functions, 'promoteClassToTemplate');
+  const result = await promote({ classId });
+  return result.data || { promoted: true };
+};
+
+export const cloneTemplateToClass = async (templateId, classId) => {
+  const clone = httpsCallable(functions, 'cloneTemplateToClass');
+  const result = await clone({ templateId, classId });
+  return result.data || { cloned: true };
 };
 
 /**
@@ -833,7 +856,12 @@ export const createCourse = async (courseData, { sectorId = null, trainerId = nu
 
     // `subjects` drives the class's modules but is not itself a class field —
     // keep it off the class doc.
-    const { subjects: inlineSubjects, ...classFields } = courseData;
+    const {
+      subjects: inlineSubjects,
+      templateMode = 'legacy',
+      templateHasContent = false,
+      ...classFields
+    } = courseData;
 
     const newCourse = {
       ...classFields,
@@ -843,13 +871,44 @@ export const createCourse = async (courseData, { sectorId = null, trainerId = nu
       trainerId: trainerId || null,
       // Additional trainers who share edit rights (the lead is `trainerId`).
       coTrainerIds: [],
-      status: classFields.status || 'Active',
+      creationMode: templateMode === 'template' ? 'template' : 'empty',
+      status: templateMode === 'template' ? 'Provisioning' : (classFields.status || 'Active'),
       currentEnrollments: 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
 
     const docRef = await addDoc(classesRef, newCourse);
+
+    // Full templates are copied server-side so private assessment answer keys
+    // are never exposed to the trainer's browser.
+    if (templateMode === 'template') {
+      if (!classFields.courseId || templateHasContent !== true) {
+        await updateDoc(docRef, {
+          templateCloneStatus: 'failed',
+          updatedAt: serverTimestamp(),
+        });
+        throw new Error('The selected program does not have a full-content template.');
+      }
+      try {
+        await cloneTemplateToClass(classFields.courseId, docRef.id);
+        await updateDoc(docRef, {
+          templateCloneStatus: 'complete',
+          status: classFields.status || 'Active',
+          updatedAt: serverTimestamp(),
+        });
+      } catch (cloneError) {
+        await updateDoc(docRef, {
+          templateCloneStatus: 'failed',
+          updatedAt: serverTimestamp(),
+        }).catch(() => {});
+        throw new Error(
+          `The class could not be created from its template: ${
+            cloneError?.message || 'Unknown cloning error'
+          }`
+        );
+      }
+    }
 
     // Seed the class's TOPICS from the program's subjects. Each subject becomes
     // a section (topic) in the Modules tab — this is what both the trainer's
@@ -1250,7 +1309,8 @@ export const deleteCourse = async (courseId) => {
     const existing = await getDoc(courseRef).catch(() => null);
     const sectorId = existing?.exists() ? existing.data().sectorId : null;
 
-    await deleteDoc(courseRef);
+    const deleteSecurely = httpsCallable(functions, 'deleteCourseTemplateSecure');
+    await deleteSecurely({ courseId });
 
     // Log activity
     await logActivity('admin', 'delete_course', 'courses', courseId, {
@@ -1271,148 +1331,11 @@ export const deleteCourse = async (courseId) => {
  */
 export const deleteClass = async (classId) => {
   try {
-    await deleteDoc(doc(db, 'classes', classId));
+    const deleteSecurely = httpsCallable(functions, 'deleteClassSecure');
+    await deleteSecurely({ classId });
     return true;
   } catch (error) {
     console.error('Error deleting class:', error);
-    throw error;
-  }
-};
-
-// ==================== COURSE APPLICATIONS ====================
-
-/**
- * Trainee applies to a course
- * Checks: No active enrollment
- */
-export const applyCourse = async (studentId, courseId) => {
-  try {
-    // Trainees may enroll in multiple subjects, so no single-enrollment gate.
-    // Get course and trainer info
-    const courseRef = doc(db, 'courses', courseId);
-    const courseSnap = await getDoc(courseRef);
-    
-    if (!courseSnap.exists()) {
-      throw new Error('Course not found');
-    }
-    
-    const courseData = courseSnap.data();
-    
-    // Create application
-    const applicationsRef = collection(db, 'courseApplications');
-    const appDocRef = await addDoc(applicationsRef, {
-      studentId,
-      courseId,
-      sectorId: courseData.sectorId,
-      trainerId: courseData.trainerId,
-      status: 'pending',
-      appliedAt: serverTimestamp(),
-    });
-    
-    // Log activity
-    await logActivity(studentId, 'apply_course', 'courseApplications', appDocRef.id, {
-      courseId,
-      courseName: courseData.name,
-    });
-    
-    return appDocRef.id;
-  } catch (error) {
-    console.error('Error applying to course:', error);
-    throw error;
-  }
-};
-
-/**
- * Get course applications (for trainer or student)
- */
-export const getCourseApplications = async (filters = {}) => {
-  try {
-    const applicationsRef = collection(db, 'courseApplications');
-    const constraints = [];
-    
-    if (filters.courseId) {
-      constraints.push(where('courseId', '==', filters.courseId));
-    }
-    
-    if (filters.studentId) {
-      constraints.push(where('studentId', '==', filters.studentId));
-    }
-    
-    if (filters.trainerId) {
-      constraints.push(where('trainerId', '==', filters.trainerId));
-    }
-    
-    if (filters.status) {
-      constraints.push(where('status', '==', filters.status));
-    }
-    
-    // Note: Only add orderBy if there are no filters to avoid requiring composite indexes
-    if (constraints.length === 0) {
-      constraints.push(orderBy('appliedAt', 'desc'));
-    }
-    
-    const q = constraints.length > 0 ? query(applicationsRef, ...constraints) : query(applicationsRef);
-    const snapshot = await getDocs(q);
-    
-    let applications = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    
-    // Sort in-memory if we filtered (orderBy wasn't added)
-    if (constraints.length > 0 || filters.courseId || filters.studentId || filters.trainerId || filters.status) {
-      applications.sort((a, b) => {
-        const dateA = a.appliedAt?.toDate?.() || new Date(0);
-        const dateB = b.appliedAt?.toDate?.() || new Date(0);
-        return dateB - dateA;
-      });
-    }
-    
-    return applications;
-  } catch (error) {
-    console.error('Error fetching course applications:', error);
-    throw error;
-  }
-};
-
-/**
- * Trainor approves an application
- * This should trigger a Cloud Function to create enrollment atomically
- */
-export const approveApplication = async (applicationId) => {
-  try {
-    const appRef = doc(db, 'courseApplications', applicationId);
-    
-    await updateDoc(appRef, {
-      status: 'approved',
-      reviewedAt: serverTimestamp(),
-    });
-    
-    // Cloud Function will handle enrollment creation
-    
-    return true;
-  } catch (error) {
-    console.error('Error approving application:', error);
-    throw error;
-  }
-};
-
-/**
- * Trainor rejects an application
- */
-export const rejectApplication = async (applicationId, reason = '') => {
-  try {
-    const appRef = doc(db, 'courseApplications', applicationId);
-    
-    await updateDoc(appRef, {
-      status: 'rejected',
-      rejectionReason: reason,
-      reviewedAt: serverTimestamp(),
-    });
-    
-    return true;
-  } catch (error) {
-    console.error('Error rejecting application:', error);
     throw error;
   }
 };
@@ -1595,6 +1518,58 @@ export const completeIdRequest = async (requestId, adminUid = '') => {
 
 // ==================== INCIDENT FORMS ====================
 // Filed by students or trainers; visible to staff (trainer + admin).
+
+export const subscribeToPersonalCalendarEvents = (userId, callback) => {
+  if (!userId) {
+    callback([]);
+    return () => {};
+  }
+  return onSnapshot(
+    collection(db, 'users', userId, 'calendarEvents'),
+    (snapshot) => {
+      const events = snapshot.docs.map((eventDoc) => ({
+        id: eventDoc.id,
+        ...eventDoc.data(),
+        date: toDate(eventDoc.data().date),
+      }));
+      events.sort((a, b) => (a.date?.getTime?.() || 0) - (b.date?.getTime?.() || 0));
+      callback(events);
+    },
+    (error) => {
+      console.error('Error loading personal calendar events:', error);
+      callback([]);
+    }
+  );
+};
+
+export const getJoinableClasses = async (filters = {}) => {
+  const constraints = [];
+  if (filters.sectorId) constraints.push(where('sectorId', '==', filters.sectorId));
+  if (filters.status) constraints.push(where('status', '==', filters.status));
+  const snapshot = await getDocs(
+    query(collection(db, 'classDirectory'), ...constraints)
+  );
+  return snapshot.docs
+    .map((classDoc) => ({ id: classDoc.id, ...classDoc.data() }))
+    .sort((left, right) => String(left.name || '').localeCompare(String(right.name || '')));
+};
+
+export const createPersonalCalendarEvent = async (userId, event = {}) => {
+  if (!userId || !event.title || !event.date) {
+    throw new Error('Calendar event title and date are required.');
+  }
+  const ref = await addDoc(collection(db, 'users', userId, 'calendarEvents'), {
+    title: String(event.title).trim(),
+    date: event.date instanceof Date ? Timestamp.fromDate(event.date) : Timestamp.fromDate(new Date(event.date)),
+    endTime: String(event.endTime || ''),
+    type: String(event.type || 'personal'),
+    location: String(event.location || '').trim(),
+    color: String(event.color || 'purple'),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+};
 
 export const createIncidentForm = async ({
   filedByName = '',
@@ -1803,7 +1778,7 @@ export const joinClassByCode = async (studentId, classCode) => {
     }
 
     // Find class by code
-    const classesRef = collection(db, 'classes');
+    const classesRef = collection(db, 'classDirectory');
     const q = query(classesRef, where('classCode', '==', classCode.trim().toUpperCase()));
     const snapshot = await getDocs(q);
 
@@ -1867,7 +1842,8 @@ export const joinClassByCode = async (studentId, classCode) => {
       enrollmentData.level = classData.level;
     }
 
-    const docRef = await addDoc(enrollmentsRef, enrollmentData);
+    const docRef = doc(enrollmentsRef, `${classId}_${studentId}`);
+    await setDoc(docRef, enrollmentData);
 
     // Let the trainer know someone is waiting for approval.
     if (classData.trainerId) {
@@ -1905,20 +1881,61 @@ export const joinClassByCode = async (studentId, classCode) => {
 /**
  * Trainor approves a pending class-join request (pending -> active).
  */
-export const approveEnrollment = async (enrollmentId, { studentId, className } = {}) => {
+export const ensureClassMembership = async (enrollment = {}) => {
+  const studentId = enrollment.studentId || auth?.currentUser?.uid;
+  if (
+    !enrollment.id
+    || !enrollment.classId
+    || !studentId
+    || !['active', 'ongoing', 'completed'].includes(String(enrollment.status || '').toLowerCase())
+  ) {
+    return false;
+  }
+  await setDoc(
+    doc(db, 'classes', enrollment.classId, 'members', studentId),
+    {
+      studentId,
+      enrollmentId: enrollment.id,
+      status: String(enrollment.status).toLowerCase(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+  return true;
+};
+
+export const approveEnrollment = async (enrollmentId, { studentId, classId, className } = {}) => {
   try {
     const enrollmentRef = doc(db, 'enrollments', enrollmentId);
-    await updateDoc(enrollmentRef, {
+    const enrollmentSnapshot = await getDoc(enrollmentRef);
+    const enrollmentData = enrollmentSnapshot.exists() ? enrollmentSnapshot.data() : {};
+    const resolvedStudentId = studentId || enrollmentData.studentId;
+    const resolvedClassId = classId || enrollmentData.classId;
+    const batch = writeBatch(db);
+    batch.update(enrollmentRef, {
       status: 'active',
       joinedAt: new Date().toISOString(),
       approvedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    if (resolvedStudentId && resolvedClassId) {
+      batch.set(
+        doc(db, 'classes', resolvedClassId, 'members', resolvedStudentId),
+        {
+          studentId: resolvedStudentId,
+          enrollmentId,
+          status: 'active',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+    await batch.commit();
 
-    if (studentId) {
+    if (resolvedStudentId) {
       try {
         await createNotification({
-          toUid: studentId,
+          toUid: resolvedStudentId,
           type: 'join_approved',
           text: `You've been added to ${className || 'your class'}. Your dashboard is now unlocked.`,
           metadata: { enrollmentId },
@@ -2020,6 +2037,8 @@ export const createEnrollment = async (enrollmentData) => {
 export const updateEnrollmentStatus = async (enrollmentId, newStatus, reason = '') => {
   try {
     const enrollmentRef = doc(db, 'enrollments', enrollmentId);
+    const enrollmentSnapshot = await getDoc(enrollmentRef);
+    const enrollment = enrollmentSnapshot.exists() ? enrollmentSnapshot.data() : {};
     const updates = {
       status: newStatus,
       updatedAt: serverTimestamp(),
@@ -2032,7 +2051,26 @@ export const updateEnrollmentStatus = async (enrollmentId, newStatus, reason = '
       updates.terminationReason = reason;
     }
     
-    await updateDoc(enrollmentRef, updates);
+    const batch = writeBatch(db);
+    batch.update(enrollmentRef, updates);
+    if (enrollment.classId && enrollment.studentId) {
+      const memberRef = doc(db, 'classes', enrollment.classId, 'members', enrollment.studentId);
+      if (newStatus === 'terminated') {
+        batch.delete(memberRef);
+      } else {
+        batch.set(
+          memberRef,
+          {
+            studentId: enrollment.studentId,
+            enrollmentId,
+            status: newStatus,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
+    }
+    await batch.commit();
     
     return true;
   } catch (error) {
@@ -2068,7 +2106,14 @@ export const updateEnrollmentProgress = async (enrollmentId, progressData) => {
 export const removeEnrollment = async (enrollmentId) => {
   try {
     const enrollmentRef = doc(db, 'enrollments', enrollmentId);
-    await deleteDoc(enrollmentRef);
+    const enrollmentSnapshot = await getDoc(enrollmentRef);
+    const enrollment = enrollmentSnapshot.exists() ? enrollmentSnapshot.data() : {};
+    const batch = writeBatch(db);
+    batch.delete(enrollmentRef);
+    if (enrollment.classId && enrollment.studentId) {
+      batch.delete(doc(db, 'classes', enrollment.classId, 'members', enrollment.studentId));
+    }
+    await batch.commit();
     return true;
   } catch (error) {
     console.error('Error removing enrollment:', error);
@@ -2411,7 +2456,20 @@ export const adminAddStudentToClass = async (classId, student, classData = {}) =
     if (classData.courseId) enrollmentData.courseId = classData.courseId;
     if (classData.level) enrollmentData.level = classData.level;
 
-    const docRef = await addDoc(enrollmentsRef, enrollmentData);
+    const enrollmentRef = doc(enrollmentsRef, `${classId}_${student.id}`);
+    const batch = writeBatch(db);
+    batch.set(enrollmentRef, enrollmentData);
+    batch.set(
+      doc(db, 'classes', classId, 'members', student.id),
+      {
+        studentId: student.id,
+        enrollmentId: enrollmentRef.id,
+        status: 'active',
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    await batch.commit();
 
     // Notify the student they were added.
     try {
@@ -2419,13 +2477,13 @@ export const adminAddStudentToClass = async (classId, student, classData = {}) =
         toUid: student.id,
         type: 'join_approved',
         text: `You've been added to ${classData.name || 'a class'}. Your dashboard is now unlocked.`,
-        metadata: { classId, enrollmentId: docRef.id },
+        metadata: { classId, enrollmentId: enrollmentRef.id },
       });
     } catch (notifyErr) {
       console.warn('Could not notify added student:', notifyErr?.message);
     }
 
-    return { id: docRef.id, ...enrollmentData };
+    return { id: enrollmentRef.id, ...enrollmentData };
   } catch (error) {
     console.error('Error adding student to class:', error);
     throw error;
@@ -2620,10 +2678,10 @@ export const getAnnouncements = async (classId) => {
     const q = query(announcementsRef, orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
     
-    return snapshot.docs.map((doc) => {
-      const data = doc.data();
+    return snapshot.docs.map((announcementDoc) => {
+      const data = announcementDoc.data();
       return {
-        id: doc.id,
+        id: announcementDoc.id,
         ...data,
         createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
         updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt),
@@ -2749,10 +2807,9 @@ export const getClassActivityFeed = async (classId, limitResults = 10) => {
 };
 
 /**
- * Compress file to base64 for Firestore storage
- * Max 1MB per document, so we'll store references and metadata
+ * Upload a file to Cloud Storage and return compact metadata for Firestore.
  */
-export const compressAndStoreFile = async (file) => {
+export const compressAndStoreFile = async (file, classId) => {
   try {
     // Validate file exists
     if (!file) {
@@ -2763,73 +2820,41 @@ export const compressAndStoreFile = async (file) => {
     if (!file.name || file.name.trim() === '') {
       throw new Error('File name is invalid');
     }
-    
-    // CRITICAL: Firestore document size limit is 1MB per document
-    // Base64 encoding increases size by ~33%, so we need to be conservative
-    // Reserve space for other document fields, so limit attachment to ~300KB
-    const MAX_FILE_SIZE = 300 * 1024; // 300KB (conservative)
-    if (file.size > MAX_FILE_SIZE) {
-      throw new Error(`File is too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Maximum size: ${MAX_FILE_SIZE / 1024}KB`);
+
+    if (!storage || !auth?.currentUser?.uid) {
+      throw new Error('File storage is unavailable or the user is not signed in.');
     }
-    
-    // Read file as Data URL
-    const reader = new FileReader();
-    
-    return new Promise((resolve, reject) => {
-      reader.onload = async (e) => {
-        try {
-          // Get the base64 string (remove the data: prefix)
-          let base64String = e.target.result;
-          if (typeof base64String !== 'string') {
-            throw new Error('File read result is not a string');
-          }
-          
-          if (!base64String.includes(',')) {
-            throw new Error('Invalid data URL format');
-          }
-          
-          base64String = base64String.split(',')[1];
-          
-          // Validate base64 string was extracted
-          if (!base64String || base64String.length === 0) {
-            throw new Error('Failed to extract base64 content from file');
-          }
-          
-          // Estimate final document size
-          // Base64 string + JSON overhead ≈ base64 length + 500 bytes
-          const estimatedDocSize = base64String.length + 1000; // bytes
-          if (estimatedDocSize > 900 * 1024) { // 900KB safety margin
-            throw new Error(`Document would be too large (est. ${(estimatedDocSize / 1024 / 1024).toFixed(2)}MB). Maximum: ~900KB`);
-          }
-          
-          resolve({
-            name: file.name,
-            type: file.type || 'application/octet-stream',
-            size: file.size,
-            base64: base64String
-          });
-        } catch (err) {
-          reject(new Error(`Failed to process file: ${err.message}`));
-        }
-      };
-      
-      reader.onerror = () => {
-        reject(new Error(`Failed to read file: ${file.name || 'unknown'}`));
-      };
-      
-      reader.onabort = () => {
-        reject(new Error('File reading was aborted'));
-      };
-      
-      // Use readAsDataURL to handle any file type (including binary)
-      try {
-        reader.readAsDataURL(file);
-      } catch (err) {
-        reject(new Error(`Error initiating file read: ${err.message}`));
-      }
+    if (!classId) {
+      throw new Error('A class is required before uploading an LMS file.');
+    }
+    const MAX_UPLOAD_SIZE = 25 * 1024 * 1024;
+    if (file.size > MAX_UPLOAD_SIZE) {
+      throw new Error(
+        `File is too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Maximum size: 25MB`
+      );
+    }
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_');
+    const randomPart =
+      globalThis.crypto?.randomUUID?.()
+      || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const path = `lmsFiles/${classId}/${auth.currentUser.uid}/${randomPart}-${safeName}`;
+    const fileRef = storageRef(storage, path);
+    await uploadBytes(fileRef, file, {
+      contentType: file.type || 'application/octet-stream',
+      customMetadata: { originalName: file.name },
     });
+    const url = await getDownloadURL(fileRef);
+    return {
+      name: file.name,
+      type: file.type || 'application/octet-stream',
+      size: file.size,
+      url,
+      storagePath: path,
+    };
+    
+          // Base64 string + JSON overhead ≈ base64 length + 500 bytes
   } catch (error) {
-    console.error('File compression error:', error.message);
+    console.error('File upload error:', error.message);
     throw error;
   }
 };
@@ -2839,7 +2864,7 @@ export const compressAndStoreFile = async (file) => {
  */
 export const storeAnnouncementAttachment = async (classId, announcementId, file) => {
   try {
-    const compressedFile = await compressAndStoreFile(file);
+    const compressedFile = await compressAndStoreFile(file, classId);
     const announcementRef = doc(db, 'classes', classId, 'announcements', announcementId);
     
     // Create clean attachment object - avoid nested complex types
@@ -2847,7 +2872,8 @@ export const storeAnnouncementAttachment = async (classId, announcementId, file)
       name: String(compressedFile.name),
       type: String(compressedFile.type),
       size: Number(compressedFile.size),
-      base64: String(compressedFile.base64)
+      url: String(compressedFile.url),
+      storagePath: String(compressedFile.storagePath),
     };
     
     await updateDoc(announcementRef, {
@@ -2931,8 +2957,10 @@ export const downloadAttachment = (attachment) => {
     }
     
     if (!attachment.base64) {
-      // If no base64, it might be a URL - open in new tab
-      window.open(attachment.fileUrl || attachment.url, '_blank');
+      const fileUrl = attachment.fileUrl || attachment.url;
+      if (!fileUrl) throw new Error('Attachment URL is unavailable');
+      const opened = window.open(fileUrl, '_blank', 'noopener,noreferrer');
+      if (opened) opened.opener = null;
       return;
     }
     
@@ -3460,11 +3488,13 @@ export const createAssessment = async (classId, {
   shuffleQuestions = false,
   showScores = true,
   showCorrectAnswers = true,
+  settings = {},
   questions = [],
   availableDate = null,
   dueDate = null,
   status = 'active',
-  topicId = null
+  topicId = null,
+  passingScore = 60,
 }) => {
   try {
     // Validate required fields
@@ -3481,6 +3511,13 @@ export const createAssessment = async (classId, {
     }
 
     const assessmentsRef = collection(db, 'classes', classId, 'assessments');
+    const assessmentRef = doc(assessmentsRef);
+    const answerKeyRef = doc(assessmentRef, 'private', 'answerKey');
+    const publicQuestions = questions.map(({ correctAnswer: _correctAnswer, ...question }) => question);
+    const answerKey = questions.reduce((result, question) => {
+      if (question?.id) result[question.id] = question.correctAnswer ?? null;
+      return result;
+    }, {});
     
     const assessment = {
       title,
@@ -3493,7 +3530,9 @@ export const createAssessment = async (classId, {
       shuffleQuestions,
       showScores,
       showCorrectAnswers,
-      questions,
+      settings,
+      questions: publicQuestions,
+      passingScore: Math.min(100, Math.max(0, Number(passingScore) || 60)),
       topicId: topicId || null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -3502,9 +3541,15 @@ export const createAssessment = async (classId, {
       dueDate
     };
 
-    const docRef = await addDoc(assessmentsRef, assessment);
-    
-    return { id: docRef.id, ...assessment };
+    const batch = writeBatch(db);
+    batch.set(assessmentRef, assessment);
+    batch.set(answerKeyRef, {
+      answers: answerKey,
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+
+    return { id: assessmentRef.id, ...assessment, questions };
   } catch (error) {
     console.error('❌ Error creating assessment:', error);
     console.error('   Error code:', error.code);
@@ -3519,11 +3564,36 @@ export const createAssessment = async (classId, {
 export const updateAssessment = async (classId, assessmentId, updates) => {
   try {
     const assessmentRef = doc(db, 'classes', classId, 'assessments', assessmentId);
-    
-    await updateDoc(assessmentRef, {
-      ...updates,
+    const nextUpdates = { ...updates };
+    const batch = writeBatch(db);
+
+    if (Array.isArray(nextUpdates.questions)) {
+      const answerKey = nextUpdates.questions.reduce((result, question) => {
+        if (question?.id) result[question.id] = question.correctAnswer ?? null;
+        return result;
+      }, {});
+      nextUpdates.questions = nextUpdates.questions.map(
+        ({ correctAnswer: _correctAnswer, ...question }) => question
+      );
+      batch.set(
+        doc(assessmentRef, 'private', 'answerKey'),
+        { answers: answerKey, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
+    }
+
+    if (nextUpdates.passingScore !== undefined) {
+      nextUpdates.passingScore = Math.min(
+        100,
+        Math.max(0, Number(nextUpdates.passingScore) || 60)
+      );
+    }
+
+    batch.update(assessmentRef, {
+      ...nextUpdates,
       updatedAt: serverTimestamp()
     });
+    await batch.commit();
     
     return { id: assessmentId, ...updates };
   } catch (error) {
@@ -3537,13 +3607,25 @@ export const updateAssessment = async (classId, assessmentId, updates) => {
  */
 export const deleteAssessment = async (classId, assessmentId) => {
   try {
-    const assessmentRef = doc(db, 'classes', classId, 'assessments', assessmentId);
-    await deleteDoc(assessmentRef);
+    const deleteSecurely = httpsCallable(functions, 'deleteAssessmentSecure');
+    await deleteSecurely({ classId, assessmentId });
     return true;
   } catch (error) {
     console.error('Error deleting assessment:', error);
     throw error;
   }
+};
+
+export const migrateAssessmentAnswerKeys = async () => {
+  const migrate = httpsCallable(functions, 'migrateAssessmentAnswerKeys');
+  const result = await migrate({});
+  return result.data || { migrated: 0 };
+};
+
+export const migrateClassDirectory = async () => {
+  const migrate = httpsCallable(functions, 'migrateClassDirectory');
+  const result = await migrate({});
+  return result.data || { synchronized: 0 };
 };
 
 /**
@@ -3691,12 +3773,15 @@ export const submitAssignment = async (
     }
 
     const attachments = [];
-    const filesBase64 = [];
     for (const file of files) {
-      // Reuse the same 300KB base64 pipeline used for class materials.
-      const compressed = await compressAndStoreFile(file);
-      filesBase64.push(compressed.base64);
-      attachments.push({ name: compressed.name, type: compressed.type, size: compressed.size });
+      const uploaded = await compressAndStoreFile(file, classId);
+      attachments.push({
+        name: uploaded.name,
+        type: uploaded.type,
+        size: uploaded.size,
+        url: uploaded.url,
+        storagePath: uploaded.storagePath,
+      });
     }
 
     const submissionRef = doc(
@@ -3717,7 +3802,7 @@ export const submitAssignment = async (
       text,
       link: (link || '').trim(),
       attachments,
-      filesBase64,
+      filesBase64: [],
       status: 'submitted',
       submittedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -3860,15 +3945,65 @@ export const getAssessments = async (classId) => {
     const q = query(assessmentsRef, orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
     
-    return snapshot.docs.map((doc) => {
-      const data = doc.data();
+    return Promise.all(snapshot.docs.map(async (assessmentDoc) => {
+      const data = assessmentDoc.data();
+      let questions = Array.isArray(data.questions) ? data.questions : [];
+      try {
+        const answerKeyRef = doc(
+          db,
+          'classes',
+          classId,
+          'assessments',
+          assessmentDoc.id,
+          'private',
+          'answerKey'
+        );
+        const keySnapshot = await getDoc(answerKeyRef);
+        const legacyAnswers = questions.reduce((answers, question) => {
+          if (
+            question?.id
+            && Object.prototype.hasOwnProperty.call(question, 'correctAnswer')
+          ) {
+            answers[question.id] = question.correctAnswer;
+          }
+          return answers;
+        }, {});
+        const privateAnswers = keySnapshot.exists()
+          ? keySnapshot.data()?.answers || {}
+          : legacyAnswers;
+
+        if (!keySnapshot.exists() && Object.keys(legacyAnswers).length > 0) {
+          const batch = writeBatch(db);
+          batch.set(answerKeyRef, {
+            answers: legacyAnswers,
+            migratedAt: serverTimestamp(),
+          });
+          batch.update(assessmentDoc.ref, {
+            questions: questions.map(({ correctAnswer: _answer, ...question }) => question),
+            updatedAt: serverTimestamp(),
+          });
+          await batch.commit();
+        }
+
+        questions = questions.map((question) => ({
+          ...question,
+          correctAnswer: Object.prototype.hasOwnProperty.call(privateAnswers, question.id)
+            ? privateAnswers[question.id]
+            : question.correctAnswer,
+        }));
+      } catch {
+        // Trainees cannot read the private answer key. Their public question
+        // payload remains answer-free; trainers/admins receive it for editing.
+        questions = questions.map(({ correctAnswer: _answer, ...question }) => question);
+      }
       return {
-        id: doc.id,
+        id: assessmentDoc.id,
         ...data,
+        questions,
         createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
         updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt),
       };
-    });
+    }));
   } catch (error) {
     console.error('Error fetching assessments:', error);
     throw error;
@@ -3888,9 +4023,23 @@ export const getAssessmentById = async (classId, assessmentId) => {
     }
     
     const data = docSnapshot.data();
+    let questions = Array.isArray(data.questions) ? data.questions : [];
+    if (templateMode !== 'template') try {
+      const keySnapshot = await getDoc(
+        doc(assessmentRef, 'private', 'answerKey')
+      );
+      const answers = keySnapshot.exists() ? keySnapshot.data()?.answers || {} : {};
+      questions = questions.map((question) => ({
+        ...question,
+        correctAnswer: answers[question.id],
+      }));
+    } catch {
+      questions = questions.map(({ correctAnswer: _answer, ...question }) => question);
+    }
     return {
       id: docSnapshot.id,
       ...data,
+      questions,
       createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
       updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt),
     };
@@ -4088,26 +4237,24 @@ export const subscribeToEnrollments = (classId, callback) => {
 /**
  * Submit a quiz attempt
  */
-export const submitQuizAttempt = async (classId, assessmentId, studentId, { answers, score, earnedPoints, totalPoints, correctCount, totalQuestions, timeTaken = 0 }) => {
+export const submitQuizAttempt = async (
+  classId,
+  assessmentId,
+  studentId,
+  { answers, timeTaken = 0 }
+) => {
   try {
-    const attemptsRef = collection(db, 'classes', classId, 'assessments', assessmentId, 'attempts');
-    
-    const attempt = {
-      studentId,
-      answers,
-      score,
-      earnedPoints: earnedPoints || Math.round((score / 100) * totalPoints),
-      totalPoints,
-      correctCount,
-      totalQuestions,
-      timeTaken,
-      passed: score >= 60,
-      submittedAt: serverTimestamp(),
-      status: 'submitted',
-    };
-    
-    const docRef = await addDoc(attemptsRef, attempt);
-    return { id: docRef.id, ...attempt };
+    if (!functions || !auth?.currentUser || auth.currentUser.uid !== studentId) {
+      throw new Error('A signed-in trainee is required to submit an assessment.');
+    }
+    const gradeAssessment = httpsCallable(functions, 'submitAssessmentAttempt');
+    const result = await gradeAssessment({
+      classId,
+      assessmentId,
+      answers: answers || {},
+      timeTaken: Math.max(0, Number(timeTaken) || 0),
+    });
+    return result.data;
   } catch (error) {
     console.error('Error submitting quiz attempt:', error);
     throw error;
@@ -4362,12 +4509,17 @@ export const getQuizStatistics = async (studentId, classId, assessmentId) => {
     const scores = attempts.map((a) => a.score || 0);
     const averageScore = Math.round(scores.reduce((a, b) => a + b) / attempts.length);
     const bestScore = Math.max(...scores);
+    const bestAttempt = attempts.reduce(
+      (best, attempt) => Number(attempt.score || 0) > Number(best?.score || 0) ? attempt : best,
+      attempts[0]
+    );
     
     return {
       attempts: attempts.length,
       averageScore,
       bestScore,
-      passed: bestScore >= 70, // Assuming 70% is passing
+      passed: Boolean(bestAttempt?.passed),
+      passingScore: Number(bestAttempt?.passingScore || 60),
       attemptHistory: attempts,
     };
   } catch (error) {
@@ -4417,6 +4569,7 @@ export const migrateClassesCoursTemplateIdToCourseId = async () => {
 export default {
   // User operations
   createUserProfile,
+  adminUpdateUserAccount,
   getUserProfile,
   updateUserProfile,
   getUserPrivateProfile,
@@ -4431,20 +4584,18 @@ export default {
   
   // Courses
   getCourses,
+  getJoinableClasses,
   getCoursesTemplates,
   getCourseById,
   getCourseTemplateById,
   createCourseTemplate,
+  promoteClassToTemplate,
+  cloneTemplateToClass,
   createCourse,
+  generateUniqueClassCode,
   updateCourseTemplate,
   updateCourse,
   deleteCourse,
-  
-  // Applications
-  applyCourse,
-  getCourseApplications,
-  approveApplication,
-  rejectApplication,
   
   // Enrollments
   queryActiveEnrollment,
@@ -4460,6 +4611,9 @@ export default {
   getStudents,
   getClassEnrollments,
   adminAddStudentToClass,
+  ensureClassMembership,
+  subscribeToPersonalCalendarEvents,
+  createPersonalCalendarEvent,
 
   // Materials
   getCourseMaterials,
@@ -4521,6 +4675,8 @@ export default {
   getAssessmentById,
   updateAssessment,
   deleteAssessment,
+  migrateAssessmentAnswerKeys,
+  migrateClassDirectory,
   submitQuizAttempt,
   getStudentQuizAttempts,
   

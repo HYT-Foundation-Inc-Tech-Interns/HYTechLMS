@@ -30,7 +30,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, submitQuizAttempt, hasStudentAttempted, getStudentQuizAttempts, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments, submitAssignment, getMySubmission, logClassActivity, updateEnrollmentProgress, updateStudentProgress } from '../../utils/firestoreService';
+import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, downloadAttachment, submitQuizAttempt, hasStudentAttempted, getStudentQuizAttempts, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments, submitAssignment, getMySubmission, logClassActivity, updateEnrollmentProgress, updateStudentProgress } from '../../utils/firestoreService';
 
 // ---- Quiz question helpers (support every trainer-builder question type) ----
 // Types: multiple-choice | true-false | dropdown (single index),
@@ -124,8 +124,6 @@ const StudentCourse = () => {
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState(null);
-  const [showDownloadToast, setShowDownloadToast] = useState(false);
-  const [downloadFileName, setDownloadFileName] = useState('');
   const [showQuizInfoModal, setShowQuizInfoModal] = useState(false);
   const [selectedQuizInfo, setSelectedQuizInfo] = useState(null);
 
@@ -182,8 +180,6 @@ const StudentCourse = () => {
   const [enrollmentData, setEnrollmentData] = useState(null);
   const [studentProgress, setStudentProgress] = useState(null);
   const [courseData, setCourseDataLocal] = useState(null);
-  const [classStudents, setClassStudents] = useState([]);
-  const [loadingClassStudents, setLoadingClassStudents] = useState(false);
   
   // Comments states
   const [announcementComments, setAnnouncementComments] = useState({});
@@ -379,48 +375,6 @@ const StudentCourse = () => {
     return () => unsubscribe();
   }, [courseId]);
 
-  // Load all students enrolled in this class
-  useEffect(() => {
-    if (!courseId) return;
-
-    const loadClassStudents = async () => {
-      try {
-        setLoadingClassStudents(true);
-        const enrollments = await getCourseEnrollments(courseId);
-
-        const students = await Promise.all(
-          (enrollments || []).map(async (enrollment) => {
-            const profile = await getUserProfile(enrollment.studentId);
-
-            const fullName =
-              profile?.displayName ||
-              [profile?.firstName, profile?.lastName].filter(Boolean).join(' ').trim() ||
-              profile?.name ||
-              profile?.email ||
-              'Trainee';
-
-            return {
-              id: enrollment.studentId || enrollment.id,
-              name: fullName,
-              email: profile?.email || '',
-              avatar: profile?.avatarBase64 || profile?.avatarUrl || null,
-              joinedAt: enrollment.joinedAt,
-            };
-          })
-        );
-
-        setClassStudents(students);
-      } catch (error) {
-        console.error('Error loading class students:', error);
-        setClassStudents([]);
-      } finally {
-        setLoadingClassStudents(false);
-      }
-    };
-
-    loadClassStudents();
-  }, [courseId]);
-
   // Check attempted assessments and load full attempt history from Firestore
   useEffect(() => {
     const loadAssessmentAttempts = async () => {
@@ -459,7 +413,10 @@ const StudentCourse = () => {
                 id: attempt.id,
                 quizId: itemId,
                 score: Number(attempt.score || 0),
-                passed: attempt.passed ?? Number(attempt.score || 0) >= 60,
+                passed:
+                  attempt.passed
+                  ?? Number(attempt.score || 0) >= Number(attempt.passingScore || item.passingScore || 60),
+                passingScore: Number(attempt.passingScore || item.passingScore || 60),
                 submittedAt: submittedDate,
                 submittedAtLabel: !isNaN(submittedDate?.getTime?.())
                   ? submittedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -1559,115 +1516,63 @@ const StudentCourse = () => {
   };
 
   const handleSubmitQuiz = async () => {
-    if (!selectedQuiz) return;
-    
-    let correctCount = 0;
-    let totalPoints = 0;
-    let earnedPoints = 0;
-    const questionResults = [];
+    if (!selectedQuiz || !courseId || !user?.uid) return;
 
-    selectedQuiz.questions.forEach(q => {
-      const points = Number(q.points) || 0;
-      const userAnswer = answers[q.id];
-      const { isCorrect, autoGraded } = gradeQuestion(q, userAnswer);
-      // Paragraph answers can't be auto-graded — keep them out of the score
-      // denominator (the trainer reviews them in Responses) but still record them.
-      if (autoGraded) {
-        totalPoints += points;
-        if (isCorrect) {
-          correctCount++;
-          earnedPoints += points;
-        }
-      }
-      questionResults.push({
-        ...q,
-        userAnswer,
-        isCorrect,
-        autoGraded,
-      });
-    });
-
-    const percentage = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
-    
-    setQuizResults({
-      correctCount,
-      totalQuestions: selectedQuiz.questions.length,
-      earnedPoints,
-      totalPoints,
-      percentage,
-      questionResults,
-      passed: percentage >= 60
-    });
-
-    const submittedAtDate = new Date();
-    setQuizAttemptHistory((prev) => [
-      {
-        id: `local-${Date.now()}`,
-        quizId: selectedQuiz.id,
-        score: percentage,
-        passed: percentage >= 60,
-        submittedAt: submittedAtDate,
-        submittedAtLabel: submittedAtDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      },
-      ...prev,
-    ]);
-
-    setAttemptedAssessmentIds((prev) => {
-      const updated = new Set(prev);
-      updated.add(String(selectedQuiz.id));
-      return updated;
-    });
-    
-    setQuizSubmitted(true);
-    
-    // Save attempt to Firestore
     try {
-      if (courseId && user?.uid && selectedQuiz?.id) {
-        await submitQuizAttempt(courseId, selectedQuiz.id, user.uid, {
-          answers,
-          score: percentage,
-          earnedPoints,
-          totalPoints,
-          correctCount,
-          totalQuestions: selectedQuiz.questions.length,
-          timeTaken: 0 // Could track time if needed
-        });
+      const gradedAttempt = await submitQuizAttempt(courseId, selectedQuiz.id, user.uid, {
+        answers,
+        timeTaken: 0,
+      });
+      const resultByQuestion = new Map(
+        (gradedAttempt.questionResults || []).map((result) => [String(result.questionId), result])
+      );
+      setQuizResults({
+        correctCount: Number(gradedAttempt.correctCount || 0),
+        totalQuestions: Number(gradedAttempt.totalQuestions || selectedQuiz.questions.length),
+        earnedPoints: Number(gradedAttempt.earnedPoints || 0),
+        totalPoints: Number(gradedAttempt.totalPoints || 0),
+        percentage: Number(gradedAttempt.score || 0),
+        passingScore: Number(gradedAttempt.passingScore || selectedQuiz.passingScore || 60),
+        passed: Boolean(gradedAttempt.passed),
+        showCorrectAnswers: Boolean(gradedAttempt.showCorrectAnswers),
+        questionResults: (selectedQuiz.questions || []).map((question) => ({
+          ...question,
+          ...(resultByQuestion.get(String(question.id)) || {}),
+        })),
+      });
+      setAttemptedAssessmentIds((prev) => new Set([...prev, String(selectedQuiz.id)]));
+      setQuizSubmitted(true);
 
-        // Refresh latest attempts for this assessment from Firestore
-        const refreshedAttempts = await getStudentQuizAttempts(courseId, selectedQuiz.id, user.uid);
-        const normalizedRefreshed = (refreshedAttempts || []).map((attempt) => {
-          const submittedDate = attempt.submittedAt?.toDate
-            ? attempt.submittedAt.toDate()
-            : attempt.submittedAt instanceof Date
-            ? attempt.submittedAt
-            : new Date(attempt.submittedAt);
-
-          return {
-            id: attempt.id,
-            quizId: selectedQuiz.id,
-            score: Number(attempt.score || 0),
-            passed: attempt.passed ?? Number(attempt.score || 0) >= 60,
-            submittedAt: submittedDate,
-            submittedAtLabel: !isNaN(submittedDate?.getTime?.())
-              ? submittedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-              : 'Unknown',
-          };
+      const refreshedAttempts = await getStudentQuizAttempts(courseId, selectedQuiz.id, user.uid);
+      const normalizedRefreshed = (refreshedAttempts || []).map((attempt) => {
+        const submittedDate = attempt.submittedAt?.toDate
+          ? attempt.submittedAt.toDate()
+          : attempt.submittedAt instanceof Date
+          ? attempt.submittedAt
+          : new Date(attempt.submittedAt);
+        return {
+          id: attempt.id,
+          quizId: selectedQuiz.id,
+          score: Number(attempt.score || 0),
+          passed: Boolean(attempt.passed),
+          passingScore: Number(attempt.passingScore || selectedQuiz.passingScore || 60),
+          submittedAt: submittedDate,
+          submittedAtLabel: !isNaN(submittedDate?.getTime?.())
+            ? submittedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : 'Unknown',
+        };
+      });
+      setQuizAttemptHistory((prev) => {
+        const withoutCurrentQuiz = prev.filter((a) => String(a.quizId) !== String(selectedQuiz.id));
+        return [...normalizedRefreshed, ...withoutCurrentQuiz].sort((a, b) => {
+          const dateA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+          const dateB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+          return dateB - dateA;
         });
-
-        setQuizAttemptHistory((prev) => {
-          const withoutCurrentQuiz = prev.filter((a) => String(a.quizId) !== String(selectedQuiz.id));
-          const merged = [...normalizedRefreshed, ...withoutCurrentQuiz];
-          merged.sort((a, b) => {
-            const dateA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
-            const dateB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
-            return dateB - dateA;
-          });
-          return merged;
-        });
-      }
+      });
     } catch (error) {
       console.error('Error saving quiz attempt:', error);
-      addToast('Failed to save quiz attempt', 'error');
+      addToast(error?.message || 'Failed to submit assessment', 'error');
     }
     exitFullscreen();
   };
@@ -1689,12 +1594,6 @@ const StudentCourse = () => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleDownload = (fileName) => {
-    setDownloadFileName(`Barista_NC2_${fileName.replace(/\s+/g, '_')}.pdf`);
-    setShowDownloadToast(true);
-    setTimeout(() => setShowDownloadToast(false), 4000);
   };
 
   const formatMaterialDate = (date) => {
@@ -1746,9 +1645,14 @@ const StudentCourse = () => {
   };
 
   const previewMaterialFile = (material, fileIndex) => {
+    const attachmentUrl = material?.attachments?.[fileIndex]?.url;
     const fileBase64 = material?.filesBase64?.[fileIndex];
     const rawType = material?.attachments?.[fileIndex]?.type || '';
 
+    if (attachmentUrl) {
+      window.open(attachmentUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
     if (!fileBase64) {
       addToast('Preview not available for this file', 'error');
       return;
@@ -1782,10 +1686,20 @@ const StudentCourse = () => {
   const downloadMaterialFile = (material, fileIndex) => {
     const fileName = material?.attachments?.[fileIndex]?.name || material?.title || 'material-file';
     const fileType = material?.attachments?.[fileIndex]?.type || 'application/octet-stream';
+    const attachmentUrl = material?.attachments?.[fileIndex]?.url;
     const fileBase64 = material?.filesBase64?.[fileIndex];
 
+    if (attachmentUrl) {
+      const link = document.createElement('a');
+      link.href = attachmentUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.download = fileName;
+      link.click();
+      return;
+    }
     if (!fileBase64) {
-      handleDownload(fileName);
+      addToast('This file is unavailable.', 'error');
       return;
     }
 
@@ -1834,22 +1748,6 @@ const StudentCourse = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 md:px-6 lg:px-8">
-      {/* Download Toast - fixed to bottom-right corner */}
-      {showDownloadToast && (
-        <div className="fixed bottom-6 right-6 z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 p-4 flex items-center gap-4 min-w-[300px]">
-          <div className="flex-1">
-            <p className="font-semibold text-gray-900">Download complete.</p>
-            <p className="text-sm text-gray-500">{downloadFileName} (5mb)</p>
-          </div>
-          <button 
-            onClick={() => setShowDownloadToast(false)}
-            className="px-4 py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors flex-shrink-0"
-          >
-            Open
-          </button>
-        </div>
-      )}
-
       {/* Tab Navigation */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-40 -mx-4 md:-mx-6 lg:-mx-8">
         <div className="flex items-center gap-8 px-6">
@@ -1896,17 +1794,6 @@ const StudentCourse = () => {
           >
             <FileText className="w-5 h-5 inline-block mr-2" />
             Assignments
-          </button>
-          <button
-            onClick={() => setActiveTab('students')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-all ${
-              activeTab === 'students'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <Users className="w-5 h-5 inline-block mr-2" />
-            Trainees
           </button>
         </div>
       </div>
@@ -1997,7 +1884,7 @@ const StudentCourse = () => {
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
                 <p className="text-xs text-white/70 uppercase tracking-wider">Passed Attempts</p>
                 <p className="text-2xl font-bold mt-1">{passedAttemptCount}</p>
-                <p className="text-xs text-white/70 mt-1">Pass mark: 60% and above</p>
+                <p className="text-xs text-white/70 mt-1">Passing mark is set per assessment</p>
               </div>
             </div>
           </div>
@@ -2451,12 +2338,16 @@ const StudentCourse = () => {
                     >
                       <Eye className="w-4 h-4" />
                     </button>
-                    <button 
-                      onClick={() => handleDownload(material.title)}
-                      className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
+                    <button
+                      onClick={() => downloadMaterialFile(material, 0)}
+                      disabled={
+                        !material?.attachments?.[0]?.url
+                        && !material?.filesBase64?.[0]
+                      }
+                      className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Download className="w-4 h-4" />
-                      PDF
+                      Download
                     </button>
                   </div>
                 </div>
@@ -2687,7 +2578,7 @@ const StudentCourse = () => {
                             </td>
                             <td className="px-6 py-4 text-center">
                               {isCompleted && attempt?.score !== undefined ? (
-                                <span className={`font-bold text-lg ${attempt.score >= 60 ? 'text-green-600' : 'text-red-600'}`}>
+                                <span className={`font-bold text-lg ${attempt.passed ? 'text-green-600' : 'text-red-600'}`}>
                                   {attempt.score}%
                                 </span>
                               ) : (
@@ -2814,56 +2705,6 @@ const StudentCourse = () => {
           </div>
         )}
 
-        {/* Trainees Tab */}
-        {activeTab === 'students' && (
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-            <div className="p-6 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-gray-900">Trainees</h2>
-              <p className="text-sm text-gray-600 mt-1">All trainees enrolled in this class</p>
-            </div>
-            <div className="divide-y divide-gray-100">
-              {loadingClassStudents ? (
-                <div className="p-6 text-center">
-                  <p className="text-gray-500">Loading students...</p>
-                </div>
-              ) : classStudents.length > 0 ? (
-                classStudents.map((student) => {
-                  const initials = (student.name || 'S')
-                    .split(' ')
-                    .filter(Boolean)
-                    .slice(0, 2)
-                    .map((n) => n[0])
-                    .join('')
-                    .toUpperCase();
-
-                  return (
-                    <div key={student.id} className="p-6 flex items-center gap-4">
-                      {student.avatar ? (
-                        <img
-                          src={student.avatar}
-                          alt={student.name}
-                          className="w-12 h-12 rounded-full object-cover border border-gray-200"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-semibold">
-                          {initials}
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="font-semibold text-gray-900 truncate">{student.name}</p>
-                        <p className="text-sm text-gray-500 truncate">{student.email || 'No email available'}</p>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="p-6 text-center">
-                  <p className="text-gray-500">No trainees found for this class</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Announcement Modal */}
@@ -2921,11 +2762,11 @@ const StudentCourse = () => {
                         <span className="font-medium text-gray-900">{attachment.name}</span>
                       </div>
                       <button 
-                        onClick={() => handleDownload(attachment.name)}
+                        onClick={() => downloadAttachment(attachment)}
                         className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
                       >
                         <Download className="w-4 h-4" />
-                        PDF
+                        Download
                       </button>
                     </div>
                   ))}
@@ -3143,7 +2984,7 @@ const StudentCourse = () => {
                 </div>
                 <div className="bg-green-50 rounded-xl p-4">
                   <p className="text-xs text-green-700 uppercase">Pass Mark</p>
-                  <p className="text-xl font-bold text-green-900 mt-1">60%</p>
+                  <p className="text-xl font-bold text-green-900 mt-1">{selectedQuizInfo.passingScore || 60}%</p>
                 </div>
               </div>
 
@@ -3293,7 +3134,7 @@ const StudentCourse = () => {
               {submitFileAllowed && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Attach files <span className="text-gray-400">(max ~300KB each)</span>
+                    Attach files <span className="text-gray-400">(max 25MB each)</span>
                   </label>
                   <input
                     type="file"
@@ -3552,7 +3393,7 @@ const StudentCourse = () => {
                     <p className="text-white/80 mb-6">
                       {quizResults.passed 
                         ? 'You have successfully passed this quiz!' 
-                        : 'You need 60% to pass. Review the material and try again.'}
+                        : `You need ${quizResults.passingScore}% to pass. Review the material and try again.`}
                     </p>
                     
                     <div className="flex items-center justify-center gap-8">
@@ -3608,7 +3449,7 @@ const StudentCourse = () => {
                                   </p>
                                   {pending ? (
                                     <p className="text-gray-500">Your trainer will review this response.</p>
-                                  ) : !result.isCorrect ? (
+                                  ) : !result.isCorrect && quizResults.showCorrectAnswers ? (
                                     <p className="text-green-700">
                                       Correct answer: <strong>{describeCorrect(result)}</strong>
                                     </p>

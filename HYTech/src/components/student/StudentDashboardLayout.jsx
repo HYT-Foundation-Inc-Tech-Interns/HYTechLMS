@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   getCourseByName,
   getCourseTemplateById,
+  ensureClassMembership,
   subscribeToStudentEnrollments,
 } from '../../utils/firestoreService';
 import { formatCertification } from '../../utils/courseLabel';
@@ -25,8 +26,14 @@ const StudentDashboardLayout = () => {
       return undefined;
     }
 
-    const unsubscribe = subscribeToStudentEnrollments(user.uid, (items) => {
-      setEnrollments(items || []);
+    const unsubscribe = subscribeToStudentEnrollments(user.uid, async (items) => {
+      const nextItems = items || [];
+      await Promise.all(
+        nextItems
+          .filter((item) => ['active', 'ongoing', 'completed'].includes(String(item.status || '').toLowerCase()))
+          .map((item) => ensureClassMembership(item).catch(() => false))
+      );
+      setEnrollments(nextItems);
     });
 
     return unsubscribe;

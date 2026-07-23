@@ -21,8 +21,19 @@ service cloud.firestore {
         : 'none';
     }
 
-    function isAdmin()   { return isSignedIn() && myRole() == 'admin'; }
-    function isTrainer() { return isSignedIn() && myRole() == 'trainer'; }
+    function canUseLms() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', 'Inactive') == 'Active'
+        && (
+          request.auth.token.email_verified == true
+          || myRole() in ['admin', 'trainer']
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('createdBy', '') == 'admin'
+        );
+    }
+
+    function isAdmin()   { return canUseLms() && myRole() == 'admin'; }
+    function isTrainer() { return canUseLms() && myRole() == 'trainer'; }
 
     // Role of an arbitrary user (used to restrict who a student may notify).
     function roleOf(uid) {
@@ -42,12 +53,17 @@ service cloud.firestore {
     // trainers get the same content powers as the lead. Managing co-trainers and
     // transferring ownership edit the class doc itself, which stays lead-only.
     function classTrainer(classId) {
-      return isSignedIn()
+      return canUseLms()
         && exists(/databases/$(database)/documents/classes/$(classId))
         && (
           get(/databases/$(database)/documents/classes/$(classId)).data.get('trainerId', '') == request.auth.uid
           || request.auth.uid in get(/databases/$(database)/documents/classes/$(classId)).data.get('coTrainerIds', [])
         );
+    }
+
+    function classMember(classId) {
+      return canUseLms()
+        && exists(/databases/$(database)/documents/classes/$(classId)/members/$(request.auth.uid));
     }
 
     // Keys added/removed/changed by an update.
@@ -58,9 +74,10 @@ service cloud.firestore {
     // ==================== USERS ====================
 
     match /users/{uid} {
-      // All signed-in users read profiles (trainer picker, avatars,
-      // student names on attempts, admin user table).
-      allow read: if isSignedIn();
+      // Staff need directory access for rosters and administration. Trainees
+      // may read only their own account, preventing organization-wide email
+      // and account enumeration.
+      allow read: if isAdmin() || isTrainer() || isSelf(uid);
 
       // Self-signup may only create a plain Active student.
       // Admin may create any user doc (Add User writes as admin).
@@ -84,66 +101,122 @@ service cloud.firestore {
       match /private/{docId} {
         allow read, write: if isSelf(uid) || isAdmin();
       }
+
+      match /calendarEvents/{eventId} {
+        allow read, write: if isSelf(uid);
+      }
     }
 
     // ==================== USER SETTINGS ====================
     // Read by others for avatar display; write owner-only.
     match /userSettings/{uid} {
-      allow read: if isSignedIn();
+      allow read: if isSelf(uid) || isAdmin();
       allow write: if isSelf(uid) || isAdmin();
     }
 
     // ==================== SECTORS ====================
     match /sectors/{sectorId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow read: if canUseLms();
+      allow create, update: if isAdmin();
+      allow delete: if false;
     }
 
     // ==================== COURSE TEMPLATES ====================
     match /courses/{courseId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow read: if canUseLms();
+      allow create, update: if isAdmin();
+      allow delete: if false;
 
-      match /materials/{materialId} {
-        allow read: if isSignedIn();
+      match /topics/{topicId} {
+        allow read: if isAdmin() || isTrainer();
         allow write: if isAdmin();
       }
+
+      match /materials/{materialId} {
+        allow read: if isAdmin() || isTrainer();
+        allow write: if isAdmin();
+      }
+
+      match /assignments/{assignmentId} {
+        allow read: if isAdmin() || isTrainer();
+        allow write: if isAdmin();
+
+        match /{nested=**} {
+          allow read, write: if false;
+        }
+      }
+
+      match /assessments/{assessmentId} {
+        allow read: if isAdmin() || isTrainer();
+        allow write: if isAdmin();
+
+        // Template answer keys are copied only by the Admin SDK. They are
+        // never readable from a browser, including admin/trainer browsers.
+        match /private/{privateId} {
+          allow read, write: if false;
+        }
+
+        match /{nested=**} {
+          allow read, write: if false;
+        }
+      }
+    }
+
+    // Sanitized enrollment directory. It intentionally excludes meetings,
+    // internal activity, rosters, and other class-private fields.
+    match /classDirectory/{classId} {
+      allow read: if canUseLms();
+      allow write: if false;
     }
 
     // ==================== CLASSES ====================
     match /classes/{classId} {
-      // Students look classes up by classCode to join.
-      allow read: if isSignedIn();
+      allow read: if isAdmin() || isTrainer() || classMember(classId);
 
       allow create: if isAdmin()
         || (isTrainer() && request.resource.data.get('trainerId', '') == request.auth.uid);
 
-      allow update, delete: if isAdmin()
-        || (isSignedIn() && resource.data.get('trainerId', '') == request.auth.uid);
+      allow update: if isAdmin()
+        || (canUseLms() && resource.data.get('trainerId', '') == request.auth.uid);
+      // Trusted recursive deletion also removes subcollections/enrollments.
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow read: if isAdmin() || classTrainer(classId) || isSelf(uid);
+        allow create, update: if isAdmin()
+          || classTrainer(classId)
+          || (isSelf(uid)
+              && request.resource.data.get('studentId', '') == request.auth.uid
+              && exists(/databases/$(database)/documents/enrollments/$(request.resource.data.get('enrollmentId', 'none')))
+              && get(/databases/$(database)/documents/enrollments/$(request.resource.data.get('enrollmentId', 'none'))).data.get('studentId', '') == request.auth.uid
+              && get(/databases/$(database)/documents/enrollments/$(request.resource.data.get('enrollmentId', 'none'))).data.get('classId', '') == classId
+              && get(/databases/$(database)/documents/enrollments/$(request.resource.data.get('enrollmentId', 'none'))).data.get('status', '') in ['active', 'ongoing', 'completed']);
+        allow delete: if isAdmin() || classTrainer(classId);
+      }
 
       // ---- Content subcollections: authed read, owner-trainer write ----
       match /materials/{materialId} {
-        allow read: if isSignedIn();
+        allow read: if isAdmin() || classTrainer(classId) || classMember(classId);
         allow write: if isAdmin() || classTrainer(classId);
       }
 
       match /modules/{moduleId} {
-        allow read: if isSignedIn();
+        allow read: if isAdmin() || classTrainer(classId) || classMember(classId);
         allow write: if isAdmin() || classTrainer(classId);
 
         match /materials/{materialId} {
-          allow read: if isSignedIn();
+          allow read: if isAdmin() || classTrainer(classId) || classMember(classId);
           allow write: if isAdmin() || classTrainer(classId);
         }
       }
 
       match /topics/{topicId} {
-        allow read: if isSignedIn();
+        allow read: if isAdmin() || classTrainer(classId) || classMember(classId);
         allow write: if isAdmin() || classTrainer(classId);
       }
 
       match /assignments/{assignmentId} {
-        allow read: if isSignedIn();
+        allow read: if isAdmin() || classTrainer(classId) || classMember(classId);
         allow write: if isAdmin() || classTrainer(classId);
 
         // Student deliverable submissions. Doc id = studentId.
@@ -168,25 +241,25 @@ service cloud.firestore {
       // Announcements: trainer/admin AND the author (students post to the
       // class feed and then update their own post to attach a file).
       match /announcements/{announcementId} {
-        allow read: if isSignedIn();
+        allow read: if isAdmin() || classTrainer(classId) || classMember(classId);
         allow create: if isAdmin()
           || classTrainer(classId)
-          || (isSignedIn() && request.resource.data.get('authorId', '') == request.auth.uid);
+          || (classMember(classId) && request.resource.data.get('authorId', '') == request.auth.uid);
         allow update: if isAdmin()
           || classTrainer(classId)
-          || (isSignedIn() && resource.data.get('authorId', '') == request.auth.uid);
+          || (canUseLms() && resource.data.get('authorId', '') == request.auth.uid);
         allow delete: if isAdmin()
           || classTrainer(classId)
-          || (isSignedIn() && resource.data.get('authorId', '') == request.auth.uid);
+          || (canUseLms() && resource.data.get('authorId', '') == request.auth.uid);
 
         match /comments/{commentId} {
-          allow read: if isSignedIn();
-          allow create: if isSignedIn()
+          allow read: if isAdmin() || classTrainer(classId) || classMember(classId);
+          allow create: if classMember(classId)
             && request.resource.data.get('authorId', '') == request.auth.uid;
           allow update: if false;
           allow delete: if isAdmin()
             || classTrainer(classId)
-            || (isSignedIn() && resource.data.get('authorId', '') == request.auth.uid);
+            || (canUseLms() && resource.data.get('authorId', '') == request.auth.uid);
         }
       }
 
@@ -195,8 +268,8 @@ service cloud.firestore {
       match /activity/{eventId} {
         allow read: if isAdmin()
           || classTrainer(classId)
-          || (isSignedIn() && resource.data.get('studentId', '') == request.auth.uid);
-        allow create: if isSignedIn()
+          || (canUseLms() && resource.data.get('studentId', '') == request.auth.uid);
+        allow create: if canUseLms()
           && request.resource.data.get('studentId', '') == request.auth.uid;
         // Events are immutable; staff/admin may clean up.
         allow update: if false;
@@ -204,16 +277,22 @@ service cloud.firestore {
       }
 
       match /assessments/{assessmentId} {
-        allow read: if isSignedIn();
-        allow write: if isAdmin() || classTrainer(classId);
+        allow read: if isAdmin() || classTrainer(classId) || classMember(classId);
+        allow create, update: if isAdmin() || classTrainer(classId);
+        // Recursive deletion is performed by a trusted Cloud Function so
+        // private answer keys and attempts cannot be orphaned.
+        allow delete: if false;
+
+        match /private/{privateId} {
+          allow read, write: if isAdmin() || classTrainer(classId);
+        }
 
         match /attempts/{attemptId} {
           allow read: if isAdmin()
             || classTrainer(classId)
-            || (isSignedIn() && resource.data.get('studentId', '') == request.auth.uid);
-          // Student submits only as themselves.
-          allow create: if isSignedIn()
-            && request.resource.data.get('studentId', '') == request.auth.uid;
+            || (canUseLms() && resource.data.get('studentId', '') == request.auth.uid);
+          // Attempts are created only by the trusted grading Cloud Function.
+          allow create: if false;
           // Attempts are immutable (anti-tampering). Admin may delete.
           allow update: if false;
           allow delete: if isAdmin();
@@ -222,18 +301,19 @@ service cloud.firestore {
     }
 
     // ==================== ENROLLMENTS ====================
-    // READ is authed-wide BY DESIGN: students render a classmates roster
-    // (query where classId==X) and trainers query by classId without a
-    // trainerId filter. Firestore list rules are static, so an owner-scoped
-    // read rule would reject those queries. Writes are strictly scoped.
+    // Students see only their own enrollments; a class trainer sees their
+    // class roster and admins see all.
     match /enrollments/{enrollmentId} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin()
+        || (canUseLms() && resource.data.get('studentId', '') == request.auth.uid)
+        || (isTrainer() && classTrainer(resource.data.get('classId', 'none')));
 
       // A student self-joining by class code creates a PENDING enrollment that
       // the class trainer must approve before it becomes active. Admins and
       // trainers may still create active enrollments directly.
       allow create: if isAdmin()
-        || (isSignedIn()
+        || (canUseLms()
+            && enrollmentId == request.resource.data.get('classId', '') + '_' + request.auth.uid
             && request.resource.data.get('studentId', '') == request.auth.uid
             && request.resource.data.get('status', '') == 'pending'
             && classExists(request.resource.data.get('classId', 'none')))
@@ -245,42 +325,25 @@ service cloud.firestore {
       // Trainer of record / class trainer / admin change status+progress.
       // Student may change ONLY their own progress field.
       allow update: if isAdmin()
-        || (isSignedIn() && resource.data.get('trainerId', '') == request.auth.uid)
+        || (canUseLms() && resource.data.get('trainerId', '') == request.auth.uid)
         || (isTrainer() && classTrainer(resource.data.get('classId', 'none')))
-        || (isSignedIn()
+        || (canUseLms()
             && resource.data.get('studentId', '') == request.auth.uid
             && changedKeys().hasOnly(['progress', 'updatedAt']));
 
       allow delete: if isAdmin()
-        || (isSignedIn() && resource.data.get('trainerId', '') == request.auth.uid)
+        || (canUseLms() && resource.data.get('trainerId', '') == request.auth.uid)
         || (isTrainer() && classTrainer(resource.data.get('classId', 'none')));
-    }
-
-    // ==================== COURSE APPLICATIONS ====================
-    match /courseApplications/{applicationId} {
-      allow read: if isAdmin()
-        || (isSignedIn()
-            && (resource.data.get('studentId', '') == request.auth.uid
-                || resource.data.get('trainerId', '') == request.auth.uid));
-
-      allow create: if isSignedIn()
-        && request.resource.data.get('studentId', '') == request.auth.uid
-        && request.resource.data.get('status', '') == 'pending';
-
-      allow update: if isAdmin()
-        || (isSignedIn() && resource.data.get('trainerId', '') == request.auth.uid);
-
-      allow delete: if isAdmin();
     }
 
     // ==================== ID CARD REQUESTS ====================
     // Admin approves/rejects/completes directly (trainer is not involved).
     match /idRequests/{id} {
       allow read: if isAdmin()
-        || (isSignedIn() && resource.data.get('studentId', '') == request.auth.uid);
+        || (canUseLms() && resource.data.get('studentId', '') == request.auth.uid);
 
       // Student raises their own ticket, always starting 'pending'.
-      allow create: if isSignedIn()
+      allow create: if canUseLms()
         && request.resource.data.get('studentId', '') == request.auth.uid
         && request.resource.data.get('status', '') == 'pending';
 
@@ -294,9 +357,9 @@ service cloud.firestore {
     match /incidentForms/{id} {
       // Staff (admin/trainer) see all; a filer sees their own.
       allow read: if isAdmin() || isTrainer()
-        || (isSignedIn() && resource.data.get('filedBy', '') == request.auth.uid);
+        || (canUseLms() && resource.data.get('filedBy', '') == request.auth.uid);
 
-      allow create: if isSignedIn()
+      allow create: if canUseLms()
         && request.resource.data.get('filedBy', '') == request.auth.uid;
 
       // Status handling by staff only.
@@ -310,22 +373,22 @@ service cloud.firestore {
       // Sender must identify themselves. Staff (admin/trainer) may notify
       // anyone; a student may only notify staff (prevents a student from
       // blasting phishing notifications to every other student).
-      allow create: if isSignedIn()
+      allow create: if canUseLms()
         && request.resource.data.get('fromUid', '') == request.auth.uid
         && (isAdmin()
             || isTrainer()
             || roleOf(request.resource.data.get('toUid', '')) in ['trainer', 'admin']);
 
       allow read: if isAdmin()
-        || (isSignedIn() && resource.data.get('toUid', '') == request.auth.uid);
+        || (canUseLms() && resource.data.get('toUid', '') == request.auth.uid);
 
       // Recipient may only flip the unread flag.
-      allow update: if isSignedIn()
+      allow update: if canUseLms()
         && resource.data.get('toUid', '') == request.auth.uid
         && changedKeys().hasOnly(['unread']);
 
       allow delete: if isAdmin()
-        || (isSignedIn() && resource.data.get('toUid', '') == request.auth.uid);
+        || (canUseLms() && resource.data.get('toUid', '') == request.auth.uid);
     }
 
     // ==================== ACTIVITY LOGS ====================
@@ -333,9 +396,11 @@ service cloud.firestore {
     // logActivity('admin', ...) calls.
     match /activityLogs/{logId} {
       allow create: if isAdmin()
-        || (isSignedIn() && request.resource.data.get('userId', '') == request.auth.uid);
+        || (canUseLms() && request.resource.data.get('userId', '') == request.auth.uid)
+        || (isSelf(request.resource.data.get('userId', ''))
+            && request.resource.data.get('action', '') == 'user_signup');
       allow read: if isAdmin()
-        || (isSignedIn() && resource.data.get('userId', '') == request.auth.uid);
+        || (canUseLms() && resource.data.get('userId', '') == request.auth.uid);
       // Logs are immutable; admins may purge them for maintenance/history reset.
       allow update: if false;
       allow delete: if isAdmin();

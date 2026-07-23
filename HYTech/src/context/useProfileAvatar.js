@@ -33,17 +33,17 @@ export const useProfileAvatar = (role) => {
       setAvatarState(null);
       return () => {};
     }
-    const settingsRef = doc(db, 'userSettings', uid);
+    const profileRef = doc(db, 'users', uid);
     let unsub = null;
     let isMounted = true;
 
     const fetchAvatar = async () => {
       try {
         // One-time fetch for initial load
-        const snapshot = await import('firebase/firestore').then(m => m.getDoc(settingsRef));
+        const snapshot = await import('firebase/firestore').then(m => m.getDoc(profileRef));
         if (isMounted && snapshot.exists()) {
-          const roleSettings = snapshot.data()?.[normalizedRole] || null;
-          const remoteAvatar = roleSettings?.avatarUrl || roleSettings?.avatarPreview || roleSettings?.avatarBase64 || null;
+          const profile = snapshot.data() || {};
+          const remoteAvatar = profile.avatarUrl || profile.avatarBase64 || null;
           if (remoteAvatar) {
             localStorage.setItem(getKey(normalizedRole, uid), remoteAvatar);
             setAvatarState(remoteAvatar);
@@ -62,11 +62,11 @@ export const useProfileAvatar = (role) => {
     // Subscribe to changes for live updates
     try {
       unsub = onSnapshot(
-        settingsRef,
+        profileRef,
         (snapshot) => {
           if (!isMounted) return;
-          const roleSettings = snapshot.exists() ? snapshot.data()?.[normalizedRole] || null : null;
-          const remoteAvatar = roleSettings?.avatarUrl || roleSettings?.avatarPreview || roleSettings?.avatarBase64 || null;
+          const profile = snapshot.exists() ? snapshot.data() || {} : {};
+          const remoteAvatar = profile.avatarUrl || profile.avatarBase64 || null;
           if (remoteAvatar) {
             localStorage.setItem(getKey(normalizedRole, uid), remoteAvatar);
             setAvatarState(remoteAvatar);

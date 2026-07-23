@@ -11,10 +11,11 @@ import {
   Loader
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getCourses, getSectors, getCoursesTemplates, subscribeToActivityLogs, getUserProfile, toDate } from '../../utils/firestoreService';
+import { getCourses, getSectors, getCoursesTemplates, subscribeToActivityLogs, getUserProfile, migrateAssessmentAnswerKeys, migrateClassDirectory, toDate } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase';
-import { collection, getDocs, where, query } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 
 // Map raw activity actions to friendly labels for the dashboard feed.
 const ACTION_LABELS = {
@@ -64,6 +65,25 @@ const Dashboard = () => {
   const [trainingSectors, setTrainingSectors] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const { addToast } = useToast();
+  const { user } = useAuth();
+  const adminName =
+    [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
+    || user?.displayName
+    || user?.name
+    || 'Admin';
+
+  useEffect(() => {
+    Promise.allSettled([
+      migrateAssessmentAnswerKeys(),
+      migrateClassDirectory(),
+    ]).then((results) => {
+      results.forEach((result) => {
+        if (result.status === 'rejected') {
+          console.warn('Security migration could not run:', result.reason?.message);
+        }
+      });
+    });
+  }, []);
 
   // Fetch real data from Firestore
   useEffect(() => {
@@ -90,34 +110,32 @@ const Dashboard = () => {
         const allUsersSnapshot = await getDocs(usersCollection);
         const totalAccounts = allUsersSnapshot.size;
         const allUsers = allUsersSnapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const totalTrainers = allUsers.filter((u) => u.role === 'trainer').length;
-        const studentCount = allUsers.filter((u) => u.role === 'student').length;
+        const totalTrainers = allUsers.filter(
+          (u) => u.role === 'trainer' && String(u.status || 'Active').toLowerCase() === 'active'
+        ).length;
+        const studentCount = allUsers.filter(
+          (u) => u.role === 'student' && String(u.status || 'Active').toLowerCase() === 'active'
+        ).length;
         const inactiveCount = allUsers.filter(
           (u) => String(u.status || 'Active').toLowerCase() !== 'active'
         ).length;
 
-        // Count enrolled students (all enrollments)
+        // Count unique trainees with a currently active seat.
         const enrollmentsCollection = collection(db, 'enrollments');
         const enrollmentsSnapshot = await getDocs(enrollmentsCollection);
-        const enrolledStudents = enrollmentsSnapshot.size;
         const allEnrollments = enrollmentsSnapshot.docs.map((d) => d.data());
-
-        // Pending course applications (single-field query, no index needed)
-        let pendingApps = 0;
-        try {
-          const appsSnap = await getDocs(
-            query(collection(db, 'courseApplications'), where('status', '==', 'pending'))
-          );
-          pendingApps = appsSnap.size;
-        } catch (appErr) {
-          console.warn('Could not load pending applications:', appErr?.message);
-        }
+        const activeStudentIds = new Set(
+          allEnrollments
+            .filter((e) => ['active', 'ongoing'].includes(String(e.status || '').toLowerCase()))
+            .map((e) => e.studentId)
+            .filter(Boolean)
+        );
 
         // Update stats
         setStats([
           { label: 'Accounts', value: totalAccounts.toString(), icon: Users, color: 'blue' },
           { label: 'Active Trainors', value: totalTrainers.toString(), icon: GraduationCap, color: 'purple' },
-          { label: 'Active Trainees', value: enrolledStudents.toString(), icon: Users, color: 'cyan' },
+          { label: 'Active Trainees', value: activeStudentIds.size.toString(), icon: Users, color: 'cyan' },
           { label: 'Sectors', value: totalSectors.toString(), icon: FolderOpen, color: 'green' },
           { label: 'Courses', value: totalCourses.toString(), icon: BookOpen, color: 'teal' },
           { label: 'Classes', value: activeClasses.toString(), icon: BookOpen, color: 'orange' },
@@ -127,17 +145,27 @@ const Dashboard = () => {
         const sectorRows = (sectorsData || []).map((sector) => {
           const sectorClasses = (allClasses || []).filter((c) => c.sectorId === sector.id);
           const classIds = new Set(sectorClasses.map((c) => c.id));
-          const sectorEnrollments = allEnrollments.filter((e) => classIds.has(e.classId));
+          const sectorEnrollments = allEnrollments.filter(
+            (e) =>
+              classIds.has(e.classId)
+              && ['active', 'ongoing'].includes(String(e.status || '').toLowerCase())
+          );
           const pcts = sectorEnrollments
-            .map((e) => (typeof e.progress?.percentage === 'number' ? e.progress.percentage : null))
+            .map((e) => {
+              const value =
+                e.progress?.overallProgress
+                ?? e.progress?.percentage
+                ?? e.progress?.completionRate;
+              return Number.isFinite(Number(value)) ? Number(value) : null;
+            })
             .filter((v) => v !== null);
           const avgProgress = pcts.length
             ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length)
             : 0;
           return {
             name: sector.name || 'Sector',
-            courses: sectorClasses.length,
-            students: sectorEnrollments.length,
+            classes: sectorClasses.length,
+            students: new Set(sectorEnrollments.map((e) => e.studentId).filter(Boolean)).size,
             progress: avgProgress,
           };
         });
@@ -146,22 +174,9 @@ const Dashboard = () => {
         setTrainingSectors(sectorRows);
 
         // ---- Alerts panel: real actionable signals ----
-        const activeStudentIds = new Set(
-          allEnrollments
-            .filter((e) => e.status === 'active' || e.status === 'ongoing')
-            .map((e) => e.studentId)
-        );
         const waitingStudents = Math.max(0, studentCount - activeStudentIds.size);
 
         const newAlerts = [];
-        if (pendingApps > 0) {
-          newAlerts.push({
-            type: 'warning',
-            title: 'Applications pending',
-            message: `${pendingApps} course application${pendingApps > 1 ? 's' : ''} awaiting review.`,
-            icon: AlertTriangle,
-          });
-        }
         if (waitingStudents > 0) {
           newAlerts.push({
             type: 'info',
@@ -239,7 +254,7 @@ const Dashboard = () => {
     <div className="space-y-6 pb-6 lg:pb-8">
       {/* Welcome Message */}
       <div className="mb-2">
-        <h1 className="text-2xl font-bold text-gray-800">Welcome back, Admin</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Welcome back, {adminName}</h1>
         <p className="text-gray-500">Here's your learning system overview for today</p>
       </div>
 
@@ -357,7 +372,10 @@ const Dashboard = () => {
         <div className="lg:col-span-2 card p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-gray-800">Training Sector</h3>
-            <button className="flex items-center gap-1 text-orange-500 hover:text-orange-600 text-sm font-medium transition-colors">
+            <button
+              onClick={() => navigate('/admin/sectors')}
+              className="flex items-center gap-1 text-orange-500 hover:text-orange-600 text-sm font-medium transition-colors"
+            >
               View all
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -376,7 +394,7 @@ const Dashboard = () => {
                     <h4 className="font-medium text-gray-800 text-sm">{sector.name}</h4>
                     <p className="text-xs text-gray-400">{sector.students} trainees</p>
                   </div>
-                  <span className="text-xs font-medium text-gray-500">{sector.courses} courses</span>
+                  <span className="text-xs font-medium text-gray-500">{sector.classes} classes</span>
                 </div>
                 <div className="progress-bar">
                   <div 
