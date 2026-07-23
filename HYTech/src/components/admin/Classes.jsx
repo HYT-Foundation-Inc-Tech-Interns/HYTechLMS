@@ -41,9 +41,11 @@ import {
   getAssessments,
   getAssignments,
   promoteClassToTemplate,
+  compressAndStoreFile,
 } from '../../utils/firestoreService';
 import { catalogTotals } from '../../data/tesdaCatalog';
 import SubjectListEditor from '../shared/SubjectListEditor';
+import ClassAppearanceEditor from '../shared/ClassAppearanceEditor';
 import { useToast } from '../../context/ToastContext';
 
 const LEVEL_OPTIONS = ['NC I', 'NC II', 'NC III', 'NC IV'];
@@ -77,6 +79,7 @@ const Classes = () => {
   const [expandedClassId, setExpandedClassId] = useState(null);
   const [editingClassId, setEditingClassId] = useState(null);
   const [editFormData, setEditFormData] = useState({});
+  const [editClassImageFile, setEditClassImageFile] = useState(null);
   const [savingClassId, setSavingClassId] = useState(null);
   const [previewingClass, setPreviewingClass] = useState(null);
   const [previewContent, setPreviewContent] = useState({
@@ -372,26 +375,54 @@ const Classes = () => {
       level: course.level || '',
       sector: course.sector || '',
       status: course.status || 'Active',
+      color: course.color || '',
+      bgImage: course.bgImage || '',
+      bgImagePath: course.bgImagePath || '',
     });
+    setEditClassImageFile(null);
   };
 
   const cancelEditing = () => {
     setEditingClassId(null);
     setEditFormData({});
+    setEditClassImageFile(null);
   };
 
   const handleEditInputChange = (field, value) => {
     setEditFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleEditClassImage = (file) => {
+    if (!file) {
+      setEditClassImageFile(null);
+      return;
+    }
+    if (!file.type?.startsWith('image/')) {
+      addToast('Please select a valid image file.', 'error');
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      addToast('Class card images must be 25 MB or smaller.', 'error');
+      return;
+    }
+    setEditClassImageFile(file);
+  };
+
   const saveClassData = async (classId) => {
     try {
       setSavingClassId(classId);
-      await updateCourse(classId, editFormData);
-      setClasses((prev) => prev.map((cls) => (cls.id === classId ? { ...cls, ...editFormData } : cls)));
+      const updates = { ...editFormData };
+      if (editClassImageFile) {
+        const uploadedImage = await compressAndStoreFile(editClassImageFile, classId);
+        updates.bgImage = uploadedImage.url;
+        updates.bgImagePath = uploadedImage.storagePath;
+      }
+      await updateCourse(classId, updates);
+      setClasses((prev) => prev.map((cls) => (cls.id === classId ? { ...cls, ...updates } : cls)));
       addToast('Class updated successfully', 'success');
       setEditingClassId(null);
       setEditFormData({});
+      setEditClassImageFile(null);
     } catch (err) {
       console.error('Error updating class:', err);
       addToast(`Failed to update class: ${err.message}`, 'error');
@@ -900,6 +931,24 @@ const Classes = () => {
                                   <option value="Archived">Archived</option>
                                   <option value="Draft">Draft</option>
                                 </select>
+                              </div>
+                              <div className="border-t border-gray-100 pt-4">
+                                <ClassAppearanceEditor
+                                  color={editFormData.color || ''}
+                                  imageUrl={editFormData.bgImage || ''}
+                                  imageFile={editClassImageFile}
+                                  onColorChange={(color) => handleEditInputChange('color', color)}
+                                  onImageChange={handleEditClassImage}
+                                  onRemoveImage={() => {
+                                    setEditClassImageFile(null);
+                                    setEditFormData((previous) => ({
+                                      ...previous,
+                                      bgImage: '',
+                                      bgImagePath: '',
+                                    }));
+                                  }}
+                                  disabled={savingClassId === course.id}
+                                />
                               </div>
                             </div>
                             <div className="flex gap-3 pt-4 border-t border-gray-200">

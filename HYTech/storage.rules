@@ -43,6 +43,14 @@ service firebase.storage {
         && (isAdmin() || classTrainer(classId) || classMember(classId))
         && request.resource.size < 25 * 1024 * 1024;
     }
+    // Public branding assets (site logo). Readable by everyone, including
+    // unauthenticated visitors on the landing/sign-in pages; admin-write only.
+    match /branding/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
     match /{allPaths=**} {
       allow read, write: if false;
     }

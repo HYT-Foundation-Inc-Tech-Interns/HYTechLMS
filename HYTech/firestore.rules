@@ -105,6 +105,30 @@ service cloud.firestore {
       match /calendarEvents/{eventId} {
         allow read, write: if isSelf(uid);
       }
+
+      // Private per-user class card nickname/color. These preferences never
+      // alter the shared class or another trainee's view.
+      match /classPrefs/{classId} {
+        allow read: if isSelf(uid);
+        allow create, update: if isSelf(uid)
+          && request.resource.data.keys().hasOnly(['nickname', 'color', 'updatedAt'])
+          && request.resource.data.get('nickname', '') is string
+          && request.resource.data.get('nickname', '').size() <= 100
+          && request.resource.data.get('color', '') in [
+            '',
+            'from-blue-500 to-blue-700',
+            'from-purple-500 to-purple-700',
+            'from-pink-500 to-pink-700',
+            'from-red-500 to-red-700',
+            'from-orange-500 to-orange-700',
+            'from-yellow-500 to-yellow-700',
+            'from-green-500 to-green-700',
+            'from-teal-500 to-teal-700',
+            'from-cyan-500 to-cyan-700',
+            'from-indigo-500 to-indigo-700'
+          ];
+        allow delete: if isSelf(uid);
+      }
     }
 
     // ==================== USER SETTINGS ====================
@@ -112,6 +136,16 @@ service cloud.firestore {
     match /userSettings/{uid} {
       allow read: if isSelf(uid) || isAdmin();
       allow write: if isSelf(uid) || isAdmin();
+    }
+
+    // ==================== GLOBAL APP SETTINGS ====================
+    // Single org-wide config doc (branding, access/registration policy,
+    // notification toggles). Public read is required so pre-auth pages (the
+    // branded landing/sign-in and the self-registration gate) can read it; the
+    // contents are non-sensitive. Admin-only writes.
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // ==================== SECTORS ====================

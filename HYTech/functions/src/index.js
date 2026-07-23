@@ -237,6 +237,7 @@ const toClassDirectoryEntry = (classData = {}) => ({
   level: classData.level || '',
   status: classData.status || 'Inactive',
   bgImage: classData.bgImage || '',
+  color: classData.color || '',
   updatedAt: admin.firestore.FieldValue.serverTimestamp(),
 });
 

@@ -11,7 +11,7 @@ import {
   Loader
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getCourses, getSectors, getCoursesTemplates, subscribeToActivityLogs, getUserProfile, migrateAssessmentAnswerKeys, migrateClassDirectory, toDate } from '../../utils/firestoreService';
+import { getCourses, getSectors, getCoursesTemplates, subscribeToActivityLogs, getUserProfile, toDate } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase';
@@ -72,18 +72,8 @@ const Dashboard = () => {
     || user?.name
     || 'Admin';
 
-  useEffect(() => {
-    Promise.allSettled([
-      migrateAssessmentAnswerKeys(),
-      migrateClassDirectory(),
-    ]).then((results) => {
-      results.forEach((result) => {
-        if (result.status === 'rejected') {
-          console.warn('Security migration could not run:', result.reason?.message);
-        }
-      });
-    });
-  }, []);
+  // Data migrations are no longer auto-run on dashboard load. An admin runs
+  // them on demand from Settings → Maintenance.
 
   // Fetch real data from Firestore
   useEffect(() => {

@@ -26,6 +26,116 @@ import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { db, auth, functions, storage } from '../firebase';
 import { TESDA_CATALOG, parseLevel } from '../data/tesdaCatalog';
+import { COLOR_PALETTE } from './courseColors';
+
+// ==================== APP SETTINGS (global admin config) ====================
+// A single global document `config/appSettings` holds org-wide configuration.
+// It is public-read (branding + the self-registration gate must be readable on
+// pre-auth pages) and admin-write (enforced by firestore.rules). Everything is
+// non-sensitive. Consumers should read through mergeAppSettings so a missing
+// doc or field falls back to a safe default.
+
+export const DEFAULT_APP_SETTINGS = {
+  branding: {
+    siteName: 'HYTech',
+    welcomeMessage: '',
+    logoUrl: '',
+  },
+  access: {
+    allowSelfRegistration: true,
+    requireEnrollmentApproval: true,
+    allowMultipleEnrollments: true,
+    sessionTimeoutMinutes: 0, // 0 = disabled
+    minPasswordLength: 8,
+    forcePasswordChangeDefault: true,
+  },
+  // Per-notification-type toggles. A missing/true key means the notification is
+  // enabled; only an explicit `false` suppresses it.
+  notifications: {},
+};
+
+const APP_SETTINGS_REF = () => doc(db, 'config', 'appSettings');
+
+/**
+ * Merge a raw settings doc over the defaults (one level deep per group) so
+ * callers always receive a fully-populated object.
+ */
+export const mergeAppSettings = (raw = {}) => ({
+  branding: { ...DEFAULT_APP_SETTINGS.branding, ...(raw?.branding || {}) },
+  access: { ...DEFAULT_APP_SETTINGS.access, ...(raw?.access || {}) },
+  notifications: { ...DEFAULT_APP_SETTINGS.notifications, ...(raw?.notifications || {}) },
+});
+
+/** One-shot read of the global app settings, merged with defaults. */
+export const getAppSettings = async () => {
+  try {
+    const snap = await getDoc(APP_SETTINGS_REF());
+    return mergeAppSettings(snap.exists() ? snap.data() : {});
+  } catch (error) {
+    console.warn('Could not read app settings:', error?.code || error?.message);
+    return mergeAppSettings({});
+  }
+};
+
+/** Live subscription to the global app settings. Returns an unsubscribe fn. */
+export const subscribeToAppSettings = (callback) => {
+  try {
+    return onSnapshot(
+      APP_SETTINGS_REF(),
+      (snap) => callback(mergeAppSettings(snap.exists() ? snap.data() : {})),
+      (error) => {
+        console.warn('App settings listener error:', error?.code);
+        callback(mergeAppSettings({}));
+      }
+    );
+  } catch (error) {
+    console.warn('Failed to subscribe to app settings:', error?.message);
+    callback(mergeAppSettings({}));
+    return () => {};
+  }
+};
+
+/**
+ * Admin-only write of the global app settings. `patch` is a partial grouped
+ * object, e.g. { branding: { siteName } } — setDoc(merge) merges nested maps.
+ */
+export const saveAppSettings = async (patch = {}) => {
+  await setDoc(
+    APP_SETTINGS_REF(),
+    { ...patch, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+};
+
+// Lightweight module-level cache so non-React service code (e.g. the
+// notification gate) can consult settings without a read per call. Warmed
+// lazily by a single onSnapshot; defaults to enabled until warm.
+let _appSettingsCache = null;
+let _appSettingsUnsub = null;
+const ensureAppSettingsCache = () => {
+  if (_appSettingsUnsub || !db) return;
+  try {
+    _appSettingsUnsub = onSnapshot(
+      APP_SETTINGS_REF(),
+      (snap) => {
+        _appSettingsCache = mergeAppSettings(snap.exists() ? snap.data() : {});
+      },
+      () => {}
+    );
+  } catch {
+    _appSettingsUnsub = null;
+  }
+};
+
+/**
+ * Whether a notification of `type` is currently enabled. Defaults to true when
+ * the cache is cold or the key is unset — only an explicit `false` suppresses.
+ */
+export const isNotificationTypeEnabled = (type) => {
+  ensureAppSettingsCache();
+  const map = _appSettingsCache?.notifications || {};
+  return map[type] !== false;
+};
 
 // ==================== USER OPERATIONS ====================
 
@@ -1122,36 +1232,54 @@ export const updateCourse = async (courseId, updates) => {
   try {
     const courseRef = doc(db, 'classes', courseId);
     const nextUpdates = { ...updates };
+    let previousName = '';
+    let renamed = false;
 
     if (Object.prototype.hasOwnProperty.call(nextUpdates, 'name')) {
       const currentClassSnapshot = await getDoc(courseRef);
       if (!currentClassSnapshot.exists()) {
         throw new Error('Class not found.');
       }
-      const previousName = String(currentClassSnapshot.data()?.name || '').trim();
+      previousName = String(currentClassSnapshot.data()?.name || '').trim();
       const normalizedName = String(nextUpdates.name || '').trim().replace(/\s+/g, ' ');
       if (normalizedName.length < 3 || normalizedName.length > 100) {
         throw new Error('Class name must be between 3 and 100 characters.');
       }
 
       const nameKey = normalizedName.toLowerCase();
-      const classesRef = collection(db, 'classes');
-      const [duplicateSnapshot, legacyDuplicateSnapshot] = await Promise.all([
-        getDocs(query(classesRef, where('nameKey', '==', nameKey))),
-        getDocs(query(classesRef, where('name', '==', normalizedName))),
-      ]);
-      const duplicate = [...duplicateSnapshot.docs, ...legacyDuplicateSnapshot.docs]
-        .find((classDoc) => classDoc.id !== courseId);
-      if (duplicate) {
-        throw new Error('A class with this name already exists. Choose a more specific class name.');
+      renamed = normalizedName !== previousName;
+      if (renamed) {
+        const classesRef = collection(db, 'classes');
+        const [duplicateSnapshot, legacyDuplicateSnapshot] = await Promise.all([
+          getDocs(query(classesRef, where('nameKey', '==', nameKey))),
+          getDocs(query(classesRef, where('name', '==', normalizedName))),
+        ]);
+        const duplicate = [...duplicateSnapshot.docs, ...legacyDuplicateSnapshot.docs]
+          .find((classDoc) => classDoc.id !== courseId);
+        if (duplicate) {
+          throw new Error('A class with this name already exists. Choose a more specific class name.');
+        }
       }
 
       nextUpdates.name = normalizedName;
       nextUpdates.nameKey = nameKey;
+    }
 
-      // Enrollment cards intentionally keep a display copy of the class name.
-      // Update those copies so trainees see the rename immediately. Routes use
-      // classId, so even a later batch failure cannot break navigation.
+    // Enrollment cards keep display copies so student home screens do not need
+    // permission to read every class document. Keep the shared name and
+    // appearance synchronized for existing enrollments.
+    const enrollmentCardUpdates = {};
+    if (Object.prototype.hasOwnProperty.call(nextUpdates, 'name')) {
+      enrollmentCardUpdates.className = nextUpdates.name;
+    }
+    if (Object.prototype.hasOwnProperty.call(nextUpdates, 'bgImage')) {
+      enrollmentCardUpdates.bgImage = String(nextUpdates.bgImage || '');
+    }
+    if (Object.prototype.hasOwnProperty.call(nextUpdates, 'color')) {
+      enrollmentCardUpdates.color = String(nextUpdates.color || '');
+    }
+
+    if (Object.keys(enrollmentCardUpdates).length > 0) {
       const enrollmentSnapshot = await getDocs(
         query(collection(db, 'enrollments'), where('classId', '==', courseId))
       );
@@ -1163,7 +1291,7 @@ export const updateCourse = async (courseId, updates) => {
       }, { merge: true });
       enrollmentDocs.slice(0, 499).forEach((enrollmentDoc) => {
         firstBatch.update(enrollmentDoc.ref, {
-          className: normalizedName,
+          ...enrollmentCardUpdates,
           updatedAt: serverTimestamp(),
         });
       });
@@ -1173,23 +1301,25 @@ export const updateCourse = async (courseId, updates) => {
         const batch = writeBatch(db);
         enrollmentDocs.slice(index, index + 500).forEach((enrollmentDoc) => {
           batch.update(enrollmentDoc.ref, {
-            className: normalizedName,
+            ...enrollmentCardUpdates,
             updatedAt: serverTimestamp(),
           });
         });
         await batch.commit();
       }
-      logActivity(auth?.currentUser?.uid || 'system', 'rename_class', 'classes', courseId, {
-        previousName,
-        className: normalizedName,
-      });
-      return true;
+    } else {
+      await setDoc(courseRef, {
+        ...nextUpdates,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
     }
 
-    await setDoc(courseRef, {
-      ...nextUpdates,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
+    if (renamed) {
+      logActivity(auth?.currentUser?.uid || 'system', 'rename_class', 'classes', courseId, {
+        previousName,
+        className: nextUpdates.name,
+      });
+    }
     
     return true;
   } catch (error) {
@@ -1542,6 +1672,51 @@ export const subscribeToPersonalCalendarEvents = (userId, callback) => {
   );
 };
 
+export const subscribeToClassPrefs = (userId, callback) => {
+  if (!userId) {
+    callback({});
+    return () => {};
+  }
+  return onSnapshot(
+    collection(db, 'users', userId, 'classPrefs'),
+    (snapshot) => {
+      const preferences = {};
+      snapshot.docs.forEach((preferenceDoc) => {
+        preferences[preferenceDoc.id] = {
+          id: preferenceDoc.id,
+          ...preferenceDoc.data(),
+        };
+      });
+      callback(preferences);
+    },
+    (error) => {
+      console.error('Error loading class preferences:', error);
+      callback({});
+    }
+  );
+};
+
+export const setClassPref = async (userId, classId, preference = {}) => {
+  if (!userId || !classId) {
+    throw new Error('A user and class are required to personalize a class card.');
+  }
+  const nickname = String(preference.nickname || '').trim().replace(/\s+/g, ' ');
+  const color = String(preference.color || '').trim();
+  const allowedColors = new Set(COLOR_PALETTE.map((option) => option.bg));
+  if (nickname.length > 100) {
+    throw new Error('Class nickname must be 100 characters or fewer.');
+  }
+  if (color && !allowedColors.has(color)) {
+    throw new Error('Choose a color from the available class palette.');
+  }
+  await setDoc(doc(db, 'users', userId, 'classPrefs', classId), {
+    nickname,
+    color,
+    updatedAt: serverTimestamp(),
+  });
+  return true;
+};
+
 export const getJoinableClasses = async (filters = {}) => {
   const constraints = [];
   if (filters.sectorId) constraints.push(where('sectorId', '==', filters.sectorId));
@@ -1840,6 +2015,12 @@ export const joinClassByCode = async (studentId, classCode) => {
     // Add level directly from class data for immediate display
     if (classData.level) {
       enrollmentData.level = classData.level;
+    }
+    if (classData.bgImage) {
+      enrollmentData.bgImage = classData.bgImage;
+    }
+    if (classData.color) {
+      enrollmentData.color = classData.color;
     }
 
     const docRef = doc(enrollmentsRef, `${classId}_${studentId}`);
@@ -2247,6 +2428,13 @@ export const createNotification = async ({ toUid, type = 'general', text, fromUi
       throw new Error('Notification requires toUid and text');
     }
 
+    // Admin can disable a notification event type platform-wide (Settings →
+    // Notifications). Only an explicit `false` suppresses it; unknown/general
+    // types are always allowed.
+    if (!isNotificationTypeEnabled(type)) {
+      return null;
+    }
+
     // Rules require fromUid == request.auth.uid; default to the caller.
     const resolvedFromUid = fromUid || auth?.currentUser?.uid || '';
 
@@ -2455,6 +2643,8 @@ export const adminAddStudentToClass = async (classId, student, classData = {}) =
     if (classData.trainerName) enrollmentData.trainerName = classData.trainerName;
     if (classData.courseId) enrollmentData.courseId = classData.courseId;
     if (classData.level) enrollmentData.level = classData.level;
+    if (classData.bgImage) enrollmentData.bgImage = classData.bgImage;
+    if (classData.color) enrollmentData.color = classData.color;
 
     const enrollmentRef = doc(enrollmentsRef, `${classId}_${student.id}`);
     const batch = writeBatch(db);
@@ -2851,12 +3041,39 @@ export const compressAndStoreFile = async (file, classId) => {
       url,
       storagePath: path,
     };
-    
+
           // Base64 string + JSON overhead ≈ base64 length + 500 bytes
   } catch (error) {
     console.error('File upload error:', error.message);
     throw error;
   }
+};
+
+/**
+ * Upload the site branding logo to the public `branding/` Storage path and
+ * return its download URL. Admin-only (enforced by storage.rules).
+ */
+export const uploadBrandingLogo = async (file) => {
+  if (!file) throw new Error('No logo file provided.');
+  if (!storage || !auth?.currentUser?.uid) {
+    throw new Error('Storage is unavailable or you are not signed in.');
+  }
+  if (!file.type || !file.type.startsWith('image/')) {
+    throw new Error('The logo must be an image file.');
+  }
+  const MAX_LOGO_SIZE = 5 * 1024 * 1024;
+  if (file.size > MAX_LOGO_SIZE) {
+    throw new Error(`Logo is too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Maximum size: 5MB`);
+  }
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_');
+  const randomPart =
+    globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const fileRef = storageRef(storage, `branding/logo-${randomPart}-${safeName}`);
+  await uploadBytes(fileRef, file, {
+    contentType: file.type,
+    customMetadata: { originalName: file.name },
+  });
+  return getDownloadURL(fileRef);
 };
 
 /**
@@ -4614,6 +4831,8 @@ export default {
   ensureClassMembership,
   subscribeToPersonalCalendarEvents,
   createPersonalCalendarEvent,
+  subscribeToClassPrefs,
+  setClassPref,
 
   // Materials
   getCourseMaterials,

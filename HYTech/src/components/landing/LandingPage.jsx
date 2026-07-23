@@ -1,8 +1,14 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAppSettings } from '../../context/useAppSettings';
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  const { appSettings } = useAppSettings();
+  const siteName = appSettings.branding.siteName || 'HYTech';
+  const logoUrl = appSettings.branding.logoUrl || '/images/hyt_logo.png';
+  const welcomeMessage = appSettings.branding.welcomeMessage
+    || `${siteName} is a centralized learning management system designed to support structured training programs, simplify course management, and enhance collaboration between administrators, trainors, and trainees.`;
 
   return (
     <div className="h-screen h-[100dvh] w-full relative bg-[#0f1438] overflow-hidden">
@@ -34,9 +40,9 @@ const LandingPage = () => {
           {/* Logo */}
           <div className="mb-4 sm:mb-5 md:mb-6 animate-fade-in">
             <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 lg:w-48 lg:h-48 landing-logo-glow">
-              <img 
-                src="/images/hyt_logo.png" 
-                alt="HYT Global Institute Logo" 
+              <img
+                src={logoUrl}
+                alt={`${siteName} Logo`}
                 className="w-full h-full object-contain drop-shadow-2xl"
                 onError={(e) => {
                   e.target.parentElement.innerHTML = `
@@ -65,7 +71,7 @@ const LandingPage = () => {
             </h1>
             
             <p className="text-xs sm:text-sm md:text-base lg:text-lg text-gray-200/90 leading-relaxed mb-5 sm:mb-6 md:mb-7 max-w-full lg:max-w-xl">
-              HYTech is a centralized learning management system designed to support structured training programs, simplify course management, and enhance collaboration between administrators, trainors, and trainees.
+              {welcomeMessage}
             </p>
 
             {/* CTA Button */}

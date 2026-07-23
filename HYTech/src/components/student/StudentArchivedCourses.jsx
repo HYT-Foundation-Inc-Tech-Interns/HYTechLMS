@@ -11,7 +11,13 @@ import {
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../firebase';
-import { getStudentEnrollments, getCoursesTemplates } from '../../utils/firestoreService';
+import {
+  getStudentEnrollments,
+  getCoursesTemplates,
+  subscribeToClassPrefs,
+} from '../../utils/firestoreService';
+import { getGradientStyle, getPlaceholderColor } from '../../utils/courseColors';
+import ClassCardPersonalization from './ClassCardPersonalization';
 
 const StudentArchivedCourses = () => {
   const [uid, setUid] = useState('guest');
@@ -20,6 +26,7 @@ const StudentArchivedCourses = () => {
   const [archivedCourses, setArchivedCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [courseTemplates, setCourseTemplates] = useState([]);
+  const [classPrefs, setClassPrefs] = useState({});
 
   useEffect(() => {
     if (!auth) {
@@ -33,6 +40,8 @@ const StudentArchivedCourses = () => {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => subscribeToClassPrefs(uid === 'guest' ? null : uid, setClassPrefs), [uid]);
 
   // Load archived/completed enrollments from database
   useEffect(() => {
@@ -60,6 +69,8 @@ const StudentArchivedCourses = () => {
           const courseTemplate = templates?.find(t => t.id === enrollment.courseId);
           return {
             id: enrollment.id,
+            classId: enrollment.classId,
+            sharedName: enrollment.className || 'Graduated Class',
             name: enrollment.className || 'Graduated Class',
             courseName: courseTemplate?.name || enrollment.courseName || 'Course',
             instructor: enrollment.trainerName || 'Not recorded',
@@ -72,7 +83,10 @@ const StudentArchivedCourses = () => {
                   day: 'numeric'
                 })
               : 'Recently completed',
-            image: courseTemplate?.bgImage || null,
+            image: enrollment.bgImage || courseTemplate?.bgImage || null,
+            color:
+              enrollment.color
+              || getPlaceholderColor(enrollment.courseId || enrollment.classId).bg,
             finalGrade: enrollment.finalGrade || '',
             progress:
               enrollment.progress?.overallProgress
@@ -132,21 +146,36 @@ const StudentArchivedCourses = () => {
       {/* Courses Grid */}
       {!loading && archivedCourses.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {archivedCourses.map((course) => (
+          {archivedCourses.map((course) => {
+            const preference = classPrefs[course.classId] || {};
+            const effectiveName = preference.nickname || course.sharedName;
+            const effectiveColor = preference.color || course.color;
+            return (
             <div 
               key={course.id}
-              className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all group"
+              className="relative rounded-2xl border border-gray-100 bg-white transition-all hover:shadow-lg group"
             >
             {/* Course Image */}
-            <div className="relative h-40 bg-gradient-to-br from-[#0D4291] to-[#0B005C]">
-              <img 
-                src={course.image} 
-                alt={course.name}
-                className="w-full h-full object-cover opacity-80"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                }}
-              />
+            <div
+              className="relative h-40 overflow-hidden rounded-t-2xl"
+              style={course.image ? undefined : { background: getGradientStyle(effectiveColor) }}
+            >
+              {course.image && (
+                <>
+                  <img
+                    src={course.image}
+                    alt={effectiveName}
+                    className="h-full w-full object-cover"
+                    onError={(event) => {
+                      event.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  <div
+                    className="absolute inset-0 opacity-45"
+                    style={{ background: getGradientStyle(effectiveColor) }}
+                  />
+                </>
+              )}
               
               {/* Completed Badge */}
               <div className="absolute top-3 left-3 px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full flex items-center gap-1">
@@ -164,7 +193,19 @@ const StudentArchivedCourses = () => {
 
             {/* Course Details */}
             <div className="p-4 space-y-3">
-              <h3 className="font-bold text-gray-900 text-lg">{course.name}</h3>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="font-bold text-gray-900 text-lg">{effectiveName}</h3>
+                  {preference.nickname && (
+                    <p className="mt-1 truncate text-xs text-gray-400">Shared name: {course.sharedName}</p>
+                  )}
+                </div>
+                <ClassCardPersonalization
+                  userId={uid}
+                  classId={course.classId}
+                  preference={preference}
+                />
+              </div>
               <p className="text-sm text-gray-500">{course.instructor}</p>
 
               {/* Completion Date */}
@@ -176,7 +217,7 @@ const StudentArchivedCourses = () => {
               {/* Actions */}
               <div className="flex gap-2 pt-2">
                 <button 
-                  onClick={() => handleView(course)}
+                  onClick={() => handleView({ ...course, name: effectiveName, color: effectiveColor })}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0D4291] text-white rounded-lg font-medium hover:bg-[#0a3577] transition-colors"
                 >
                   <Eye className="w-4 h-4" />
@@ -185,7 +226,8 @@ const StudentArchivedCourses = () => {
               </div>
             </div>
           </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -205,6 +247,10 @@ const StudentArchivedCourses = () => {
                 alt={selectedCourse.name}
                 className="w-full h-full object-cover opacity-60"
                 onError={(e) => { e.target.style.display = 'none'; }}
+              />
+              <div
+                className="absolute inset-0 opacity-35"
+                style={{ background: getGradientStyle(selectedCourse.color || selectedCourse.courseColor) }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
               <button 

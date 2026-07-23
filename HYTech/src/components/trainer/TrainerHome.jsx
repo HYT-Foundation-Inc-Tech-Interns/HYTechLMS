@@ -15,11 +15,11 @@ import {
   BookOpen, 
   FileText, 
   Video, 
-  Plus,
-  Image as ImageIcon
+  Plus
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import SubjectListEditor from '../shared/SubjectListEditor';
+import ClassAppearanceEditor from '../shared/ClassAppearanceEditor';
 import {
   getCourses,
   getClassesForTrainer,
@@ -32,33 +32,15 @@ import {
   createCourse,
   generateUniqueClassCode,
   reconcileSectorStatuses,
+  compressAndStoreFile,
 } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
+import { getGradientStyle } from '../../utils/courseColors';
 
 const TrainerHome = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { addToast } = useToast();
-
-  // Helper function to convert Tailwind gradient classes to inline CSS
-  const getGradientStyle = (colorClass) => {
-    if (!colorClass) {
-      return { background: 'linear-gradient(to right, rgb(168, 85, 247), rgb(147, 51, 234))' }; // purple-500 to purple-600
-    }
-    
-    // Map common Tailwind gradient patterns to actual CSS
-    const gradientMap = {
-      'from-gray-600 to-gray-800': 'linear-gradient(to right, rgb(75, 85, 99), rgb(31, 41, 55))',
-      'from-blue-600 to-blue-800': 'linear-gradient(to right, rgb(37, 99, 235), rgb(30, 58, 138))',
-      'from-green-600 to-green-800': 'linear-gradient(to right, rgb(22, 163, 74), rgb(20, 83, 45))',
-      'from-red-600 to-red-800': 'linear-gradient(to right, rgb(220, 38, 38), rgb(127, 29, 29))',
-      'from-purple-600 to-purple-800': 'linear-gradient(to right, rgb(147, 51, 234), rgb(88, 28, 135))',
-      'from-orange-600 to-orange-800': 'linear-gradient(to right, rgb(234, 88, 12), rgb(124, 45, 18))',
-      'from-indigo-600 to-indigo-800': 'linear-gradient(to right, rgb(79, 70, 229), rgb(55, 48, 163))',
-    };
-    
-    return { background: gradientMap[colorClass] || 'linear-gradient(to right, rgb(168, 85, 247), rgb(147, 51, 234))' };
-  };
 
   // State Management
   const [courses, setCourses] = useState([]);
@@ -69,6 +51,10 @@ const TrainerHome = () => {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [editingClass, setEditingClass] = useState(null);
   const [editClassName, setEditClassName] = useState('');
+  const [editClassColor, setEditClassColor] = useState('');
+  const [editClassImageUrl, setEditClassImageUrl] = useState('');
+  const [editClassImagePath, setEditClassImagePath] = useState('');
+  const [editClassImageFile, setEditClassImageFile] = useState(null);
   const [isUpdatingClass, setIsUpdatingClass] = useState(false);
 
   // Create Class States
@@ -163,10 +149,30 @@ const TrainerHome = () => {
   const handleOpenEditClass = (course) => {
     setEditingClass(course);
     setEditClassName(course?.name || '');
+    setEditClassColor(course?.color || '');
+    setEditClassImageUrl(course?.bgImage || '');
+    setEditClassImagePath(course?.bgImagePath || '');
+    setEditClassImageFile(null);
     setActiveMenu(null);
   };
 
-  const handleRenameClass = async (event) => {
+  const handleEditClassImage = (file) => {
+    if (!file) {
+      setEditClassImageFile(null);
+      return;
+    }
+    if (!file.type?.startsWith('image/')) {
+      addToast('Please select a valid image file.', 'error');
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      addToast('Class card images must be 25 MB or smaller.', 'error');
+      return;
+    }
+    setEditClassImageFile(file);
+  };
+
+  const handleUpdateClass = async (event) => {
     event.preventDefault();
     if (!editingClass) return;
     const normalizedName = editClassName.trim().replace(/\s+/g, ' ');
@@ -174,22 +180,35 @@ const TrainerHome = () => {
       addToast('Class name must be between 3 and 100 characters.', 'error');
       return;
     }
-    if (normalizedName === editingClass.name) {
-      setEditingClass(null);
-      return;
-    }
 
     try {
       setIsUpdatingClass(true);
-      await updateCourse(editingClass.id, { name: normalizedName });
+      let nextImageUrl = editClassImageUrl;
+      let nextImagePath = editClassImagePath;
+      if (editClassImageFile) {
+        const uploadedImage = await compressAndStoreFile(editClassImageFile, editingClass.id);
+        nextImageUrl = uploadedImage.url;
+        nextImagePath = uploadedImage.storagePath;
+      }
+      const updates = {
+        name: normalizedName,
+        color: editClassColor,
+        bgImage: nextImageUrl,
+        bgImagePath: nextImagePath,
+      };
+      await updateCourse(editingClass.id, updates);
       setCourses((prev) => prev.map((course) => (
-        course.id === editingClass.id ? { ...course, name: normalizedName } : course
+        course.id === editingClass.id ? { ...course, ...updates } : course
       )));
       setEditingClass(null);
       setEditClassName('');
-      addToast('Class name updated.', 'success');
+      setEditClassColor('');
+      setEditClassImageUrl('');
+      setEditClassImagePath('');
+      setEditClassImageFile(null);
+      addToast('Class details updated.', 'success');
     } catch (error) {
-      addToast(error?.message || 'Unable to update the class name.', 'error');
+      addToast(error?.message || 'Unable to update the class.', 'error');
     } finally {
       setIsUpdatingClass(false);
     }
@@ -299,6 +318,7 @@ const TrainerHome = () => {
         classCode: classCode,
         courseId: selectedClassDetails.id,
         bgImage: selectedClassDetails.bgImage || '',
+        color: selectedClassDetails.color || '',
         templateMode: creationPath,
         templateHasContent: selectedClassDetails.hasContent === true,
         subjects: creationPath === 'empty' ? classSubjects : [],
@@ -661,6 +681,28 @@ const TrainerHome = () => {
                         <Edit2 className="h-4 w-4" />
                       </button>
                     )}
+                    <div
+                      className="relative h-36 overflow-hidden"
+                      style={course.bgImage
+                        ? {
+                            backgroundImage: `url(${course.bgImage})`,
+                            backgroundPosition: 'center',
+                            backgroundSize: 'cover',
+                          }
+                        : { background: getGradientStyle(course.color) }}
+                    >
+                      {course.bgImage && (
+                        <div
+                          className="absolute inset-0 opacity-40"
+                          style={{ background: getGradientStyle(course.color) }}
+                        />
+                      )}
+                      {!course.bgImage && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <BookOpen className="h-12 w-12 text-white/80" />
+                        </div>
+                      )}
+                    </div>
                     {/* Class Info */}
                     <div className="p-4 space-y-4 flex flex-col flex-1 sm:p-6">
                       {/* Title */}
@@ -818,13 +860,13 @@ const TrainerHome = () => {
         {editingClass && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <form
-              onSubmit={handleRenameClass}
-              className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6"
+              onSubmit={handleUpdateClass}
+              className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6"
             >
               <div className="mb-5 flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900">Edit Class</h2>
-                  <p className="mt-1 text-sm text-gray-500">Rename this class without changing its program or class code.</p>
+                  <p className="mt-1 text-sm text-gray-500">Update the class name and the shared card appearance trainees see.</p>
                 </div>
                 <button
                   type="button"
@@ -850,6 +892,22 @@ const TrainerHome = () => {
                 placeholder="Enter class name"
               />
               <p className="mt-2 text-xs text-gray-500">{editClassName.trim().length}/100 characters</p>
+
+              <div className="mt-5 border-t border-gray-100 pt-5">
+                <ClassAppearanceEditor
+                  color={editClassColor}
+                  imageUrl={editClassImageUrl}
+                  imageFile={editClassImageFile}
+                  onColorChange={setEditClassColor}
+                  onImageChange={handleEditClassImage}
+                  onRemoveImage={() => {
+                    setEditClassImageFile(null);
+                    setEditClassImageUrl('');
+                    setEditClassImagePath('');
+                  }}
+                  disabled={isUpdatingClass}
+                />
+              </div>
 
               <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <button

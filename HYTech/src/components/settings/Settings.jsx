@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { 
-  User, 
-  Bell, 
-  Settings as SettingsIcon, 
+import {
+  User,
+  Bell,
   Shield,
   Save,
   Upload,
@@ -10,24 +9,55 @@ import {
   EyeOff,
   ChevronDown,
   Camera,
-  X
+  X,
+  Image as ImageIcon,
+  Database,
+  Loader2
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useToast } from '../../context/ToastContext';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
+import { useAppSettings } from '../../context/useAppSettings';
 import { compressAvatarImageToBase64 } from '../../utils/avatarStorage';
 import { normalizePhMobile, toStoredPhMobile } from '../../utils/phone';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateProfile } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
-import { getUserPrivateProfile, saveUserPrivateProfile } from '../../utils/firestoreService';
+import {
+  getUserPrivateProfile,
+  saveUserPrivateProfile,
+  DEFAULT_APP_SETTINGS,
+  saveAppSettings,
+  uploadBrandingLogo,
+  migrateAssessmentAnswerKeys,
+  migrateClassDirectory,
+  seedTesdaCatalog,
+} from '../../utils/firestoreService';
 import { joinNameFields, normalizeEditedNameFields } from '../../utils/nameFormat';
+
+// User-facing notification event types that admins can toggle. Keys match the
+// `type` written at each createNotification call site; the gate defaults to
+// enabled unless a key is explicitly false.
+const NOTIFICATION_TYPES = [
+  { key: 'join_request', label: 'New enrollment / join request', description: 'When a trainee requests to join a class (sent to the trainer).' },
+  { key: 'join_approved', label: 'Enrollment approved', description: 'When a trainee is approved into a class.' },
+  { key: 'id_request', label: 'ID request submitted', description: 'When a trainee submits an ID request (sent to admins).' },
+  { key: 'id_request_approved', label: 'ID request approved', description: 'When an ID request is approved.' },
+  { key: 'id_request_rejected', label: 'ID request rejected', description: 'When an ID request is rejected.' },
+  { key: 'id_request_completed', label: 'ID request completed', description: 'When an ID card is marked ready/completed.' },
+  { key: 'incident_filed', label: 'Incident filed', description: 'When an incident form is filed (sent to admins).' },
+  { key: 'grade_posted', label: 'Grade posted', description: 'When a grade is posted for a trainee.' },
+  { key: 'role_changed', label: 'Role changed', description: 'When an admin changes a user’s role.' },
+  { key: 'cotrainer_added', label: 'Co-trainer added', description: 'When a trainer is added as a co-trainer.' },
+  { key: 'class_ownership_transferred', label: 'Class ownership transferred', description: 'When a class lead is transferred.' },
+];
 
 const Settings = () => {
   const { addToast } = useToast();
   const { setAvatar } = useProfileAvatar('admin');
   const { uid, settingsData, saveSettings } = useUserSettings('admin');
+  const { appSettings, isLoading: appSettingsLoading } = useAppSettings();
   const avatarInputRef = useRef(null);
   const settingsHydratedRef = useRef(false);
   const profileHydratedRef = useRef(false);
@@ -54,51 +84,23 @@ const Settings = () => {
     confirmPassword: '',
   });
 
-  // Access & Notification settings
-  const [accessSettings, setAccessSettings] = useState({
-    allowSelfRegistration: true,
-    requireAdminApproval: true,
-    lockAccountAfterFailed: true,
-    sessionTimeout: 30,
-  });
-
-  const [notificationSettings, setNotificationSettings] = useState({
-    newEnrollmentAlerts: true,
-    courseCompletion: true,
-    systemAlerts: true,
-    newUserRegistration: true,
-    certificateIssuance: true,
-    emailNotifications: true,
-    smsNotifications: true,
-  });
-
-  // System Preferences
-  const [systemPrefs, setSystemPrefs] = useState({
-    siteName: '',
-    siteLogo: '',
-    welcomeMessage: '',
-    language: 'English',
-    timezone: 'Asia/Manila (GMT +8)',
-    dateFormat: 'MM/DD/YYYY',
-    maxEnrolleesPerCourse: 50,
-    maxUploadFileSize: 10,
-    certificateTemplate: 'TESDA Template',
-    gradingSystem: 'Competency-Based (Competent/Not Yet Competent)',
-    allowSelfRegistration: true,
-    requireAdminApproval: true,
-    lockAccountAfterFailed: true,
-  });
-
-  // Security Settings
-  const [securitySettings, setSecuritySettings] = useState({
-    twoFactorAuth: true,
-    forcePasswordChange: true,
-    minPasswordLength: 8,
-    passwordExpiry: 'Every 90 days',
-  });
+  // Editable copies of the GLOBAL app settings (config/appSettings), hydrated
+  // from the live `appSettings` once loaded. These drive the admin-only tabs.
+  const [accessForm, setAccessForm] = useState(DEFAULT_APP_SETTINGS.access);
+  const [brandingForm, setBrandingForm] = useState(DEFAULT_APP_SETTINGS.branding);
+  const [notifForm, setNotifForm] = useState(DEFAULT_APP_SETTINGS.notifications);
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState(null);
+  const [runningTask, setRunningTask] = useState('');
+  const appSettingsHydratedRef = useRef(false);
+  const logoInputRef = useRef(null);
 
   const tabs = [
     { id: 'account', label: 'Account', icon: User },
+    { id: 'access', label: 'Access & Registration', icon: Shield },
+    { id: 'branding', label: 'Branding', icon: ImageIcon },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'maintenance', label: 'Maintenance', icon: Database },
   ];
 
   useEffect(() => {
@@ -119,20 +121,18 @@ const Settings = () => {
         emailAddress: auth?.currentUser?.email || settingsData.accountForm.emailAddress || prev.emailAddress,
       }));
     }
-    if (settingsData.accessSettings) {
-      setAccessSettings((prev) => ({ ...prev, ...settingsData.accessSettings }));
-    }
-    if (settingsData.notificationSettings) {
-      setNotificationSettings((prev) => ({ ...prev, ...settingsData.notificationSettings }));
-    }
-    if (settingsData.systemPrefs) {
-      setSystemPrefs((prev) => ({ ...prev, ...settingsData.systemPrefs }));
-    }
-    if (settingsData.securitySettings) {
-      setSecuritySettings((prev) => ({ ...prev, ...settingsData.securitySettings }));
-    }
     settingsHydratedRef.current = true;
   }, [settingsData, setAvatar]);
+
+  // Hydrate the admin-tab forms once the global settings have loaded (the first
+  // real snapshot). After that the admin edits locally and saves.
+  useEffect(() => {
+    if (appSettingsLoading || appSettingsHydratedRef.current) return;
+    setAccessForm((prev) => ({ ...prev, ...appSettings.access }));
+    setBrandingForm((prev) => ({ ...prev, ...appSettings.branding }));
+    setNotifForm((prev) => ({ ...prev, ...appSettings.notifications }));
+    appSettingsHydratedRef.current = true;
+  }, [appSettingsLoading, appSettings]);
 
   useEffect(() => {
     settingsHydratedRef.current = false;
@@ -302,6 +302,26 @@ const Settings = () => {
         if (auth?.currentUser && auth.currentUser.displayName !== fullName) {
           await updateProfile(auth.currentUser, { displayName: fullName });
         }
+      }
+
+      // Persist the global app settings (admin-only; rules reject non-admins).
+      let logoUrl = brandingForm.logoUrl || '';
+      if (logoFile) {
+        logoUrl = await uploadBrandingLogo(logoFile);
+      }
+      await saveAppSettings({
+        branding: { ...brandingForm, logoUrl },
+        access: {
+          ...accessForm,
+          sessionTimeoutMinutes: Number(accessForm.sessionTimeoutMinutes) || 0,
+          minPasswordLength: Number(accessForm.minPasswordLength) || 8,
+        },
+        notifications: notifForm,
+      });
+      if (logoFile) {
+        setBrandingForm((b) => ({ ...b, logoUrl }));
+        setLogoFile(null);
+        setLogoPreview(null);
       }
 
       setAvatar(avatarBase64 || null);
@@ -554,356 +574,276 @@ const Settings = () => {
     </div>
   );
 
+  const handleLogoChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type?.startsWith('image/')) {
+      addToast('Please select a valid image file.', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setLogoPreview(reader.result);
+    reader.readAsDataURL(file);
+    setLogoFile(file);
+    addToast('Logo selected. Save changes to apply.', 'info');
+  };
+
+  // Run one maintenance task at a time and surface a human-readable result.
+  const runMaintenance = async (taskKey, label, fn) => {
+    if (runningTask) return;
+    setRunningTask(taskKey);
+    try {
+      const result = await fn();
+      const detail =
+        result?.migrated != null ? `${result.migrated} updated`
+          : result?.synchronized != null ? `${result.synchronized} synchronized`
+          : result?.created != null ? `${result.created} created`
+          : 'done';
+      addToast(`${label}: ${detail}.`, 'success');
+    } catch (error) {
+      addToast(`${label} failed: ${error?.message || 'unknown error'}`, 'error');
+    } finally {
+      setRunningTask('');
+    }
+  };
+
   const renderAccessTab = () => (
     <div className="space-y-8">
-      {/* Access Control */}
+      {/* Registration */}
       <div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-1">Access Control</h3>
-        <p className="text-sm text-gray-500 mb-6">Control how users access the system.</p>
-        
-        <div className="card p-6">
-          <Toggle
-            enabled={accessSettings.allowSelfRegistration}
-            onChange={(val) => setAccessSettings({ ...accessSettings, allowSelfRegistration: val })}
-            label="Allow self registration"
-            description="Let new trainees register on their own"
-          />
-          <Toggle
-            enabled={accessSettings.requireAdminApproval}
-            onChange={(val) => setAccessSettings({ ...accessSettings, requireAdminApproval: val })}
-            label="Require Admin Approval"
-            description="New accounts need admin approval before activation"
-          />
-          <Toggle
-            enabled={accessSettings.lockAccountAfterFailed}
-            onChange={(val) => setAccessSettings({ ...accessSettings, lockAccountAfterFailed: val })}
-            label="Lock Account After Failed Attempts"
-            description="Temporarily lock accounts after 5 failed login attempts"
-          />
-          
-          <div className="pt-4">
-            <label className="block text-sm font-medium text-gray-800 mb-2">Session Time Out (Minutes)</label>
-            <div className="relative w-32">
-              <select
-                value={accessSettings.sessionTimeout}
-                onChange={(e) => setAccessSettings({ ...accessSettings, sessionTimeout: Number(e.target.value) })}
-                className="input-field appearance-none cursor-pointer"
-              >
-                <option value={15}>15</option>
-                <option value={30}>30</option>
-                <option value={60}>60</option>
-                <option value={120}>120</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-            </div>
-            <p className="text-xs text-gray-400 mt-1">Auto-logout after inactivity</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Notification Preferences */}
-      <div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-1">Notification Preferences</h3>
-        <p className="text-sm text-gray-500 mb-6">Choose which notifications you'd like to receive as admin.</p>
-        
-        <div className="card p-6">
-          <Toggle
-            enabled={notificationSettings.newEnrollmentAlerts}
-            onChange={(val) => setNotificationSettings({ ...notificationSettings, newEnrollmentAlerts: val })}
-            label="New Enrollment Alerts"
-            description="Get notified when a trainee enrolls in a course"
-          />
-          <Toggle
-            enabled={notificationSettings.courseCompletion}
-            onChange={(val) => setNotificationSettings({ ...notificationSettings, courseCompletion: val })}
-            label="Course Completion"
-            description="Notify when a trainee completes a course or assessment"
-          />
-          <Toggle
-            enabled={notificationSettings.systemAlerts}
-            onChange={(val) => setNotificationSettings({ ...notificationSettings, systemAlerts: val })}
-            label="System Alerts"
-            description="Critical system warnings, errors, and maintenance notices"
-          />
-          <Toggle
-            enabled={notificationSettings.newUserRegistration}
-            onChange={(val) => setNotificationSettings({ ...notificationSettings, newUserRegistration: val })}
-            label="New User Registration"
-            description="Notify when a new user registers and needs approval"
-          />
-          <Toggle
-            enabled={notificationSettings.certificateIssuance}
-            onChange={(val) => setNotificationSettings({ ...notificationSettings, certificateIssuance: val })}
-            label="Certificate Issuance"
-            description="Alert when a certificate is generated"
-          />
-          <Toggle
-            enabled={notificationSettings.emailNotifications}
-            onChange={(val) => setNotificationSettings({ ...notificationSettings, emailNotifications: val })}
-            label="Email Notifications"
-            description="Send all notifications via email"
-          />
-          <Toggle
-            enabled={notificationSettings.smsNotifications}
-            onChange={(val) => setNotificationSettings({ ...notificationSettings, smsNotifications: val })}
-            label="SMS Notifications"
-            description="Send urgent notifications via SMS"
-          />
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderSystemTab = () => (
-    <div className="space-y-8">
-      {/* Access Control - Site Settings */}
-      <div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-1">General Settings</h3>
-        <p className="text-sm text-gray-500 mb-6">Configure the look and feel of the LMS platform.</p>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Site Name</label>
-            <input
-              type="text"
-              value={systemPrefs.siteName}
-              onChange={(e) => setSystemPrefs({ ...systemPrefs, siteName: e.target.value })}
-              className="input-field"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Site Logo</label>
-            <div className="flex gap-4">
-              <input
-                type="text"
-                value={systemPrefs.siteLogo}
-                onChange={(e) => setSystemPrefs({ ...systemPrefs, siteLogo: e.target.value })}
-                className="input-field flex-1"
-              />
-              <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                <Upload className="w-4 h-4" />
-                <span>Upload Photo</span>
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 mt-1">Recommended: 200×60px, PNG or SVG</p>
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Welcome Message</label>
-            <textarea
-              value={systemPrefs.welcomeMessage}
-              onChange={(e) => setSystemPrefs({ ...systemPrefs, welcomeMessage: e.target.value })}
-              placeholder="Message shown on the login page and dashboard..."
-              rows={4}
-              className="input-field resize-none"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Language & Regional */}
-      <div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-1">Language & Regional</h3>
-        <p className="text-sm text-gray-500 mb-6">Set the default language and regional preferences.</p>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Language</label>
-            <div className="relative">
-              <select
-                value={systemPrefs.language}
-                onChange={(e) => setSystemPrefs({ ...systemPrefs, language: e.target.value })}
-                className="input-field appearance-none cursor-pointer"
-              >
-                <option>English</option>
-                <option>Filipino</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Timezone</label>
-            <div className="relative">
-              <select
-                value={systemPrefs.timezone}
-                onChange={(e) => setSystemPrefs({ ...systemPrefs, timezone: e.target.value })}
-                className="input-field appearance-none cursor-pointer"
-              >
-                <option>Asia/Manila (GMT +8)</option>
-                <option>UTC</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
-            <div className="relative">
-              <select
-                value={systemPrefs.dateFormat}
-                onChange={(e) => setSystemPrefs({ ...systemPrefs, dateFormat: e.target.value })}
-                className="input-field appearance-none cursor-pointer"
-              >
-                <option>MM/DD/YYYY</option>
-                <option>DD/MM/YYYY</option>
-                <option>YYYY-MM-DD</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Course & Training Settings */}
-      <div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-1">Course & Training Settings</h3>
-        <p className="text-sm text-gray-500 mb-6">Configure defaults for courses and training programs.</p>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Max Enrollees per Course</label>
-            <div className="relative">
-              <select
-                value={systemPrefs.maxEnrolleesPerCourse}
-                onChange={(e) => setSystemPrefs({ ...systemPrefs, maxEnrolleesPerCourse: Number(e.target.value) })}
-                className="input-field appearance-none cursor-pointer"
-              >
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Max Upload File Size (MB)</label>
-            <div className="relative">
-              <select
-                value={systemPrefs.maxUploadFileSize}
-                onChange={(e) => setSystemPrefs({ ...systemPrefs, maxUploadFileSize: Number(e.target.value) })}
-                className="input-field appearance-none cursor-pointer"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Certificate Template</label>
-            <div className="relative">
-              <select
-                value={systemPrefs.certificateTemplate}
-                onChange={(e) => setSystemPrefs({ ...systemPrefs, certificateTemplate: e.target.value })}
-                className="input-field appearance-none cursor-pointer"
-              >
-                <option>TESDA Template</option>
-                <option>Custom Template</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Grading System</label>
-            <div className="relative">
-              <select
-                value={systemPrefs.gradingSystem}
-                onChange={(e) => setSystemPrefs({ ...systemPrefs, gradingSystem: e.target.value })}
-                className="input-field appearance-none cursor-pointer"
-              >
-                <option>Competency-Based (Competent/Not Yet Competent)</option>
-                <option>Percentage-Based</option>
-                <option>Letter Grade</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
-        </div>
+        <h3 className="text-lg font-semibold text-gray-800 mb-1">Registration</h3>
+        <p className="text-sm text-gray-500 mb-6">Control who can join the platform and how enrollments are approved.</p>
 
         <div className="card p-6">
           <Toggle
-            enabled={systemPrefs.allowSelfRegistration}
-            onChange={(val) => setSystemPrefs({ ...systemPrefs, allowSelfRegistration: val })}
-            label="Allow self registration"
-            description="Let new trainees register on their own"
+            enabled={accessForm.allowSelfRegistration}
+            onChange={(val) => setAccessForm({ ...accessForm, allowSelfRegistration: val })}
+            label="Allow self-registration"
+            description="When off, the public sign-up page is disabled and only admins can create accounts."
           />
           <Toggle
-            enabled={systemPrefs.requireAdminApproval}
-            onChange={(val) => setSystemPrefs({ ...systemPrefs, requireAdminApproval: val })}
-            label="Require Admin Approval"
-            description="New accounts need admin approval before activation"
+            enabled={accessForm.requireEnrollmentApproval}
+            onChange={(val) => setAccessForm({ ...accessForm, requireEnrollmentApproval: val })}
+            label="Require enrollment approval"
+            description="When on, joining by class code creates a pending request the trainer must approve. When off, trainees are enrolled immediately."
           />
           <Toggle
-            enabled={systemPrefs.lockAccountAfterFailed}
-            onChange={(val) => setSystemPrefs({ ...systemPrefs, lockAccountAfterFailed: val })}
-            label="Lock Account After Failed Attempts"
-            description="Temporarily lock accounts after 5 failed login attempts"
+            enabled={accessForm.allowMultipleEnrollments}
+            onChange={(val) => setAccessForm({ ...accessForm, allowMultipleEnrollments: val })}
+            label="Allow multiple active enrollments"
+            description="When off, a trainee with an active enrollment cannot join another class until it ends."
           />
         </div>
       </div>
-    </div>
-  );
 
-  const renderSecurityTab = () => (
-    <div className="space-y-8">
-      {/* Security Settings */}
+      {/* Sign-in security */}
       <div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-1">Security Settings</h3>
-        <p className="text-sm text-gray-500 mb-6">Strengthen your system's security with these options.</p>
-        
+        <h3 className="text-lg font-semibold text-gray-800 mb-1">Sign-in Security</h3>
+        <p className="text-sm text-gray-500 mb-6">Password and session policy applied across all accounts.</p>
+
         <div className="card p-6">
           <Toggle
-            enabled={securitySettings.twoFactorAuth}
-            onChange={(val) => setSecuritySettings({ ...securitySettings, twoFactorAuth: val })}
-            label="Two-Factor Authentication (2FA)"
-            description="Require 2FA for admin accounts"
+            enabled={accessForm.forcePasswordChangeDefault}
+            onChange={(val) => setAccessForm({ ...accessForm, forcePasswordChangeDefault: val })}
+            label="Force password change on first login"
+            description="Admin-created accounts must set a new password before using the app."
           />
-          <Toggle
-            enabled={securitySettings.forcePasswordChange}
-            onChange={(val) => setSecuritySettings({ ...securitySettings, forcePasswordChange: val })}
-            label="Force Password Change on First Login"
-            description="New users must change their password immediately"
-          />
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 mt-4 border-t border-gray-100">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Password Length</label>
+              <label className="block text-sm font-medium text-gray-800 mb-2">Session Timeout (Minutes)</label>
+              <div className="relative">
+                <select
+                  value={accessForm.sessionTimeoutMinutes}
+                  onChange={(e) => setAccessForm({ ...accessForm, sessionTimeoutMinutes: Number(e.target.value) })}
+                  className="input-field appearance-none cursor-pointer"
+                >
+                  <option value={0}>Disabled</option>
+                  <option value={15}>15</option>
+                  <option value={30}>30</option>
+                  <option value={60}>60</option>
+                  <option value={120}>120</option>
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Auto sign-out after inactivity. Disabled = never.</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-2">Minimum Password Length</label>
               <input
                 type="number"
-                value={securitySettings.minPasswordLength}
-                onChange={(e) => setSecuritySettings({ ...securitySettings, minPasswordLength: Number(e.target.value) })}
+                value={accessForm.minPasswordLength}
+                onChange={(e) => setAccessForm({ ...accessForm, minPasswordLength: Number(e.target.value) })}
                 min={6}
                 max={32}
                 className="input-field"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Password Expiry</label>
-              <div className="relative">
-                <select
-                  value={securitySettings.passwordExpiry}
-                  onChange={(e) => setSecuritySettings({ ...securitySettings, passwordExpiry: e.target.value })}
-                  className="input-field appearance-none cursor-pointer"
-                >
-                  <option>Every 30 days</option>
-                  <option>Every 60 days</option>
-                  <option>Every 90 days</option>
-                  <option>Every 180 days</option>
-                  <option>Never</option>
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-              </div>
+              <p className="text-xs text-gray-400 mt-1">Enforced on sign-up and password changes.</p>
             </div>
           </div>
         </div>
       </div>
     </div>
   );
+
+  const renderBrandingTab = () => {
+    const currentLogo = logoPreview || brandingForm.logoUrl || '/images/hyt_logo.png';
+    return (
+      <div className="space-y-8">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-1">Branding</h3>
+          <p className="text-sm text-gray-500 mb-6">Name, welcome message, and logo shown across the app and on the sign-in page.</p>
+
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Site Name</label>
+              <input
+                type="text"
+                value={brandingForm.siteName}
+                onChange={(e) => setBrandingForm({ ...brandingForm, siteName: e.target.value })}
+                placeholder="HYTech"
+                maxLength={60}
+                className="input-field"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Welcome Message</label>
+              <textarea
+                value={brandingForm.welcomeMessage}
+                onChange={(e) => setBrandingForm({ ...brandingForm, welcomeMessage: e.target.value })}
+                placeholder="Shown on the landing page and dashboard header..."
+                rows={3}
+                maxLength={280}
+                className="input-field resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Logo</label>
+              <div className="flex items-center gap-4">
+                <img
+                  src={currentLogo}
+                  alt="Site logo preview"
+                  className="h-12 w-12 rounded-lg object-contain bg-gray-50 border border-gray-200 p-1"
+                />
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoChange}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => logoInputRef.current?.click()}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Upload Logo</span>
+                </button>
+                {(brandingForm.logoUrl || logoPreview) && (
+                  <button
+                    type="button"
+                    onClick={() => { setLogoFile(null); setLogoPreview(null); setBrandingForm({ ...brandingForm, logoUrl: '' }); }}
+                    className="text-sm text-gray-500 hover:text-red-600"
+                  >
+                    Reset to default
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 mt-2">PNG or SVG, max 5MB. Uploaded on Save.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderNotificationsTab = () => (
+    <div className="space-y-8">
+      <div>
+        <h3 className="text-lg font-semibold text-gray-800 mb-1">Notification Events</h3>
+        <p className="text-sm text-gray-500 mb-6">Turn off any event to stop generating in-app notifications for it, platform-wide.</p>
+
+        <div className="card p-6">
+          {NOTIFICATION_TYPES.map((n) => (
+            <Toggle
+              key={n.key}
+              enabled={notifForm[n.key] !== false}
+              onChange={(val) => setNotifForm({ ...notifForm, [n.key]: val })}
+              label={n.label}
+              description={n.description}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderMaintenanceTab = () => {
+    const tasks = [
+      {
+        key: 'answerKeys',
+        label: 'Migrate assessment answer keys',
+        description: 'Move legacy quiz answers into the protected answer-key subdocument.',
+        fn: migrateAssessmentAnswerKeys,
+      },
+      {
+        key: 'classDirectory',
+        label: 'Sync class directory',
+        description: 'Rebuild the sanitized class directory used by the enroll catalog.',
+        fn: migrateClassDirectory,
+      },
+      {
+        key: 'tesda',
+        label: 'Seed TESDA catalog',
+        description: 'Create any missing sectors and program templates from the TESDA catalog.',
+        fn: seedTesdaCatalog,
+      },
+    ];
+    return (
+      <div className="space-y-8">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-1">Maintenance</h3>
+          <p className="text-sm text-gray-500 mb-6">Run data tools on demand. These are safe to re-run, but only run one at a time.</p>
+
+          <div className="space-y-3">
+            {tasks.map((t) => (
+              <div key={t.key} className="card p-4 flex items-center justify-between gap-4">
+                <div>
+                  <h4 className="font-medium text-gray-800">{t.label}</h4>
+                  <p className="text-sm text-gray-500">{t.description}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => runMaintenance(t.key, t.label, t.fn)}
+                  disabled={Boolean(runningTask)}
+                  className="inline-flex shrink-0 items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {runningTask === t.key ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+                  {runningTask === t.key ? 'Running…' : 'Run'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderTabContent = () => {
     switch (activeTab) {
       case 'account':
         return renderAccountTab();
+      case 'access':
+        return renderAccessTab();
+      case 'branding':
+        return renderBrandingTab();
+      case 'notifications':
+        return renderNotificationsTab();
+      case 'maintenance':
+        return renderMaintenanceTab();
       default:
         return renderAccountTab();
     }

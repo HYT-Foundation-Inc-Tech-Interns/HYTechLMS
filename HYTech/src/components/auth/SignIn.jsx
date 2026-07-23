@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db, firebaseInitError } from '../../firebase';
 import { useToast } from '../../context/ToastContext';
+import { useAppSettings } from '../../context/useAppSettings';
 import { getHomePathForRole, resolveEffectiveRole } from '../../utils/authRole';
 import { logActivity } from '../../utils/firestoreService';
 
@@ -26,6 +27,9 @@ const SignIn = () => {
   const SIGN_IN_DRAFT_KEY = 'hyt:signin:draft';
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { appSettings } = useAppSettings();
+  const siteName = appSettings.branding.siteName || 'HYTech';
+  const logoUrl = appSettings.branding.logoUrl || '/images/hyt_logo.png';
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
@@ -273,9 +277,9 @@ const SignIn = () => {
           <div className="mb-6 animate-fade-in">
             <div className="w-56 h-56 mx-auto mb-6 relative translate-y-11 auth-logo-glow">
               <div className="absolute inset-0 bg-white/10 rounded-full blur-2xl scale-110" />
-              <img 
-                src="/images/hyt_logo.png" 
-                alt="HYT Global Institute Logo" 
+              <img
+                src={logoUrl}
+                alt={`${siteName} Logo`}
                 className="relative w-full h-full object-contain drop-shadow-2xl"
                 onError={(e) => {
                   e.target.style.display = 'none';
@@ -290,7 +294,7 @@ const SignIn = () => {
               Welcome Back to
             </h1>
             <h2 className="text-3xl lg:text-5xl font-bold text-orange-400">
-              HYTech
+              {siteName}
             </h2>
           </div>
 
@@ -313,9 +317,9 @@ const SignIn = () => {
           {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-6 sm:mb-8">
             <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 sm:mb-4 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow duration-300 animate-scale-in">
-              <img 
-                src="/images/hyt_logo.png" 
-                alt="HYT Logo" 
+              <img
+                src={logoUrl}
+                alt={`${siteName} Logo`}
                 className="w-12 sm:w-16 h-12 sm:h-16 object-contain"
                 onError={(e) => {
                   e.target.style.display = 'none';

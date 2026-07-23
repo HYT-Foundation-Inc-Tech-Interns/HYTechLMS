@@ -29,12 +29,28 @@ const ClassDetail = () => {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { addToast } = useToast();
-  // Honor a ?tab= hint (e.g. a join-request notification deep-links to Trainees).
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'overview');
+  // Honor ?tab= hints while preserving legacy Responses/Grades deep links.
+  const initialRequestedTab = searchParams.get('tab');
+  const initialAssessmentSection = ['responses', 'grades'].includes(initialRequestedTab)
+    ? initialRequestedTab
+    : 'assessments';
+  const [activeTab, setActiveTab] = useState(
+    ['responses', 'grades'].includes(initialRequestedTab)
+      ? 'assessments'
+      : initialRequestedTab || 'overview'
+  );
+  const [assessmentSection, setAssessmentSection] = useState(initialAssessmentSection);
 
   useEffect(() => {
     const requestedTab = searchParams.get('tab');
-    if (requestedTab) setActiveTab(requestedTab);
+    if (!requestedTab) return;
+    if (['responses', 'grades'].includes(requestedTab)) {
+      setActiveTab('assessments');
+      setAssessmentSection(requestedTab);
+      return;
+    }
+    setActiveTab(requestedTab);
+    if (requestedTab === 'assessments') setAssessmentSection('assessments');
   }, [searchParams]);
 
   // Due/available date pickers are capped at one year from today (no far-future
@@ -1820,6 +1836,31 @@ const ClassDetail = () => {
     }
   };
 
+  const openAssessmentResponses = async (assessment) => {
+    if (!assessment) return;
+    setSelectedAssessmentForResponses(assessment);
+    setAssessmentSection('responses');
+    setActiveTab('assessments');
+    setLoadingResponses(true);
+    setItemSubmissions([]);
+    setAssessmentResponses([]);
+    setGradingStudentId(null);
+    try {
+      if (!classData?.id) return;
+      if (assessment.type === 'Submission') {
+        await loadItemSubmissions(assessment);
+      } else {
+        const responses = await getAssessmentAttempts(classData.id, assessment.id);
+        setAssessmentResponses(responses || []);
+      }
+    } catch (error) {
+      console.error('Error loading responses:', error);
+      addToast('Error loading responses', 'error');
+    } finally {
+      setLoadingResponses(false);
+    }
+  };
+
   const startGrading = (submission) => {
     setGradingStudentId(submission.studentId);
     setGradeInput(submission.grade ?? '');
@@ -2338,11 +2379,11 @@ const ClassDetail = () => {
   // Load the gradebook when the Grades tab is opened.
   // Must stay above the early returns below to keep hook order stable.
   useEffect(() => {
-    if (activeTab === 'grades' && classData?.id) {
+    if (activeTab === 'assessments' && assessmentSection === 'grades' && classData?.id) {
       loadGradebook();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, classData?.id]);
+  }, [activeTab, assessmentSection, classData?.id]);
 
   // Load engagement logs when the Logs tab is opened.
   const loadClassActivity = async () => {
@@ -2533,8 +2574,7 @@ const ClassDetail = () => {
               setSelectedMaterialForView(item);
               setShowMaterialViewModal(true);
             } else {
-              setSelectedAssessmentForResponses(item);
-              setActiveTab('responses');
+              openAssessmentResponses(item);
             }
           }}
         >
@@ -2614,9 +2654,7 @@ const ClassDetail = () => {
     { id: 'overview', label: 'Overview', icon: BookOpen },
     { id: 'modules', label: 'Modules', icon: FileText },
     { id: 'assessments', label: 'Assessments', icon: FileText },
-    { id: 'responses', label: 'Responses', icon: FileText },
-    { id: 'grades', label: 'Grades', icon: Award },
-    { id: 'students', label: 'Trainees', icon: Users },
+    { id: 'students', label: 'People', icon: Users },
     { id: 'logs', label: 'Logs', icon: Clock },
   ];
 
@@ -2637,7 +2675,10 @@ const ClassDetail = () => {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  if (tab.id === 'assessments') setAssessmentSection('assessments');
+                }}
                 className={`shrink-0 whitespace-nowrap py-4 px-0 font-medium text-sm flex items-center gap-2 border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? 'border-blue-600 text-blue-600'
@@ -3891,13 +3932,15 @@ const ClassDetail = () => {
           </div>
         )}
 
-        {/* Trainees Tab */}
+        {/* People Tab */}
         {activeTab === 'students' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
               <div className="rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white p-5 shadow-sm">
                 <p className="text-white/70 text-sm">Total Participants</p>
-                <div className="mt-2 text-4xl font-bold">{enrollments.length + 1}</div>
+                <div className="mt-2 text-4xl font-bold">
+                  {enrollments.filter((enrollment) => enrollment.status !== 'pending').length + 1 + coTrainerIds.length}
+                </div>
                 <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-sm">
                   <Users className="w-4 h-4" />
                   Class members
@@ -3913,7 +3956,9 @@ const ClassDetail = () => {
               </div>
               <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm">
                 <p className="text-gray-500 text-sm">Active Trainees</p>
-                <div className="mt-2 text-4xl font-bold text-gray-900">{enrollments.filter(e => e.status !== 'completed').length}</div>
+                <div className="mt-2 text-4xl font-bold text-gray-900">
+                  {enrollments.filter((enrollment) => !['completed', 'pending'].includes(enrollment.status)).length}
+                </div>
                 <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
                   <Users className="w-4 h-4" />
                   Currently enrolled
@@ -3940,12 +3985,14 @@ const ClassDetail = () => {
               </div>
             </div>
 
-            {/* Trainers panel: lead + co-trainers (lead manages roles) */}
+            {/* One role-annotated roster for everyone with class access. */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div>
-                  <h3 className="font-bold text-gray-900 text-lg">Trainers</h3>
-                  <p className="text-sm text-gray-500 mt-1">Lead trainer and co-trainers for this class.</p>
+                  <h3 className="font-bold text-gray-900 text-lg">
+                    People ({enrollments.filter((enrollment) => enrollment.status !== 'pending').length + 1 + coTrainerIds.length})
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">Lead trainer, co-trainers, and trainees with access to this class.</p>
                 </div>
                 {isLead && (
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -4013,10 +4060,7 @@ const ClassDetail = () => {
                   ))
                 )}
               </div>
-            </div>
-
-            <div className="gap-6">
-              <div className="lg:col-span-3 bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+              <div className="mt-6 border-t border-gray-100 pt-5">
                 <div className="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
                   <div>
                     <h3 className="font-bold text-gray-900 text-lg">Trainees ({enrollments.filter((e) => e.status !== 'pending').length})</h3>
@@ -4133,6 +4177,9 @@ const ClassDetail = () => {
                                 <p className="font-semibold text-gray-900 truncate">{displayName}</p>
                                 <p className="text-sm text-gray-500 truncate">{email}</p>
                                 <div className="mt-2 flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+                                  <span className="rounded-full bg-indigo-100 px-2.5 py-1 font-medium text-indigo-700">
+                                    Trainee
+                                  </span>
                                   <span className={`rounded-full px-2.5 py-1 font-medium ${
                                     enrollment.status === 'completed' 
                                       ? 'bg-blue-100 text-blue-700' 
@@ -4250,8 +4297,35 @@ const ClassDetail = () => {
           </div>
         )}
 
-        {/* Assessments Tab */}
         {activeTab === 'assessments' && (
+          <div className="mb-5 flex gap-2 overflow-x-auto rounded-xl border border-gray-200 bg-white p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {[
+              { id: 'assessments', label: 'Assessments', icon: ClipboardList },
+              { id: 'responses', label: 'Responses', icon: FileText },
+              { id: 'grades', label: 'Grades', icon: Award },
+            ].map((section) => {
+              const SectionIcon = section.icon;
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => setAssessmentSection(section.id)}
+                  className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${
+                    assessmentSection === section.id
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  }`}
+                >
+                  <SectionIcon className="h-4 w-4" />
+                  {section.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Assessments section */}
+        {activeTab === 'assessments' && assessmentSection === 'assessments' && (
           <div className="bg-white rounded-lg p-8 border border-gray-200">
             <div className="mb-6">
               <div className="flex items-center justify-between mb-6">
@@ -4369,10 +4443,7 @@ const ClassDetail = () => {
                                       {String(assessment.status || 'active') === 'draft' ? 'Publish' : 'Unpublish'}
                                     </button>
                                     <button
-                                      onClick={() => {
-                                        setSelectedAssessmentForResponses(assessment);
-                                        setActiveTab('responses');
-                                      }}
+                                      onClick={() => openAssessmentResponses(assessment)}
                                       className="text-violet-600 hover:text-violet-700 font-medium text-sm"
                                     >
                                       View Responses
@@ -4397,8 +4468,8 @@ const ClassDetail = () => {
           </div>
         )}
 
-        {/* Responses Tab */}
-        {activeTab === 'grades' && (
+        {/* Gradebook section */}
+        {activeTab === 'assessments' && assessmentSection === 'grades' && (
           <div className="bg-white rounded-lg p-6 border border-gray-200">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-gray-900">Gradebook</h3>
@@ -4454,7 +4525,8 @@ const ClassDetail = () => {
           </div>
         )}
 
-        {activeTab === 'responses' && (
+        {/* Responses section */}
+        {activeTab === 'assessments' && assessmentSection === 'responses' && (
           <div className="bg-white rounded-lg p-8 border border-gray-200">
             <div className="mb-6">
               <div className="flex items-center justify-between mb-6">
@@ -4479,28 +4551,7 @@ const ClassDetail = () => {
                         {allAssessments.map((assessment) => (
                           <button
                             key={assessment.id}
-                            onClick={async () => {
-                              setSelectedAssessmentForResponses(assessment);
-                              setLoadingResponses(true);
-                              setItemSubmissions([]);
-                              setGradingStudentId(null);
-                              try {
-                                if (classData?.id) {
-                                  if (assessment.type === 'Submission') {
-                                    await loadItemSubmissions(assessment);
-                                    setAssessmentResponses([]);
-                                  } else {
-                                    const responses = await getAssessmentAttempts(classData.id, assessment.id);
-                                    setAssessmentResponses(responses || []);
-                                  }
-                                }
-                              } catch (error) {
-                                console.error('Error loading responses:', error);
-                                addToast('Error loading responses', 'error');
-                              } finally {
-                                setLoadingResponses(false);
-                              }
-                            }}
+                            onClick={() => openAssessmentResponses(assessment)}
                             className="text-left p-5 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 hover:shadow-md transition-all group"
                           >
                             <div className="flex items-start justify-between mb-2">
@@ -4537,7 +4588,7 @@ const ClassDetail = () => {
                         }}
                         className="text-blue-600 hover:text-blue-700 font-medium text-sm inline-flex items-center gap-1 mb-2"
                       >
-                        ← Back to Assessments
+                        ← Back to response selection
                       </button>
                       <h4 className="text-2xl font-bold text-gray-900">{selectedAssessmentForResponses.title}</h4>
                       <p className="text-sm text-gray-600 mt-1">{selectedAssessmentForResponses.description || 'No description'}</p>

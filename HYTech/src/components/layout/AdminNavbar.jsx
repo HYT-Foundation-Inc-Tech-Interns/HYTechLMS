@@ -6,6 +6,7 @@ import NotificationDropdown from '../shared/NotificationDropdown';
 import FlappyBirdGame from '../shared/FlappyBirdGame';
 import { useProfileAvatar } from '../../context/useProfileAvatar';
 import { useUserSettings } from '../../context/useUserSettings';
+import { useAppSettings } from '../../context/useAppSettings';
 import { auth } from '../../firebase';
 
 const AdminNavbar = ({ title, subtitle }) => {
@@ -14,6 +15,9 @@ const AdminNavbar = ({ title, subtitle }) => {
   const navigate = useNavigate();
   const { avatar } = useProfileAvatar('admin');
   const { settingsData } = useUserSettings('admin');
+  const { appSettings } = useAppSettings();
+  const siteName = appSettings.branding.siteName || 'HYTech';
+  const logoUrl = appSettings.branding.logoUrl || '/images/hyt_logo.png';
 
   const firstName = settingsData?.accountForm?.firstName?.trim() || '';
   const middleName = settingsData?.accountForm?.middleName?.trim() || '';
@@ -79,9 +83,9 @@ const AdminNavbar = ({ title, subtitle }) => {
     <header className="text-white h-16 pl-16 pr-3 sm:pr-4 lg:px-6 flex items-center justify-between shadow-lg relative z-50 flex-shrink-0" style={{ backgroundColor: '#0B005C' }}>
       {/* Left Side - Breadcrumb */}
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 pr-2">
-        <img 
-          src="/images/hyt_logo.png" 
-          alt="HYT Logo" 
+        <img
+          src={logoUrl}
+          alt={`${siteName} Logo`}
           className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 object-contain cursor-pointer select-none"
           onClick={handleLogoClick}
           onError={(e) => { e.target.style.display = 'none'; }}
@@ -91,7 +95,7 @@ const AdminNavbar = ({ title, subtitle }) => {
           className="hidden sm:inline font-semibold text-base md:text-lg whitespace-nowrap cursor-pointer select-none"
           onClick={handleEasterEgg}
         >
-          HYTech
+          {siteName}
         </span>
         {title && (
           <div className="min-w-0 ml-1 sm:ml-4 lg:ml-16 xl:ml-24 pl-2 sm:pl-4">

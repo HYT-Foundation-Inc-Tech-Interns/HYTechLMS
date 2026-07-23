@@ -15,10 +15,12 @@ import {
   getAssignments,
   hasStudentAttempted,
   getMySubmission,
+  subscribeToClassPrefs,
 } from '../../utils/firestoreService';
 
 import { useToast } from '../../context/ToastContext';
 import { getPlaceholderColor, getGradientStyle } from '../../utils/courseColors';
+import ClassCardPersonalization from './ClassCardPersonalization';
 
 const StudentHome = () => {
   const navigate = useNavigate();
@@ -29,6 +31,7 @@ const StudentHome = () => {
   const [courseTemplates, setCourseTemplates] = useState([]);
   const [activeEnrollment, setActiveEnrollment] = useState(null);
   const [enrollments, setEnrollments] = useState([]);
+  const [classPrefs, setClassPrefs] = useState({});
   const [pendingCount, setPendingCount] = useState(0);
 
   // Class Code Join States
@@ -66,6 +69,8 @@ const StudentHome = () => {
 
     initializeData();
   }, [user?.uid]);
+
+  useEffect(() => subscribeToClassPrefs(user?.uid, setClassPrefs), [user?.uid]);
 
   // Count real pending requirements: published quizzes not yet attempted +
   // submission tasks not yet submitted, across the student's active classes.
@@ -285,37 +290,48 @@ const StudentHome = () => {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {activeEnrollments.map((enrollment) => {
-          // Look up course template via courseId to get bgImage
           const courseTemplate = courseTemplates.find(t => t.id === enrollment.courseId);
+          const preference = classPrefs[enrollment.classId] || {};
+          const effectiveImage = enrollment.bgImage || courseTemplate?.bgImage || '';
+          const effectiveColor =
+            preference.color
+            || enrollment.color
+            || getPlaceholderColor(enrollment.courseId || enrollment.classId).bg;
+          const effectiveTitle = preference.nickname || enrollment.className;
           
           return (
             <div
               key={enrollment.id}
               onClick={() => (enrollment.classId || enrollment.className) && navigate(`/student/${encodeURIComponent(enrollment.classId || enrollment.className)}`)}
-              className={`bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer border border-gray-200 ${
+              className={`relative rounded-xl border border-gray-200 bg-white shadow-md transition-all hover:border-blue-300 hover:shadow-xl ${
                 enrollment.className ? '' : 'opacity-75'
               }`}
             >
-              {/* Course Image/Header from bgImage via courseId */}
+              {/* Shared class image with the student's effective color overlay. */}
               <div 
-                className="relative h-48 overflow-hidden"
+                className="relative h-48 cursor-pointer overflow-hidden rounded-t-xl"
                 style={
-                  courseTemplate?.bgImage
+                  effectiveImage
                     ? { 
-                        backgroundImage: `url(${courseTemplate.bgImage})`, 
+                        backgroundImage: `url(${effectiveImage})`,
                         backgroundSize: 'cover', 
                         backgroundPosition: 'center' 
                       }
-                    : { background: getGradientStyle(getPlaceholderColor(enrollment.courseId).bg) }
+                    : { background: getGradientStyle(effectiveColor) }
                 }
               >
-                {/* Gradient Overlay for better text contrast if using image */}
-                {courseTemplate?.bgImage && (
-                  <div className="absolute inset-0 bg-black/20"></div>
+                {effectiveImage && (
+                  <>
+                    <div
+                      className="absolute inset-0 opacity-45"
+                      style={{ background: getGradientStyle(effectiveColor) }}
+                    />
+                    <div className="absolute inset-0 bg-black/10" />
+                  </>
                 )}
                 
                 {/* Icon for when no image */}
-                {!courseTemplate?.bgImage && (
+                {!effectiveImage && (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <BookOpen className="w-16 h-16 text-white opacity-80" />
                   </div>
@@ -325,11 +341,21 @@ const StudentHome = () => {
               {/* Class Info */}
               <div className="p-4 space-y-4 sm:p-6">
                 {/* Title */}
-                <div>
-                  <h3 className="font-bold text-navy-900 text-lg line-clamp-2">{enrollment.className}</h3>
-                  {courseTemplate?.name && (
-                    <p className="text-sm text-gray-600 mt-1 line-clamp-1">{courseTemplate.name}</p>
-                  )}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 cursor-pointer">
+                    <h3 className="font-bold text-navy-900 text-lg line-clamp-2">{effectiveTitle}</h3>
+                    {preference.nickname && (
+                      <p className="mt-1 truncate text-xs text-gray-400">Shared name: {enrollment.className}</p>
+                    )}
+                    {courseTemplate?.name && (
+                      <p className="text-sm text-gray-600 mt-1 line-clamp-1">{courseTemplate.name}</p>
+                    )}
+                  </div>
+                  <ClassCardPersonalization
+                    userId={user?.uid}
+                    classId={enrollment.classId}
+                    preference={preference}
+                  />
                 </div>
 
                 {/* Status Badge Box */}
