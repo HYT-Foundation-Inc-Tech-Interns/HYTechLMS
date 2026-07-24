@@ -40,7 +40,15 @@ const StudentCalendar = lazy(() => import('./components/student/StudentCalendar'
 function App() {
   return (
     <Router>
-      <Suspense fallback={<div className="min-h-screen bg-gray-50" aria-label="Loading page" />}>
+      <Suspense
+        fallback={(
+          <div
+            className="min-h-screen bg-gray-50"
+            role="status"
+            aria-label="Loading page"
+          />
+        )}
+      >
       <Routes>
         {/* Landing & Auth Routes */}
         <Route path="/" element={<LandingPage />} />

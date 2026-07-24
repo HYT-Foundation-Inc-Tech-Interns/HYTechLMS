@@ -1,6 +1,8 @@
 {
   "projects": {
-    "default": "hyt-global-institute-lms"
+    "default": "hyt-global-institute-lms",
+    "production": "hyt-global-institute-lms",
+    "staging": "hytech-lms-staging"
   },
   "targets": {},
   "etags": {}

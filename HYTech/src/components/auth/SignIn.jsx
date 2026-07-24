@@ -342,7 +342,10 @@ const SignIn = () => {
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             {/* Email Input */}
             <div className="relative group animate-slide-up animation-delay-300ms">
-              <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors">
+              <label
+                htmlFor="signin-email"
+                className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors"
+              >
                 Email
               </label>
               <div className="relative">
@@ -350,6 +353,7 @@ const SignIn = () => {
                   <Mail className="w-4 sm:w-5 h-4 sm:h-5" />
                 </div>
                 <input
+                  id="signin-email"
                   type="email"
                   name="email"
                   value={formData.email}
@@ -363,7 +367,10 @@ const SignIn = () => {
 
             {/* Password Input */}
             <div className="relative group animate-slide-up animation-delay-400ms">
-              <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors">
+              <label
+                htmlFor="signin-password"
+                className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 group-focus-within:text-orange-500 transition-colors"
+              >
                 Password
               </label>
               <div className="relative">
@@ -371,6 +378,7 @@ const SignIn = () => {
                   <Lock className="w-4 sm:w-5 h-4 sm:h-5" />
                 </div>
                 <input
+                  id="signin-password"
                   type={showPassword ? 'text' : 'password'}
                   name="password"
                   value={formData.password}
@@ -460,10 +468,14 @@ const SignIn = () => {
                 </p>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="forgot-password-email"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     Email Address
                   </label>
                   <input
+                    id="forgot-password-email"
                     type="email"
                     value={forgotPasswordEmail}
                     onChange={(e) => setForgotPasswordEmail(e.target.value)}

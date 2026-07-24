@@ -823,7 +823,6 @@ const Classes = () => {
                         )}
                         {course.available ? 'Make unavailable' : 'Make available'}
                       </button>
-                      <p className="mt-2 text-[10px] text-gray-400 font-mono truncate" title={course.id}>ID: {course.id}</p>
                     </div>
                   </div>
                 ))}
@@ -1032,8 +1031,8 @@ const Classes = () => {
                                 <p className="text-gray-900">{trainerName(course.trainerId)}</p>
                               </div>
                               <div>
-                                <p className="text-sm font-medium text-gray-700 mb-1">Class ID</p>
-                                <p className="text-gray-900 font-mono text-xs break-all">{course.id}</p>
+                                <p className="text-sm font-medium text-gray-700 mb-1">Linked Program</p>
+                                <p className="text-gray-900 text-sm">{programFor(course.courseId)?.name || 'Not linked'}</p>
                               </div>
                               {course.sector && (
                                 <div>
