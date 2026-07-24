@@ -4,8 +4,6 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   subscribeToNotifications,
-  deleteNotification,
-  clearAllNotifications,
   getUserProfile,
   toDate,
 } from '../utils/firestoreService';
@@ -109,19 +107,10 @@ export const useRoleNotifications = () => {
     markNotificationRead(id);
   };
 
-  const dismiss = (id) => deleteNotification(id);
-
-  const clearAll = () => {
-    if (uid) return clearAllNotifications(uid);
-    return Promise.resolve(0);
-  };
-
   return {
     notifications,
     unreadCount,
     markAllAsRead,
     markAsRead,
-    dismiss,
-    clearAll,
   };
 };

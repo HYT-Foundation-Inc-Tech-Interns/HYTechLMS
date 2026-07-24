@@ -44,6 +44,7 @@ const IncidentForms = ({ scope = 'own', canManage = false }) => {
   const { user } = useAuth();
   const { addToast } = useToast();
   const canDelete = canManage && user?.role === 'admin';
+  const canEditReport = canManage && user?.role === 'admin';
 
   const [forms, setForms] = useState(null); // null = loading
   const [activeTab, setActiveTab] = useState('all');
@@ -309,7 +310,7 @@ const IncidentForms = ({ scope = 'own', canManage = false }) => {
                       {when ? ` · ${when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
                     </p>
                   </div>
-                  {canManage && (
+                  {canEditReport && (
                     <button
                       onClick={() => openEdit(form)}
                       className="p-2 text-gray-400 hover:text-[#0B005C] hover:bg-gray-50 rounded-lg transition-colors shrink-0"

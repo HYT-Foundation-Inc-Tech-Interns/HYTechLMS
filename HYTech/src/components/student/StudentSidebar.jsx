@@ -49,10 +49,10 @@ const StudentSidebar = () => {
     const closeOnEscape = (event) => {
       if (event.key === 'Escape') setIsMobileOpen(false);
     };
-    document.addEventListener('keydown', closeOnEscape);
+    window.addEventListener('keydown', closeOnEscape, true);
     return () => {
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', closeOnEscape);
+      window.removeEventListener('keydown', closeOnEscape, true);
     };
   }, [isMobileOpen]);
 
@@ -68,9 +68,12 @@ const StudentSidebar = () => {
         try {
           setLoadingClasses(true);
           
-          // Pending join requests aren't accessible classes yet.
+          // Completed classes live exclusively in Archived Classes so graduates
+          // never reopen the live class and see post-graduation changes.
           const classesData = await Promise.all(
-            enrollments.filter((e) => e.status !== 'pending').map(async (enrollment) => {
+            enrollments
+              .filter((e) => ['active', 'ongoing'].includes(String(e.status || '').toLowerCase()))
+              .map(async (enrollment) => {
               try {
                 const classData = await getCourseByName(enrollment.className);
                 return {

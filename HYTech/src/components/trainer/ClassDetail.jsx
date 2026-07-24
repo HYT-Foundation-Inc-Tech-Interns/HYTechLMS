@@ -209,6 +209,7 @@ const ClassDetail = () => {
   const [newTaskDesc, setNewTaskDesc] = useState('');
   const [newTaskDue, setNewTaskDue] = useState('');
   const [newTaskPoints, setNewTaskPoints] = useState('100');
+  const [newTaskAllowLate, setNewTaskAllowLate] = useState(false);
   // Which upload kinds a trainee may submit for this task.
   const [newTaskUploadTypes, setNewTaskUploadTypes] = useState(['text', 'file']);
   const [creatingTask, setCreatingTask] = useState(false);
@@ -460,7 +461,9 @@ const ClassDetail = () => {
           timestamp: announcement.createdAt instanceof Date 
             ? announcement.createdAt 
             : new Date(announcement.createdAt),
-          preview: announcement.message?.substring(0, 50) + '...' || 'Announcement',
+          preview: announcement.message?.trim()
+            ? `${announcement.message.trim().substring(0, 50)}${announcement.message.trim().length > 50 ? '...' : ''}`
+            : (announcement.title || 'Announcement'),
           hasAttachments: (announcement.attachments || []).length > 0,
           createdAt: announcement.createdAt
         }));
@@ -506,7 +509,9 @@ const ClassDetail = () => {
           timestamp: announcement.createdAt instanceof Date 
             ? announcement.createdAt 
             : new Date(announcement.createdAt),
-          preview: announcement.message?.substring(0, 50) + '...' || 'Announcement',
+          preview: announcement.message?.trim()
+            ? `${announcement.message.trim().substring(0, 50)}${announcement.message.trim().length > 50 ? '...' : ''}`
+            : (announcement.title || 'Announcement'),
           hasAttachments: (announcement.attachments || []).length > 0,
           createdAt: announcement.createdAt
         }));
@@ -1922,6 +1927,8 @@ const ClassDetail = () => {
         points: parseInt(newTaskPoints, 10) || 100,
         questions: [],
         allowedUploadTypes: newTaskUploadTypes,
+        allowLateSubmissions: newTaskAllowLate,
+        acceptResponses: true,
         topicId: selectedTopicId || null,
         // Draft = kept for later (hidden from trainees); Active = published.
         status: publish ? 'active' : 'draft',
@@ -1934,6 +1941,7 @@ const ClassDetail = () => {
       setNewTaskDesc('');
       setNewTaskDue('');
       setNewTaskPoints('100');
+      setNewTaskAllowLate(false);
       setNewTaskUploadTypes(['text', 'file']);
       addToast(publish ? 'Submission task published.' : 'Submission task saved as draft.', 'success');
     } catch (error) {
@@ -3102,17 +3110,19 @@ const ClassDetail = () => {
                                   >
                                     <Eye className="w-4 h-4" />
                                   </button>
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEditingAnnouncementId(item.id);
-                                      setEditingAnnouncementText(item.message);
-                                    }}
-                                    className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600"
-                                    title="Edit your announcement"
-                                  >
-                                    <Edit2 className="w-4 h-4" />
-                                  </button>
+                                  {item.authorId === user?.uid && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingAnnouncementId(item.id);
+                                        setEditingAnnouncementText(item.message);
+                                      }}
+                                      className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600"
+                                      title="Edit your announcement"
+                                    >
+                                      <Edit2 className="w-4 h-4" />
+                                    </button>
+                                  )}
                                   <button 
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -6060,15 +6070,52 @@ const ClassDetail = () => {
                     <h3 className="font-semibold text-gray-900 mb-4">Manage Assignment</h3>
                     <div className="space-y-3">
                       <label className="flex items-center gap-3 cursor-pointer">
-                        <input type="checkbox" defaultChecked className="w-5 h-5 rounded border-gray-300 text-blue-600" />
+                        <input
+                          type="checkbox"
+                          checked={selectedAssignmentDetail.acceptResponses !== false}
+                          onChange={async (event) => {
+                            const acceptResponses = event.target.checked;
+                            try {
+                              await updateAssignment(classData.id, selectedAssignmentDetail.id, { acceptResponses });
+                              setSelectedAssignmentDetail((current) => ({ ...current, acceptResponses }));
+                              setAssignments((current) => current.map((assignment) =>
+                                assignment.id === selectedAssignmentDetail.id
+                                  ? { ...assignment, acceptResponses }
+                                  : assignment
+                              ));
+                              addToast(acceptResponses ? 'Responses enabled.' : 'Responses closed.', 'success');
+                            } catch (error) {
+                              addToast(error.message || 'Unable to update response settings.', 'error');
+                            }
+                          }}
+                          className="w-5 h-5 rounded border-gray-300 text-blue-600"
+                        />
                         <span className="text-sm text-gray-700">Allow trainees to submit responses</span>
                       </label>
                       <label className="flex items-center gap-3 cursor-pointer">
-                        <input type="checkbox" className="w-5 h-5 rounded border-gray-300 text-blue-600" />
-                        <span className="text-sm text-gray-700">Show correct answers to trainees</span>
-                      </label>
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input type="checkbox" className="w-5 h-5 rounded border-gray-300 text-blue-600" />
+                        <input
+                          type="checkbox"
+                          checked={selectedAssignmentDetail.allowLateSubmissions === true}
+                          onChange={async (event) => {
+                            const allowLateSubmissions = event.target.checked;
+                            try {
+                              await updateAssignment(classData.id, selectedAssignmentDetail.id, { allowLateSubmissions });
+                              setSelectedAssignmentDetail((current) => ({ ...current, allowLateSubmissions }));
+                              setAssignments((current) => current.map((assignment) =>
+                                assignment.id === selectedAssignmentDetail.id
+                                  ? { ...assignment, allowLateSubmissions }
+                                  : assignment
+                              ));
+                              addToast(
+                                allowLateSubmissions ? 'Late submissions allowed.' : 'Late submissions blocked.',
+                                'success'
+                              );
+                            } catch (error) {
+                              addToast(error.message || 'Unable to update late-submission settings.', 'error');
+                            }
+                          }}
+                          className="w-5 h-5 rounded border-gray-300 text-blue-600"
+                        />
                         <span className="text-sm text-gray-700">Allow late submissions</span>
                       </label>
                     </div>
@@ -6141,6 +6188,18 @@ const ClassDetail = () => {
                   <input type="number" value={newTaskPoints} onChange={(e) => setNewTaskPoints(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
               </div>
+              <label className="flex items-start gap-3 rounded-xl border border-gray-200 p-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newTaskAllowLate}
+                  onChange={(event) => setNewTaskAllowLate(event.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-700">Allow late submissions</span>
+                  <span className="block text-xs text-gray-500">When disabled, trainees cannot submit after the due date.</span>
+                </span>
+              </label>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Allowed submission types <span className="text-red-500">*</span></label>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

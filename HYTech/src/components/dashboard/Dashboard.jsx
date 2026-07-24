@@ -30,10 +30,21 @@ const ACTION_LABELS = {
   notify_trainer: 'Notified a trainer',
   create_class: 'Created a class',
   grade_posted: 'Grade posted',
+  incident_filed: 'Incident Filed',
 };
 
 const formatAction = (action) =>
-  ACTION_LABELS[action] || String(action || 'Activity').replace(/_/g, ' ');
+  ACTION_LABELS[action]
+  || String(action || 'Activity')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const normalizeRole = (value) => {
+  const role = String(value || '').trim().toLowerCase();
+  if (role === 'trainor') return 'trainer';
+  if (role === 'trainee') return 'student';
+  return role;
+};
 
 const formatTimeAgo = (timestamp) => {
   const date = toDate(timestamp);
@@ -101,10 +112,10 @@ const Dashboard = () => {
         const totalAccounts = allUsersSnapshot.size;
         const allUsers = allUsersSnapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
         const totalTrainers = allUsers.filter(
-          (u) => u.role === 'trainer' && String(u.status || 'Active').toLowerCase() === 'active'
+          (u) => normalizeRole(u.role) === 'trainer' && String(u.status || 'Active').toLowerCase() === 'active'
         ).length;
         const studentCount = allUsers.filter(
-          (u) => u.role === 'student' && String(u.status || 'Active').toLowerCase() === 'active'
+          (u) => normalizeRole(u.role) === 'student' && String(u.status || 'Active').toLowerCase() === 'active'
         ).length;
         const inactiveCount = allUsers.filter(
           (u) => String(u.status || 'Active').toLowerCase() !== 'active'
@@ -114,18 +125,27 @@ const Dashboard = () => {
         const enrollmentsCollection = collection(db, 'enrollments');
         const enrollmentsSnapshot = await getDocs(enrollmentsCollection);
         const allEnrollments = enrollmentsSnapshot.docs.map((d) => d.data());
+        const activeAccountStudentIds = new Set(
+          allUsers
+            .filter(
+              (u) =>
+                normalizeRole(u.role) === 'student'
+                && String(u.status || 'Active').toLowerCase() === 'active'
+            )
+            .map((u) => u.id)
+        );
         const activeStudentIds = new Set(
           allEnrollments
             .filter((e) => ['active', 'ongoing'].includes(String(e.status || '').toLowerCase()))
             .map((e) => e.studentId)
-            .filter(Boolean)
+            .filter((studentId) => activeAccountStudentIds.has(studentId))
         );
 
         // Update stats
         setStats([
           { label: 'Accounts', value: totalAccounts.toString(), icon: Users, color: 'blue' },
           { label: 'Active Trainors', value: totalTrainers.toString(), icon: GraduationCap, color: 'purple' },
-          { label: 'Active Trainees', value: activeStudentIds.size.toString(), icon: Users, color: 'cyan' },
+          { label: 'Trainees in Classes', value: activeStudentIds.size.toString(), icon: Users, color: 'cyan' },
           { label: 'Sectors', value: totalSectors.toString(), icon: FolderOpen, color: 'green' },
           { label: 'Courses', value: totalCourses.toString(), icon: BookOpen, color: 'teal' },
           { label: 'Classes', value: activeClasses.toString(), icon: BookOpen, color: 'orange' },
@@ -164,7 +184,9 @@ const Dashboard = () => {
         setTrainingSectors(sectorRows);
 
         // ---- Alerts panel: real actionable signals ----
-        const waitingStudents = Math.max(0, studentCount - activeStudentIds.size);
+        const waitingStudents = [...activeAccountStudentIds]
+          .filter((studentId) => !activeStudentIds.has(studentId))
+          .length;
 
         const newAlerts = [];
         if (waitingStudents > 0) {

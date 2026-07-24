@@ -30,7 +30,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, downloadAttachment, submitQuizAttempt, hasStudentAttempted, getStudentQuizAttempts, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments, submitAssignment, getMySubmission, logClassActivity, updateEnrollmentProgress, updateStudentProgress } from '../../utils/firestoreService';
+import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, downloadAttachment, submitQuizAttempt, hasStudentAttempted, getStudentQuizAttempts, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments, submitAssignment, getMySubmission, logClassActivity, updateEnrollmentProgress, updateStudentProgress, updateComment, deleteComment } from '../../utils/firestoreService';
 
 // ---- Quiz question helpers (support every trainer-builder question type) ----
 // Types: multiple-choice | true-false | dropdown (single index),
@@ -1015,6 +1015,7 @@ const StudentCourse = ({ previewMode = false }) => {
         title: assignment.title,
         author: assignment.author,
         dueDate: formattedDueDate,
+        rawDueDate: assignment.dueDate,
         duration: 0,
         totalPoints: assignment.points || 100,
         questions: assignment.questions || []
@@ -1193,7 +1194,7 @@ const StudentCourse = ({ previewMode = false }) => {
     try {
       if (!previewMode && courseId && user?.uid) {
         const hasAttempted = await hasStudentAttempted(courseId, quiz.id, user.uid);
-        if (hasAttempted) {
+        if (hasAttempted && quiz?.settings?.oneResponsePerUser) {
           setStudentHasAttempted(true);
           addToast('You have already answered this assessment and cannot retake it', 'warning');
           return;
@@ -1278,6 +1279,17 @@ const StudentCourse = ({ previewMode = false }) => {
       return;
     }
     if (!submissionItem || !courseId || !user?.uid) return;
+    const submissionDueAt = submissionItem.rawDueDate
+      ? new Date(submissionItem.rawDueDate).getTime()
+      : 0;
+    if (
+      submissionDueAt
+      && Date.now() > submissionDueAt
+      && submissionItem.allowLateSubmissions !== true
+    ) {
+      addToast('The submission deadline has passed and late work is not allowed.', 'error');
+      return;
+    }
 
     const hasText = submitTextAllowed && submissionText.trim().length > 0;
     const hasLink = submitLinkAllowed && submissionLink.trim().length > 0;
@@ -1546,10 +1558,30 @@ const StudentCourse = ({ previewMode = false }) => {
     }
     if (!selectedQuiz || !courseId || !user?.uid) return;
 
+    const unansweredRequired = (selectedQuiz.questions || []).find((question) => {
+      if (!question.required) return false;
+      const answer = answers[question.id];
+      if (Array.isArray(answer)) return answer.length === 0;
+      if (answer && typeof answer === 'object') {
+        const requiredRows = Array.isArray(question.rows) ? question.rows.length : 1;
+        return Object.keys(answer).length < requiredRows;
+      }
+      return answer === undefined || answer === null || String(answer).trim() === '';
+    });
+    if (unansweredRequired) {
+      const questionIndex = selectedQuiz.questions.findIndex((question) => question.id === unansweredRequired.id);
+      setCurrentQuestion(Math.max(0, questionIndex));
+      addToast('Answer all required questions before submitting.', 'error');
+      return;
+    }
+
     try {
       const gradedAttempt = await submitQuizAttempt(courseId, selectedQuiz.id, user.uid, {
         answers,
-        timeTaken: 0,
+        timeTaken: Math.max(
+          0,
+          (Number(selectedQuiz.duration || 0) * 60) - Number(timeRemaining || 0)
+        ),
       });
       const resultByQuestion = new Map(
         (gradedAttempt.questionResults || []).map((result) => [String(result.questionId), result])
@@ -3598,6 +3630,52 @@ const StudentCourse = ({ previewMode = false }) => {
                           {formatAbsoluteTime(comment.createdAt)}
                         </p>
                       </div>
+                      {!previewMode && user?.uid === comment.authorId && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const nextMessage = window.prompt('Edit comment', comment.message || '');
+                              if (nextMessage === null) return;
+                              try {
+                                await updateComment(
+                                  courseId,
+                                  selectedAnnouncementForComments.id,
+                                  comment.id,
+                                  nextMessage
+                                );
+                                addToast('Comment updated.', 'success');
+                              } catch (error) {
+                                addToast(error.message || 'Unable to update comment.', 'error');
+                              }
+                            }}
+                            className="p-1 rounded hover:bg-blue-50"
+                            title="Edit your comment"
+                          >
+                            <Edit2 className="w-4 h-4 text-gray-400 hover:text-blue-600" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!window.confirm('Delete this comment?')) return;
+                              try {
+                                await deleteComment(
+                                  courseId,
+                                  selectedAnnouncementForComments.id,
+                                  comment.id
+                                );
+                                addToast('Comment deleted.', 'success');
+                              } catch (error) {
+                                addToast(error.message || 'Unable to delete comment.', 'error');
+                              }
+                            }}
+                            className="p-1 rounded hover:bg-red-50"
+                            title="Delete your comment"
+                          >
+                            <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-600" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                     <p className="text-sm text-gray-700">{comment.message}</p>
                   </div>
@@ -3721,21 +3799,39 @@ const StudentCourse = ({ previewMode = false }) => {
                           <div className="flex items-start justify-between">
                             <p className="font-semibold text-gray-900 text-sm">{comment.author}</p>
                             {!previewMode && user?.uid === comment.authorId && (
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    // Delete comment logic would go here
-                                    console.log('Delete comment:', index);
-                                    addToast('Comment deleted', 'success');
-                                  } catch (error) {
-                                    console.error('Error deleting comment:', error);
-                                  }
-                                }}
-                                className="p-1 hover:bg-gray-100 rounded transition-colors"
-                                title="Delete your comment"
-                              >
-                                <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-600" />
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={async () => {
+                                    const nextMessage = window.prompt('Edit comment', comment.message || comment.text || '');
+                                    if (nextMessage === null) return;
+                                    try {
+                                      await updateComment(courseId, selectedAnnouncementDetail.id, comment.id, nextMessage);
+                                      addToast('Comment updated.', 'success');
+                                    } catch (error) {
+                                      addToast(error.message || 'Unable to update comment.', 'error');
+                                    }
+                                  }}
+                                  className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                  title="Edit your comment"
+                                >
+                                  <Edit2 className="w-4 h-4 text-gray-400 hover:text-blue-600" />
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (!window.confirm('Delete this comment?')) return;
+                                    try {
+                                      await deleteComment(courseId, selectedAnnouncementDetail.id, comment.id);
+                                      addToast('Comment deleted.', 'success');
+                                    } catch (error) {
+                                      addToast(error.message || 'Unable to delete comment.', 'error');
+                                    }
+                                  }}
+                                  className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                  title="Delete your comment"
+                                >
+                                  <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-600" />
+                                </button>
+                              </div>
                             )}
                           </div>
                           <p className="text-xs text-gray-500 mb-1">

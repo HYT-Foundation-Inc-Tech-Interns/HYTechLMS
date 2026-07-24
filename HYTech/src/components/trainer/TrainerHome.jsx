@@ -673,6 +673,7 @@ const TrainerHome = () => {
                     className="relative bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl hover:border-blue-300 transition-all cursor-pointer border border-gray-200 flex flex-col h-full"
                   >
                     {course.trainerId === user?.uid && (
+                      <>
                       <button
                         type="button"
                         onClick={(event) => {
@@ -685,6 +686,20 @@ const TrainerHome = () => {
                       >
                         <Edit2 className="h-4 w-4" />
                       </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedCourse(course);
+                          setShowArchiveModal(true);
+                        }}
+                        className="absolute right-14 top-3 z-10 rounded-lg bg-white/95 p-2 text-gray-600 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-red-50 hover:text-red-700"
+                        aria-label={`Archive ${course.name}`}
+                        title="Archive class"
+                      >
+                        <Archive className="h-4 w-4" />
+                      </button>
+                      </>
                     )}
                     <div
                       className="relative h-36 overflow-hidden"

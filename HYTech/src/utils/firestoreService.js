@@ -1981,6 +1981,18 @@ export const joinClassByCode = async (studentId, classCode) => {
     if (String(classData.status || '').toLowerCase() !== 'active') {
       throw new Error('This class is not currently open for enrollment.');
     }
+    const enrollmentDeadline =
+      classData.enrollmentDeadline || classData.expiresAt || classData.expiryDate || classData.endDate;
+    if (enrollmentDeadline) {
+      const deadline = toDate(enrollmentDeadline);
+      if (deadline && Number.isFinite(deadline.getTime()) && Date.now() > deadline.getTime()) {
+        throw new Error('This class code has expired.');
+      }
+    }
+    const capacity = Number(classData.capacity || classData.maxStudents || 0);
+    if (capacity > 0 && Number(classData.currentEnrollments || 0) >= capacity) {
+      throw new Error('This class is full.');
+    }
 
     // Admin-configurable enrollment policy (Settings → Access & Registration).
     const { access } = await getAppSettings();
@@ -2279,6 +2291,28 @@ export const updateEnrollmentStatus = async (enrollmentId, newStatus, reason = '
     
     if (newStatus === 'completed') {
       updates.completedAt = serverTimestamp();
+      // Freeze the summary graduates see. Archived Classes must not read its
+      // name/description/modules from a template that trainers can later edit.
+      if (enrollment.classId) {
+        const classSnapshot = await getDoc(doc(db, 'classes', enrollment.classId));
+        const classData = classSnapshot.exists() ? classSnapshot.data() || {} : {};
+        let templateData = {};
+        if (classData.courseId || enrollment.courseId) {
+          const templateSnapshot = await getDoc(
+            doc(db, 'courses', classData.courseId || enrollment.courseId)
+          ).catch(() => null);
+          templateData = templateSnapshot?.exists() ? templateSnapshot.data() || {} : {};
+        }
+        updates.className = classData.name || enrollment.className || 'Completed Class';
+        updates.courseName = templateData.name || enrollment.courseName || '';
+        updates.trainerName = classData.trainerName || enrollment.trainerName || '';
+        updates.description = classData.description || templateData.description || enrollment.description || '';
+        updates.subjects = Array.isArray(classData.subjects)
+          ? classData.subjects
+          : (Array.isArray(templateData.subjects) ? templateData.subjects : []);
+        updates.bgImage = classData.bgImage || enrollment.bgImage || templateData.bgImage || '';
+        updates.color = classData.color || enrollment.color || '';
+      }
     } else if (newStatus === 'terminated') {
       updates.terminatedAt = serverTimestamp();
       updates.terminationReason = reason;
@@ -2993,7 +3027,9 @@ export const getClassActivityFeed = async (classId, limitResults = 10) => {
         authorId: data.authorId,
         attachments: data.attachments || [],
         timestamp: data.createdAt?.toDate?.() || new Date(data.createdAt),
-        preview: data.message?.substring(0, 50) + '...' || 'Announcement',
+        preview: data.message?.trim()
+          ? `${data.message.trim().substring(0, 50)}${data.message.trim().length > 50 ? '...' : ''}`
+          : (data.title || 'Announcement'),
         hasAttachments: (data.attachments || []).length > 0
       });
     });
@@ -3214,6 +3250,17 @@ export const deleteComment = async (classId, announcementId, commentId) => {
     console.error('Error deleting comment:', error);
     throw error;
   }
+};
+
+export const updateComment = async (classId, announcementId, commentId, message) => {
+  const normalizedMessage = String(message || '').trim();
+  if (!normalizedMessage) throw new Error('Comment cannot be empty.');
+  const commentRef = doc(db, 'classes', classId, 'announcements', announcementId, 'comments', commentId);
+  await updateDoc(commentRef, {
+    message: normalizedMessage,
+    updatedAt: serverTimestamp(),
+  });
+  return true;
 };
 
 /**
@@ -3602,7 +3649,9 @@ export const subscribeToClassTopics = (classId, callback) => {
     }
     
     const topicsRef = collection(db, 'classes', classId, 'topics');
-    const q = query(topicsRef, orderBy('createdAt', 'asc'));
+    // Sort locally so legacy topics without an `order` field are not excluded
+    // by Firestore's orderBy query.
+    const q = query(topicsRef);
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const topics = snapshot.docs.map((doc) => ({
@@ -3611,6 +3660,12 @@ export const subscribeToClassTopics = (classId, callback) => {
         createdAt: doc.data().createdAt?.toDate?.() || new Date(doc.data().createdAt),
         updatedAt: doc.data().updatedAt?.toDate?.() || new Date(doc.data().updatedAt),
       }));
+      topics.sort((a, b) => {
+        const orderA = Number.isFinite(Number(a.order)) ? Number(a.order) : Number.MAX_SAFE_INTEGER;
+        const orderB = Number.isFinite(Number(b.order)) ? Number(b.order) : Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+        return (a.createdAt?.getTime?.() || 0) - (b.createdAt?.getTime?.() || 0);
+      });
       callback(topics);
     });
     
@@ -4002,14 +4057,22 @@ export const deleteAssignment = async (classId, assignmentId) => {
  */
 export const updateAssignment = async (classId, assignmentId, updates) => {
   try {
-    const hasPublishableQuestion = Array.isArray(updates?.questions)
-      && updates.questions.some((q) => (q?.question || '').trim().length > 0);
-
-    if (updates?.status === 'active' && updates?.type !== 'Submission' && !hasPublishableQuestion) {
-      throw new Error('Assignment must have at least one non-empty question before publishing');
-    }
-
     const assignmentRef = doc(db, 'classes', classId, 'assignments', assignmentId);
+    if (updates?.status === 'active') {
+      const existingSnapshot = await getDoc(assignmentRef);
+      if (!existingSnapshot.exists()) throw new Error('Assignment not found.');
+      const existing = existingSnapshot.data() || {};
+      const effectiveType = updates.type ?? existing.type;
+      const effectiveQuestions = Array.isArray(updates.questions)
+        ? updates.questions
+        : (Array.isArray(existing.questions) ? existing.questions : []);
+      const hasPublishableQuestion = effectiveQuestions.some(
+        (question) => String(question?.question || '').trim().length > 0
+      );
+      if (effectiveType !== 'Submission' && !hasPublishableQuestion) {
+        throw new Error('Assignment must have at least one non-empty question before publishing');
+      }
+    }
 
     await updateDoc(assignmentRef, {
       ...updates,
@@ -4039,6 +4102,25 @@ export const submitAssignment = async (
   try {
     if (!classId || !assignmentId || !studentId) {
       throw new Error('Missing class, assignment, or student id');
+    }
+    const assignmentRef = doc(db, 'classes', classId, 'assignments', assignmentId);
+    const assignmentSnapshot = await getDoc(assignmentRef);
+    if (!assignmentSnapshot.exists()) throw new Error('This submission task no longer exists.');
+    const assignment = assignmentSnapshot.data() || {};
+    if (String(assignment.status || 'draft').toLowerCase() === 'draft') {
+      throw new Error('This submission task is not published.');
+    }
+    if (assignment.acceptResponses === false) {
+      throw new Error('This submission task is no longer accepting responses.');
+    }
+    const dueAt = assignment.dueDate ? toDate(assignment.dueDate) : null;
+    if (
+      dueAt
+      && Number.isFinite(dueAt.getTime())
+      && Date.now() > dueAt.getTime()
+      && assignment.allowLateSubmissions !== true
+    ) {
+      throw new Error('The submission deadline has passed and late work is not allowed.');
     }
 
     const attachments = [];
@@ -4536,13 +4618,22 @@ export const submitQuizAttempt = async (
 export const getStudentQuizAttempts = async (classId, assessmentId, studentId) => {
   try {
     const attemptsRef = collection(db, 'classes', classId, 'assessments', assessmentId, 'attempts');
-    const q = query(attemptsRef, where('studentId', '==', studentId), orderBy('submittedAt', 'desc'));
+    // Sort in memory: combining studentId equality with submittedAt ordering
+    // otherwise requires a composite index and made successful submissions
+    // appear to fail while refreshing their attempt history.
+    const q = query(attemptsRef, where('studentId', '==', studentId));
     const snapshot = await getDocs(q);
     
-    return snapshot.docs.map((doc) => ({
+    const attempts = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
+    attempts.sort((a, b) => {
+      const aTime = toDate(a.submittedAt)?.getTime?.() || 0;
+      const bTime = toDate(b.submittedAt)?.getTime?.() || 0;
+      return bTime - aTime;
+    });
+    return attempts;
   } catch (error) {
     console.error('Error fetching quiz attempts:', error);
     throw error;
@@ -4906,6 +4997,7 @@ export default {
   deleteAnnouncement,
   storeAnnouncementAttachment,
   addCommentToAnnouncement,
+  updateComment,
   getAnnouncementComments,
   deleteComment,
   subscribeToComments,

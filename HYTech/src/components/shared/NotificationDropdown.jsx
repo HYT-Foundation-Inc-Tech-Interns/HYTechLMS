@@ -7,7 +7,9 @@ import { getNotificationDestination } from '../../utils/notificationNavigation';
 
 const NotificationDropdown = ({ role = 'student' }) => {
   const [showNotifications, setShowNotifications] = useState(false);
-  const [isViewingAll, setIsViewingAll] = useState(false);
+  // Dropdown dismissals are intentionally local to this browser tab. The
+  // underlying Firestore records remain available on the full Notifications page.
+  const [hiddenIds, setHiddenIds] = useState(() => new Set());
   const notificationRef = useRef(null);
   const navigate = useNavigate();
   const { addToast } = useToast();
@@ -17,25 +19,31 @@ const NotificationDropdown = ({ role = 'student' }) => {
     unreadCount,
     markAllAsRead,
     markAsRead,
-    dismiss,
-    clearAll,
   } = useRoleNotifications(role);
 
   const handleDismiss = (e, id) => {
     e.stopPropagation();
-    dismiss(id);
+    setHiddenIds((current) => new Set([...current, id]));
+    markAsRead(id);
   };
 
-  const handleClearAll = async () => {
-    if (notificationList.length === 0) {
-      addToast('No notifications to clear.', 'info');
+  const dropdownNotifications = notificationList.filter(
+    (notification) => !hiddenIds.has(notification.id)
+  );
+
+  const handleHideCurrent = () => {
+    if (dropdownNotifications.length === 0) {
+      addToast('No notifications to hide.', 'info');
       return;
     }
-    if (!window.confirm('Delete all notifications?')) return;
-    await clearAll();
-    addToast('Notifications cleared.', 'success');
+    setHiddenIds((current) => new Set([
+      ...current,
+      ...dropdownNotifications.map((notification) => notification.id),
+    ]));
+    markAllAsRead();
+    addToast('Current notifications hidden from this menu. They are still available in View all notifications.', 'success');
   };
-  const visibleNotifications = isViewingAll ? notificationList : notificationList.slice(0, 3);
+  const visibleNotifications = dropdownNotifications.slice(0, 3);
 
   const handleMarkAllAsRead = () => {
     if (unreadCount === 0) {
@@ -51,7 +59,6 @@ const NotificationDropdown = ({ role = 'student' }) => {
 
   const handleViewAll = () => {
     setShowNotifications(false);
-    setIsViewingAll(false);
     navigate(`${basePath}/notifications`);
   };
 
@@ -60,7 +67,6 @@ const NotificationDropdown = ({ role = 'student' }) => {
       markAsRead(notification.id);
     }
     setShowNotifications(false);
-    setIsViewingAll(false);
     navigate(getNotificationDestination(notification, role));
   };
 
@@ -69,7 +75,6 @@ const NotificationDropdown = ({ role = 'student' }) => {
     const handleClickOutside = (event) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target)) {
         setShowNotifications(false);
-        setIsViewingAll(false);
       }
     };
 
@@ -83,9 +88,6 @@ const NotificationDropdown = ({ role = 'student' }) => {
       <button
         onClick={() => {
           setShowNotifications(!showNotifications);
-          if (showNotifications) {
-            setIsViewingAll(false);
-          }
         }}
         className="relative p-2 hover:bg-white/10 rounded-lg transition-colors"
       >
@@ -103,7 +105,6 @@ const NotificationDropdown = ({ role = 'student' }) => {
             className="fixed inset-0 z-40 bg-black/20 md:hidden"
             onClick={() => {
               setShowNotifications(false);
-              setIsViewingAll(false);
             }}
           />
           
@@ -123,7 +124,6 @@ const NotificationDropdown = ({ role = 'student' }) => {
               <button 
                 onClick={() => {
                   setShowNotifications(false);
-                  setIsViewingAll(false);
                 }}
                 className="p-1 hover:bg-gray-100:bg-gray-700 rounded-lg transition-colors md:hidden"
               >
@@ -132,8 +132,8 @@ const NotificationDropdown = ({ role = 'student' }) => {
             </div>
 
             {/* Notifications List */}
-            <div className={`${isViewingAll ? 'max-h-[70vh]' : 'max-h-80'} overflow-y-auto transition-all duration-200`}>
-              {notificationList.length > 0 ? (
+            <div className="max-h-80 overflow-y-auto">
+              {dropdownNotifications.length > 0 ? (
                 visibleNotifications.map((notification) => (
                   <div
                     key={notification.id}
@@ -165,7 +165,7 @@ const NotificationDropdown = ({ role = 'student' }) => {
                       <button
                         onClick={(e) => handleDismiss(e, notification.id)}
                         className="flex-shrink-0 p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
-                        title="Dismiss"
+                        title="Hide from this menu (still available in View all notifications)"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -181,8 +181,8 @@ const NotificationDropdown = ({ role = 'student' }) => {
             </div>
 
             {/* Footer */}
-            {notificationList.length > 0 && (
-              <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-2">
+            <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-2">
+              {dropdownNotifications.length > 0 ? (
                 <div className="flex items-center gap-3">
                   <button
                     onClick={handleMarkAllAsRead}
@@ -192,20 +192,22 @@ const NotificationDropdown = ({ role = 'student' }) => {
                     Mark all as read
                   </button>
                   <button
-                    onClick={handleClearAll}
-                    className="text-sm text-red-500 hover:text-red-600 font-medium transition-colors"
+                    onClick={handleHideCurrent}
+                    className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors"
                   >
-                    Clear all
+                    Hide current
                   </button>
                 </div>
+              ) : (
+                <span />
+              )}
                 <button
-                  onClick={isViewingAll ? () => setIsViewingAll(false) : handleViewAll}
+                  onClick={handleViewAll}
                   className="text-sm text-orange-600 hover:text-orange-700:text-orange-300 font-medium transition-colors"
                 >
-                  {isViewingAll ? 'Show less' : 'View all notifications'}
+                  View all notifications
                 </button>
-              </div>
-            )}
+            </div>
           </div>
         </>
       )}

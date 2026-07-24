@@ -29,6 +29,12 @@ export const getNotificationDestination = (notification, role = 'student') => {
         : basePath;
     case 'join_approved':
       return basePath;
+    case 'announcement_posted':
+    case 'assessment_published':
+    case 'submission_published':
+      return role === 'student' && metadata.classId
+        ? `/student/${encodeURIComponent(metadata.classId)}`
+        : `${basePath}/notifications`;
     default:
       return `${basePath}/notifications`;
   }

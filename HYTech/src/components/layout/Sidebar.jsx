@@ -46,10 +46,10 @@ const Sidebar = () => {
     const closeOnEscape = (event) => {
       if (event.key === 'Escape') setIsMobileOpen(false);
     };
-    document.addEventListener('keydown', closeOnEscape);
+    window.addEventListener('keydown', closeOnEscape, true);
     return () => {
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', closeOnEscape);
+      window.removeEventListener('keydown', closeOnEscape, true);
     };
   }, [isMobileOpen]);
 

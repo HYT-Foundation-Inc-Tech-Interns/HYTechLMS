@@ -1,0 +1,75 @@
+name: QA
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    name: Build and Playwright QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: HYTech
+
+    env:
+      CI: true
+      E2E_BASE_URL: http://127.0.0.1:4173
+      E2E_ALLOW_LOCAL: true
+
+      VITE_FIREBASE_API_KEY: AIzaSyB_tKjWMkaWTfOHQRbblUEwOuBTMLA0hBg
+      VITE_FIREBASE_AUTH_DOMAIN: hytech-lms-staging.firebaseapp.com
+      VITE_FIREBASE_PROJECT_ID: hytech-lms-staging
+      VITE_FIREBASE_STORAGE_BUCKET: hytech-lms-staging.firebasestorage.app
+      VITE_FIREBASE_MESSAGING_SENDER_ID: 551641776522
+      VITE_FIREBASE_APP_ID: 1:551641776522:web:8f532131be7dd993dd0873
+
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_TRAINER_EMAIL: ${{ secrets.E2E_TRAINER_EMAIL }}
+      E2E_TRAINER_PASSWORD: ${{ secrets.E2E_TRAINER_PASSWORD }}
+      E2E_STUDENT_EMAIL: ${{ secrets.E2E_STUDENT_EMAIL }}
+      E2E_STUDENT_PASSWORD: ${{ secrets.E2E_STUDENT_PASSWORD }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: HYTech/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build staging application
+        run: npm run build:staging
+
+      - name: Run Playwright QA
+        run: npm run test:e2e
+
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-evidence-${{ github.run_number }}
+          path: |
+            HYTech/playwright-report
+            HYTech/test-results
+          if-no-files-found: ignore
+          retention-days: 14

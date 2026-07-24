@@ -72,10 +72,14 @@ const StudentArchivedCourses = () => {
             classId: enrollment.classId,
             sharedName: enrollment.className || 'Graduated Class',
             name: enrollment.className || 'Graduated Class',
-            courseName: courseTemplate?.name || enrollment.courseName || 'Course',
+            // Enrollment values are the graduation-time record. Template data
+            // is fallback-only for older enrollments that never stored it.
+            courseName: enrollment.courseName || courseTemplate?.name || 'Course',
             instructor: enrollment.trainerName || 'Not recorded',
-            description: courseTemplate?.description || enrollment.description || '',
-            modules: Array.isArray(courseTemplate?.subjects) ? courseTemplate.subjects : [],
+            description: enrollment.description || courseTemplate?.description || '',
+            modules: Array.isArray(enrollment.subjects)
+              ? enrollment.subjects
+              : (Array.isArray(courseTemplate?.subjects) ? courseTemplate.subjects : []),
             completedDate: enrollment.completedAt 
               ? new Date(enrollment.completedAt.toDate?.() || enrollment.completedAt).toLocaleDateString('en-US', {
                   year: 'numeric',

@@ -46,7 +46,10 @@ const NOTIFICATION_TYPES = [
   { key: 'id_request_approved', label: 'ID request approved', description: 'When an ID request is approved.' },
   { key: 'id_request_rejected', label: 'ID request rejected', description: 'When an ID request is rejected.' },
   { key: 'id_request_completed', label: 'ID request completed', description: 'When an ID card is marked ready/completed.' },
-  { key: 'incident_filed', label: 'Incident filed', description: 'When an incident form is filed (sent to admins).' },
+  { key: 'incident_filed', label: 'Incident Filed', description: 'When an incident form is filed (sent to admins).' },
+  { key: 'announcement_posted', label: 'Announcement posted', description: 'When a new class announcement is posted.' },
+  { key: 'assessment_published', label: 'Assessment published', description: 'When an assessment becomes available to trainees.' },
+  { key: 'submission_published', label: 'Submission task published', description: 'When a new submission task becomes available.' },
   { key: 'grade_posted', label: 'Grade posted', description: 'When a grade is posted for a trainee.' },
   { key: 'role_changed', label: 'Role changed', description: 'When an admin changes a user’s role.' },
   { key: 'cotrainer_added', label: 'Co-trainer added', description: 'When a trainer is added as a co-trainer.' },
@@ -98,7 +101,7 @@ const Settings = () => {
   const tabs = [
     { id: 'account', label: 'Account', icon: User },
     { id: 'access', label: 'Access & Registration', icon: Shield },
-    { id: 'branding', label: 'Branding', icon: ImageIcon },
+    { id: 'branding', label: 'Organization Branding', icon: ImageIcon },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'maintenance', label: 'Maintenance', icon: Database },
   ];
@@ -692,7 +695,7 @@ const Settings = () => {
     return (
       <div className="space-y-8">
         <div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-1">Branding</h3>
+          <h3 className="text-lg font-semibold text-gray-800 mb-1">Organization Branding</h3>
           <p className="text-sm text-gray-500 mb-6">Name, welcome message, and logo shown across the app and on the sign-in page.</p>
 
           <div className="space-y-6">

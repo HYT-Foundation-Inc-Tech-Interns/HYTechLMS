@@ -6,7 +6,7 @@ import { useUserSettings } from '../../context/useUserSettings';
 import { compressAvatarImageToBase64 } from '../../utils/avatarStorage';
 import MyCoursesCard from '../shared/MyCoursesCard';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateProfile } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { getUserPrivateProfile, saveUserPrivateProfile } from '../../utils/firestoreService';
 import { normalizePhMobile, toStoredPhMobile } from '../../utils/phone';
@@ -192,6 +192,22 @@ const handleSave = async () => {
           console.warn('Could not synchronize Firebase display name:', profileError?.message);
         }
       }
+      // Keep denormalized trainer labels on existing classes/enrollments in
+      // sync so the new name appears outside Settings immediately.
+      const [classSnapshot, enrollmentSnapshot] = await Promise.all([
+        getDocs(query(collection(db, 'classes'), where('trainerId', '==', uid))),
+        getDocs(query(collection(db, 'enrollments'), where('trainerId', '==', uid))),
+      ]);
+      const nameBatch = writeBatch(db);
+      classSnapshot.docs.forEach((snapshot) => {
+        nameBatch.update(snapshot.ref, { trainerName: fullName, updatedAt: serverTimestamp() });
+      });
+      enrollmentSnapshot.docs.forEach((snapshot) => {
+        nameBatch.update(snapshot.ref, { trainerName: fullName, updatedAt: serverTimestamp() });
+      });
+      if (classSnapshot.size + enrollmentSnapshot.size > 0) {
+        await nameBatch.commit();
+      }
       // Sensitive PII to the owner/admin-only private subcollection.
       await saveUserPrivateProfile(uid, {
         phone: toStoredPhMobile(profileForm.phone),
@@ -258,7 +274,20 @@ const handleSave = async () => {
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'security', label: 'Security', icon: Shield },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
   ];
+
+  const handleNotificationSave = async () => {
+    setIsSaving(true);
+    try {
+      await saveSettings({ trainerNotificationSettings });
+      addToast('Notification settings saved.', 'success');
+    } catch {
+      addToast('Unable to save notification settings.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const renderProfileSettings = () => (
     <div className="space-y-6">
@@ -588,6 +617,7 @@ const handleSave = async () => {
         <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6">
           {activeTab === 'profile' && renderProfileSettings()}
           {activeTab === 'security' && renderSecuritySettings()}
+          {activeTab === 'notifications' && renderNotificationSettings()}
         </div>
 
         {activeTab === 'profile' && (
@@ -615,6 +645,18 @@ const handleSave = async () => {
             )}
           </button>
         </div>}
+        {activeTab === 'notifications' && (
+          <div className="flex justify-end mt-6">
+            <button
+              onClick={handleNotificationSave}
+              disabled={isSaving}
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {isSaving ? 'Saving...' : 'Save Notifications'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

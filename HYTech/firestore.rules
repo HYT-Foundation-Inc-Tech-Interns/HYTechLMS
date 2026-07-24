@@ -92,7 +92,14 @@ service cloud.firestore {
 
     function classMember(classId) {
       return canUseLms()
-        && exists(/databases/$(database)/documents/classes/$(classId)/members/$(request.auth.uid));
+        && (
+          exists(/databases/$(database)/documents/classes/$(classId)/members/$(request.auth.uid))
+          || (
+            exists(/databases/$(database)/documents/enrollments/$(classId + '_' + request.auth.uid))
+            && get(/databases/$(database)/documents/enrollments/$(classId + '_' + request.auth.uid))
+              .data.get('status', '') in ['active', 'ongoing', 'completed']
+          )
+        );
     }
 
     // Keys added/removed/changed by an update.
@@ -294,12 +301,20 @@ service cloud.firestore {
           // Student may submit only as themselves, and may never write grade fields.
           allow create: if isSelf(studentId)
             && request.resource.data.get('studentId', '') == request.auth.uid
+            && get(/databases/$(database)/documents/classes/$(classId)/assignments/$(assignmentId))
+              .data.get('status', 'draft') != 'draft'
+            && get(/databases/$(database)/documents/classes/$(classId)/assignments/$(assignmentId))
+              .data.get('acceptResponses', true) != false
             && !request.resource.data.keys().hasAny(['grade', 'feedback', 'gradedBy', 'gradedAt']);
 
           // Trainer/admin grade; student may update their own work but not grade fields.
           allow update: if isAdmin()
             || classTrainer(classId)
             || (isSelf(studentId)
+                && get(/databases/$(database)/documents/classes/$(classId)/assignments/$(assignmentId))
+                  .data.get('status', 'draft') != 'draft'
+                && get(/databases/$(database)/documents/classes/$(classId)/assignments/$(assignmentId))
+                  .data.get('acceptResponses', true) != false
                 && !changedKeys().hasAny(['grade', 'feedback', 'gradedBy', 'gradedAt']));
 
           allow delete: if isAdmin() || classTrainer(classId);
@@ -313,8 +328,9 @@ service cloud.firestore {
         allow create: if isAdmin()
           || classTrainer(classId)
           || (classMember(classId) && request.resource.data.get('authorId', '') == request.auth.uid);
+        // Staff may remove inappropriate trainee posts, but only the original
+        // author (or an admin correction) may rewrite announcement content.
         allow update: if isAdmin()
-          || classTrainer(classId)
           || (canUseLms() && resource.data.get('authorId', '') == request.auth.uid);
         allow delete: if isAdmin()
           || classTrainer(classId)
@@ -322,9 +338,11 @@ service cloud.firestore {
 
         match /comments/{commentId} {
           allow read: if isAdmin() || classTrainer(classId) || classMember(classId);
-          allow create: if classMember(classId)
+          allow create: if (isAdmin() || classTrainer(classId) || classMember(classId))
             && request.resource.data.get('authorId', '') == request.auth.uid;
-          allow update: if false;
+          allow update: if canUseLms()
+            && resource.data.get('authorId', '') == request.auth.uid
+            && changedKeys().hasOnly(['message', 'updatedAt']);
           allow delete: if isAdmin()
             || classTrainer(classId)
             || (canUseLms() && resource.data.get('authorId', '') == request.auth.uid);
@@ -430,8 +448,13 @@ service cloud.firestore {
       allow create: if canUseLms()
         && request.resource.data.get('filedBy', '') == request.auth.uid;
 
-      // Status handling by staff only.
-      allow update: if isAdmin() || isTrainer();
+      // Admins may correct a report. Trainers may only move it through the
+      // review workflow; they cannot rewrite the incident details.
+      allow update: if isAdmin()
+        || (isTrainer()
+          && changedKeys().hasOnly(['status', 'reviewedBy', 'reviewedAt'])
+          && request.resource.data.get('status', '') in ['open', 'reviewed', 'resolved']
+          && request.resource.data.get('reviewedBy', '') == request.auth.uid);
 
       allow delete: if isAdmin();
     }

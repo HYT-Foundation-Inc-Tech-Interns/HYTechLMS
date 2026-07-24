@@ -24,7 +24,13 @@ service firebase.storage {
 
     function classMember(classId) {
       return canUseLms()
-        && firestore.exists(/databases/(default)/documents/classes/$(classId)/members/$(request.auth.uid));
+        && (
+          firestore.exists(/databases/(default)/documents/classes/$(classId)/members/$(request.auth.uid))
+          || (
+            firestore.exists(/databases/(default)/documents/enrollments/$(classId + '_' + request.auth.uid))
+            && firestore.get(/databases/(default)/documents/enrollments/$(classId + '_' + request.auth.uid)).data.status in ['active', 'ongoing', 'completed']
+          )
+        );
     }
 
     match /userAvatars/{uid}/{role}/{fileName} {

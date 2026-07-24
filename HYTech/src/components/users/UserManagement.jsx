@@ -61,6 +61,17 @@ const buildTempPassword = (lastName, birthDate) => {
   return `HyT!${token.slice(0, 12)}`;
 };
 
+const isPlausibleEmail = (value) =>
+  /^[^\s@]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z]{2,63})+$/
+    .test(String(value || '').trim());
+
+const normalizeRole = (value) => {
+  const role = String(value || 'student').trim().toLowerCase();
+  if (role === 'trainor') return 'trainer';
+  if (role === 'trainee') return 'student';
+  return role;
+};
+
 const UserManagement = () => {
   const { addToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
@@ -155,7 +166,7 @@ const UserManagement = () => {
 
                 const mappedUsers = snapshot.docs.map((docSnap, index) => {
                   const data = docSnap.data();
-                  const normalizedRole = (data.role || 'student').toString();
+                  const normalizedRole = normalizeRole(data.role);
                   const prettyRole =
                     normalizedRole.charAt(0).toUpperCase() + normalizedRole.slice(1).toLowerCase();
                   const structuredName = [
@@ -342,6 +353,10 @@ const UserManagement = () => {
       addToast('Temporary password must be at least 8 characters.', 'error');
       return;
     }
+    if (!isPlausibleEmail(newUser.email)) {
+      addToast('Enter a valid email with a real domain format (for example, name@example.com).', 'error');
+      return;
+    }
 
     setIsAddingUser(true);
 
@@ -511,6 +526,10 @@ const UserManagement = () => {
 
   const handleUpdateUser = async (e) => {
     e.preventDefault();
+    if (!isPlausibleEmail(editUser.email)) {
+      addToast('Enter a valid email with a real domain format (for example, name@example.com).', 'error');
+      return;
+    }
     const fullName = [
       editUser.firstName,
       editUser.middleName,

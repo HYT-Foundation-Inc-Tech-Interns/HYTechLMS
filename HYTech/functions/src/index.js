@@ -47,6 +47,46 @@ const writeActivityLog = async (userId, action, entityType, entityId, metadata =
   });
 };
 
+const notificationTypeEnabled = async (type) => {
+  const settings = await db.collection('config').doc('appSettings').get();
+  return settings.data()?.notifications?.[type] !== false;
+};
+
+const notifyActiveClassTrainees = async (
+  classId,
+  { type, text, fromUid = '', metadata = {} }
+) => {
+  if (!(await notificationTypeEnabled(type))) return 0;
+  const enrollments = await db.collection('enrollments')
+    .where('classId', '==', classId)
+    .get();
+  const recipientIds = [...new Set(
+    enrollments.docs
+      .filter((entry) =>
+        ['active', 'ongoing'].includes(String(entry.data()?.status || '').toLowerCase())
+      )
+      .map((entry) => entry.data()?.studentId)
+      .filter(Boolean)
+  )];
+  if (recipientIds.length === 0) return 0;
+
+  const writer = db.bulkWriter();
+  recipientIds.forEach((toUid) => {
+    writer.create(db.collection('notifications').doc(), {
+      toUid,
+      type,
+      text,
+      fromUid,
+      fromName: '',
+      metadata: { classId, ...metadata },
+      unread: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+  await writer.close();
+  return recipientIds.length;
+};
+
 const wipeCourseContent = async (parentRef) => {
   for (const collectionName of CONTENT_COLLECTIONS) {
     await db.recursiveDelete(parentRef.collection(collectionName));
@@ -238,6 +278,10 @@ const toClassDirectoryEntry = (classData = {}) => ({
   status: classData.status || 'Inactive',
   bgImage: classData.bgImage || '',
   color: classData.color || '',
+  capacity: Number(classData.capacity || classData.maxStudents || 0),
+  currentEnrollments: Number(classData.currentEnrollments || 0),
+  enrollmentDeadline: classData.enrollmentDeadline || '',
+  expiresAt: classData.expiresAt || classData.expiryDate || classData.endDate || '',
   updatedAt: admin.firestore.FieldValue.serverTimestamp(),
 });
 
@@ -250,6 +294,87 @@ exports.syncClassDirectory = boundedFunctions.firestore
       return;
     }
     await directoryRef.set(toClassDirectoryEntry(change.after.data()), { merge: false });
+  });
+
+exports.notifyTraineesOnAnnouncement = boundedFunctions.firestore
+  .document('classes/{classId}/announcements/{announcementId}')
+  .onCreate(async (snapshot, context) => {
+    const announcement = snapshot.data() || {};
+    if (announcement.authorId) {
+      const author = await db.collection('users').doc(announcement.authorId).get();
+      if (!['admin', 'trainer'].includes(String(author.data()?.role || '').toLowerCase())) return;
+    }
+    const message = String(announcement.message || announcement.title || 'New announcement').trim();
+    await notifyActiveClassTrainees(context.params.classId, {
+      type: 'announcement_posted',
+      text: `New announcement: ${message.slice(0, 140)}`,
+      fromUid: announcement.authorId || '',
+      metadata: {
+        announcementId: context.params.announcementId,
+        link: `/student/${encodeURIComponent(context.params.classId)}`,
+      },
+    });
+  });
+
+exports.notifyTraineesOnAssessmentPublish = boundedFunctions.firestore
+  .document('classes/{classId}/assessments/{assessmentId}')
+  .onWrite(async (change, context) => {
+    if (!change.after.exists) return;
+    const before = change.before.exists ? change.before.data() || {} : {};
+    const after = change.after.data() || {};
+    const wasPublished = String(before.status || 'draft').toLowerCase() !== 'draft';
+    const isPublished = String(after.status || 'draft').toLowerCase() !== 'draft';
+    if (wasPublished || !isPublished) return;
+    await notifyActiveClassTrainees(context.params.classId, {
+      type: 'assessment_published',
+      text: `New assessment published: ${after.title || 'Assessment'}`,
+      fromUid: after.authorId || '',
+      metadata: {
+        assessmentId: context.params.assessmentId,
+        link: `/student/${encodeURIComponent(context.params.classId)}?tab=assessments`,
+      },
+    });
+  });
+
+exports.notifyTraineesOnAssignmentPublish = boundedFunctions.firestore
+  .document('classes/{classId}/assignments/{assignmentId}')
+  .onWrite(async (change, context) => {
+    if (!change.after.exists) return;
+    const before = change.before.exists ? change.before.data() || {} : {};
+    const after = change.after.data() || {};
+    const wasPublished = String(before.status || 'draft').toLowerCase() !== 'draft';
+    const isPublished = String(after.status || 'draft').toLowerCase() !== 'draft';
+    if (wasPublished || !isPublished) return;
+    const isSubmission = after.type === 'Submission';
+    await notifyActiveClassTrainees(context.params.classId, {
+      type: isSubmission ? 'submission_published' : 'assessment_published',
+      text: `${isSubmission ? 'New submission task' : 'New assignment'}: ${after.title || 'Untitled'}`,
+      fromUid: after.authorId || '',
+      metadata: {
+        assignmentId: context.params.assignmentId,
+        link: `/student/${encodeURIComponent(context.params.classId)}?tab=${isSubmission ? 'assignments' : 'assessments'}`,
+      },
+    });
+  });
+
+exports.syncClassEnrollmentCount = boundedFunctions.firestore
+  .document('enrollments/{enrollmentId}')
+  .onWrite(async (change) => {
+    const beforeClassId = change.before.exists ? change.before.data()?.classId : '';
+    const afterClassId = change.after.exists ? change.after.data()?.classId : '';
+    const classIds = [...new Set([beforeClassId, afterClassId].filter(Boolean))];
+    await Promise.all(classIds.map(async (classId) => {
+      const enrollments = await db.collection('enrollments')
+        .where('classId', '==', classId)
+        .get();
+      const activeCount = enrollments.docs.filter((entry) =>
+        ['active', 'ongoing'].includes(String(entry.data()?.status || '').toLowerCase())
+      ).length;
+      await db.collection('classes').doc(classId).set({
+        currentEnrollments: activeCount,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }));
   });
 
 exports.migrateClassDirectory = boundedFunctions.https.onCall(async (_data, context) => {
@@ -433,6 +558,32 @@ exports.submitAssessmentAttempt = boundedFunctions.https.onCall(async (data, con
 
   const answerKey = keySnap.exists ? keySnap.data()?.answers || {} : {};
   const questions = Array.isArray(assessment.questions) ? assessment.questions : [];
+  const unansweredRequired = questions.find((question) => {
+    if (question?.required !== true) return false;
+    const answer = answers[question.id];
+    if (Array.isArray(answer)) return answer.length === 0;
+    if (answer && typeof answer === 'object') {
+      const rowCount = Array.isArray(question.rows) ? question.rows.length : 1;
+      return Object.keys(answer).length < rowCount;
+    }
+    return answer === undefined || answer === null || String(answer).trim() === '';
+  });
+  if (unansweredRequired) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'Answer all required questions before submitting.'
+    );
+  }
+  const timeLimitSeconds = Math.max(
+    0,
+    Number(assessment.timeLimit || assessment.duration || 0) * 60
+  );
+  if (timeLimitSeconds > 0 && timeTaken > timeLimitSeconds + 30) {
+    throw new functions.https.HttpsError(
+      'deadline-exceeded',
+      'The assessment time limit has expired.'
+    );
+  }
   const showCorrectAnswers =
     assessment.settings?.showCorrectAnswers
     ?? assessment.showCorrectAnswers
