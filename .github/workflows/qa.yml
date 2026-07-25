@@ -16,6 +16,7 @@ jobs:
     name: Build and Playwright QA
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    environment: staging-qa
 
     defaults:
       run:
@@ -40,6 +41,14 @@ jobs:
       E2E_TRAINER_PASSWORD: ${{ secrets.E2E_TRAINER_PASSWORD }}
       E2E_STUDENT_EMAIL: ${{ secrets.E2E_STUDENT_EMAIL }}
       E2E_STUDENT_PASSWORD: ${{ secrets.E2E_STUDENT_PASSWORD }}
+      E2E_UNENROLLED_STUDENT_EMAIL: ${{ secrets.E2E_UNENROLLED_STUDENT_EMAIL }}
+      E2E_UNENROLLED_STUDENT_PASSWORD: ${{ secrets.E2E_UNENROLLED_STUDENT_PASSWORD }}
+      E2E_PENDING_STUDENT_EMAIL: ${{ secrets.E2E_PENDING_STUDENT_EMAIL }}
+      E2E_PENDING_STUDENT_PASSWORD: ${{ secrets.E2E_PENDING_STUDENT_PASSWORD }}
+      E2E_DISABLED_STUDENT_EMAIL: ${{ secrets.E2E_DISABLED_STUDENT_EMAIL }}
+      E2E_DISABLED_STUDENT_PASSWORD: ${{ secrets.E2E_DISABLED_STUDENT_PASSWORD }}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+      GOOGLE_CLOUD_PROJECT: hytech-lms-staging
 
     steps:
       - name: Check out repository
@@ -59,6 +68,20 @@ jobs:
         run: |
           npx playwright install --with-deps chromium firefox webkit
           npx playwright install msedge
+
+      - name: Configure temporary staging credentials
+        shell: bash
+        run: |
+          credential_path="$RUNNER_TEMP/hytech-lms-staging-qa.json"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$credential_path"
+          chmod 600 "$credential_path"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$credential_path" >> "$GITHUB_ENV"
+
+      - name: Seed and verify disposable staging fixtures
+        run: |
+          npm run qa:seed:identities
+          npm run qa:seed:data
+          npm run qa:verify-seed
 
       - name: Build staging application
         run: npm run build:staging
