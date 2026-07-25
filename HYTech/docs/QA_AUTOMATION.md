@@ -33,6 +33,43 @@ E2E_STUDENT_PASSWORD=...
 
 The file is ignored by Git. Never commit test passwords.
 
+## Staging fixture commands
+
+Set the service-account path in each new PowerShell session:
+
+```powershell
+$env:GOOGLE_APPLICATION_CREDENTIALS = "C:\Users\Gbert\.credentials\hytech-lms-staging-qa.json"
+$env:GOOGLE_CLOUD_PROJECT = "hytech-lms-staging"
+```
+
+Then provision and verify the reusable staging fixtures:
+
+```powershell
+npm run qa:seed:identities
+npm run qa:credentials
+npm run qa:seed:data
+npm run qa:verify-seed
+```
+
+`qa:credentials` preserves existing generated passwords in the ignored
+`.env.e2e.local` file, so rerunning it is safe and does not unexpectedly rotate
+CI credentials. `qa:seed:data` uses stable document IDs and merge writes.
+
+Cleanup is a dry run by default:
+
+```powershell
+npm run qa:cleanup
+```
+
+Only after reviewing its count should transient run data be removed:
+
+```powershell
+npm run qa:cleanup:apply
+```
+
+Cleanup never removes the stable seed and selects only records explicitly marked
+as QA-managed with a non-stable run ID.
+
 ## Automated on every push and pull request
 
 - Staging production build and preview startup.
