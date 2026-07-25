@@ -7,10 +7,14 @@ import {
 } from './helpers.js';
 
 const viewports = [
+  { name: 'small-phone', width: 320, height: 568 },
   { name: 'small-phone', width: 360, height: 800 },
-  { name: 'phone', width: 390, height: 844 },
-  { name: 'tablet', width: 768, height: 1024 },
+  { name: 'iphone', width: 390, height: 844 },
+  { name: 'large-android', width: 412, height: 915 },
+  { name: 'tablet-portrait', width: 768, height: 1024 },
+  { name: 'tablet-landscape', width: 1024, height: 768 },
   { name: 'laptop', width: 1366, height: 768 },
+  { name: 'desktop', width: 1440, height: 900 },
   { name: 'desktop', width: 1920, height: 1080 },
 ];
 

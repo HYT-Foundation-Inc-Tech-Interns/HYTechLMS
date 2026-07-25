@@ -25,6 +25,7 @@ jobs:
       CI: true
       E2E_BASE_URL: http://127.0.0.1:4173
       E2E_ALLOW_LOCAL: true
+      E2E_REQUIRE_AUTH: true
 
       VITE_FIREBASE_API_KEY: AIzaSyB_tKjWMkaWTfOHQRbblUEwOuBTMLA0hBg
       VITE_FIREBASE_AUTH_DOMAIN: hytech-lms-staging.firebaseapp.com
@@ -54,14 +55,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: |
+          npx playwright install --with-deps chromium firefox webkit
+          npx playwright install msedge
 
       - name: Build staging application
         run: npm run build:staging
 
-      - name: Run Playwright QA
-        run: npm run test:e2e
+      - name: Validate full-QA credentials
+        run: node scripts/validate-qa-env.mjs
+
+      - name: Run Chrome, Edge, Firefox, and Safari-engine QA
+        run: npm run test:qa:full
 
       - name: Upload failure evidence
         if: failure()

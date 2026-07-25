@@ -15,7 +15,14 @@ const roleRoutes = {
 
 for (const [role, routes] of Object.entries(roleRoutes)) {
   test.describe(`${role} smoke tests`, () => {
-    test.skip(!hasCredentials(role), `Set ${role.toUpperCase()} E2E credentials to enable this suite.`);
+    const credentialsAvailable = hasCredentials(role);
+    if (process.env.E2E_REQUIRE_AUTH === 'true' && !credentialsAvailable) {
+      throw new Error(
+        `Full QA requires E2E_${role.toUpperCase()}_EMAIL and `
+        + `E2E_${role.toUpperCase()}_PASSWORD. Refusing to silently skip ${role} coverage.`
+      );
+    }
+    test.skip(!credentialsAvailable, `Set ${role.toUpperCase()} E2E credentials to enable this suite.`);
 
     test.beforeEach(async ({ page }) => {
       await signInAs(page, role);

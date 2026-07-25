@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
 import { existsSync } from 'node:fs';
 
 if (existsSync('.env.e2e.local')) {
@@ -35,7 +35,6 @@ export default defineConfig({
   ],
   use: {
     baseURL,
-    browserName: 'chromium',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -43,6 +42,24 @@ export default defineConfig({
     navigationTimeout: 20_000,
     reducedMotion: 'reduce',
   },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'edge',
+      use: { ...devices['Desktop Edge'], channel: 'msedge' },
+    },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+    },
+  ],
   webServer: isLocal
     ? {
         command: 'npm run preview -- --host 127.0.0.1 --port 4173',
