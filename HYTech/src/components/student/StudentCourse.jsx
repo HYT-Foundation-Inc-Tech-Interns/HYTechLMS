@@ -34,8 +34,9 @@ import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAss
 
 // ---- Quiz question helpers (support every trainer-builder question type) ----
 // Types: multiple-choice | true-false | dropdown (single index),
-// checkbox (index array), short-answer (string), paragraph (free text, not
-// auto-graded), linear-scale (number), multiple-grid (row->column map).
+// checkbox/checkboxes (index array), short-answer (string), paragraph (free
+// text, not auto-graded), linear-scale (number), multiple-grid (row->column
+// map), checkbox-grid (row->column-index-array map).
 const isBlankAnswer = (v) =>
   v === undefined ||
   v === null ||
@@ -45,12 +46,29 @@ const isBlankAnswer = (v) =>
 
 const normalizeText = (v) => String(v ?? '').trim().toLowerCase();
 
+const isRequiredAnswerMissing = (question, answer) => {
+  if (!question?.required) return false;
+  if (question.type === 'checkbox-grid') {
+    const rowCount = Array.isArray(question.rows) ? question.rows.length : 0;
+    return rowCount === 0 || Array.from({ length: rowCount }, (_, index) => (
+      !Array.isArray(answer?.[index]) || answer[index].length === 0
+    )).some(Boolean);
+  }
+  if (question.type === 'multiple-grid') {
+    const rowCount = Array.isArray(question.rows) ? question.rows.length : 0;
+    return rowCount === 0 || Array.from({ length: rowCount }, (_, index) => (
+      answer?.[index] === undefined || answer?.[index] === null
+    )).some(Boolean);
+  }
+  return isBlankAnswer(answer);
+};
+
 // Grade one question. Paragraph has no objective answer, so it is left for the
 // trainer to review (autoGraded: false) rather than auto-marked wrong.
 const gradeQuestion = (q, answer) => {
   const type = q?.type || 'multiple-choice';
   if (type === 'paragraph') return { isCorrect: false, autoGraded: false };
-  if (type === 'checkbox') {
+  if (type === 'checkbox' || type === 'checkboxes') {
     const correct = Array.isArray(q.correctAnswer) ? q.correctAnswer : [];
     const given = Array.isArray(answer) ? answer : [];
     const a = [...correct].map(String).sort().join(',');
@@ -74,6 +92,18 @@ const gradeQuestion = (q, answer) => {
     const allMatch = rows.length > 0 && rows.every((_, rIdx) => String(given[rIdx]) === String(key[rIdx]));
     return { isCorrect: hasKey && allMatch, autoGraded: true };
   }
+  if (type === 'checkbox-grid') {
+    const rows = Array.isArray(q.rows) ? q.rows : [];
+    const key = q.correctAnswer && typeof q.correctAnswer === 'object' ? q.correctAnswer : {};
+    const given = answer && typeof answer === 'object' ? answer : {};
+    const allMatch = rows.length > 0 && rows.every((_, rIdx) => {
+      const expected = Array.isArray(key[rIdx]) ? key[rIdx] : [];
+      const actual = Array.isArray(given[rIdx]) ? given[rIdx] : [];
+      return expected.length > 0
+        && [...expected].map(String).sort().join(',') === [...actual].map(String).sort().join(',');
+    });
+    return { isCorrect: allMatch, autoGraded: true };
+  }
   // single-choice: multiple-choice, true-false, dropdown
   return { isCorrect: !isBlankAnswer(answer) && answer === q.correctAnswer, autoGraded: true };
 };
@@ -83,7 +113,7 @@ const describeAnswer = (q, answer) => {
   const type = q?.type || 'multiple-choice';
   const opts = Array.isArray(q?.options) ? q.options : [];
   if (isBlankAnswer(answer)) return 'Not answered';
-  if (type === 'checkbox') {
+  if (type === 'checkbox' || type === 'checkboxes') {
     return (Array.isArray(answer) ? answer : []).map((i) => opts[i]).filter(Boolean).join(', ') || 'Not answered';
   }
   if (type === 'short-answer' || type === 'paragraph' || type === 'linear-scale') return String(answer);
@@ -93,6 +123,15 @@ const describeAnswer = (q, answer) => {
     const given = answer && typeof answer === 'object' ? answer : {};
     return rows.map((row, rIdx) => `${row}: ${cols[given[rIdx]] ?? '—'}`).join('; ');
   }
+  if (type === 'checkbox-grid') {
+    const rows = Array.isArray(q.rows) ? q.rows : [];
+    const cols = Array.isArray(q.columns) ? q.columns : [];
+    const given = answer && typeof answer === 'object' ? answer : {};
+    return rows.map((row, rIdx) => {
+      const selected = (Array.isArray(given[rIdx]) ? given[rIdx] : []).map((i) => cols[i]).filter(Boolean);
+      return `${row}: ${selected.join(', ') || '—'}`;
+    }).join('; ');
+  }
   return opts[answer] ?? 'Not answered';
 };
 
@@ -100,7 +139,7 @@ const describeAnswer = (q, answer) => {
 const describeCorrect = (q) => {
   const type = q?.type || 'multiple-choice';
   const opts = Array.isArray(q?.options) ? q.options : [];
-  if (type === 'checkbox') {
+  if (type === 'checkbox' || type === 'checkboxes') {
     return (Array.isArray(q.correctAnswer) ? q.correctAnswer : []).map((i) => opts[i]).filter(Boolean).join(', ');
   }
   if (type === 'short-answer' || type === 'linear-scale') return String(q.correctAnswer ?? '');
@@ -109,6 +148,15 @@ const describeCorrect = (q) => {
     const cols = Array.isArray(q.columns) ? q.columns : [];
     const key = q.correctAnswer && typeof q.correctAnswer === 'object' ? q.correctAnswer : {};
     return rows.map((row, rIdx) => `${row}: ${cols[key[rIdx]] ?? '—'}`).join('; ');
+  }
+  if (type === 'checkbox-grid') {
+    const rows = Array.isArray(q.rows) ? q.rows : [];
+    const cols = Array.isArray(q.columns) ? q.columns : [];
+    const key = q.correctAnswer && typeof q.correctAnswer === 'object' ? q.correctAnswer : {};
+    return rows.map((row, rIdx) => {
+      const selected = (Array.isArray(key[rIdx]) ? key[rIdx] : []).map((i) => cols[i]).filter(Boolean);
+      return `${row}: ${selected.join(', ') || '—'}`;
+    }).join('; ');
   }
   return opts[q.correctAnswer] ?? '';
 };
@@ -149,7 +197,9 @@ const StudentCourse = ({ previewMode = false }) => {
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [studentHasAttempted, setStudentHasAttempted] = useState(false);
   const [quizAttemptHistory, setQuizAttemptHistory] = useState([]);
+  const [isSubmittingQuiz, setIsSubmittingQuiz] = useState(false);
   const quizContainerRef = useRef(null);
+  const submittingQuizRef = useRef(false);
   const commentUnsubscribeRef = useRef(null);
 
   // Firestore data state
@@ -381,8 +431,8 @@ const StudentCourse = ({ previewMode = false }) => {
     if (previewMode) return;
     const loadAssessmentAttempts = async () => {
       const assessableItems = [
-        ...(firestoreAssessments || []),
-        ...(firestoreAssignments || []),
+        ...(firestoreAssessments || []).map((item) => ({ ...item, kind: 'assessment' })),
+        ...(firestoreAssignments || []).map((item) => ({ ...item, kind: 'assignment' })),
       ];
 
       if (!courseId || !user?.uid || !assessableItems.length) return;
@@ -400,7 +450,7 @@ const StudentCourse = ({ previewMode = false }) => {
             if (sub) submittedIds.add(itemId);
             continue;
           }
-          const attempts = await getStudentQuizAttempts(courseId, itemId, user.uid);
+          const attempts = await getStudentQuizAttempts(courseId, itemId, user.uid, item.kind);
           if (attempts && attempts.length > 0) {
             attemptedIds.add(itemId);
 
@@ -990,17 +1040,67 @@ const StudentCourse = ({ previewMode = false }) => {
   // Only show published materials
   const publishedCourseMaterials = courseMaterials.filter((material) => material.isPublished === true);
 
+  // Deadlines carry a time of day. Legacy items may still hold a bare
+  // "YYYY-MM-DD", which Date() reads as UTC midnight — resolve those to the
+  // local edge of the day instead so the gates here match the server's.
+  const boundaryTime = (value, edge) => {
+    if (!value) return 0;
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return new Date(`${value}T${edge === 'end' ? '23:59:59.999' : '00:00:00.000'}`).getTime();
+    }
+    const date = value?.toDate ? value.toDate() : new Date(value);
+    return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+  };
+  const formatDueDate = (value) => {
+    const at = boundaryTime(value, 'end');
+    if (!at) return 'No due date';
+    return new Date(at).toLocaleString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  // An assessment/task is open once its "available from" moment has passed
+  // (or if none is set). Trainees can't start it before then.
+  const isAssessmentOpen = (item) =>
+    !item?.availableDate || boundaryTime(item.availableDate, 'start') <= Date.now();
+  const availableFromLabel = (item) => {
+    const at = boundaryTime(item?.availableDate, 'start');
+    if (!at) return '';
+    return new Date(at).toLocaleString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  // Past the deadline the assessment is closed for good: the trainee can no
+  // longer open it, and an unattempted one is scored 0. The Cloud Function
+  // rejects late attempts too, so this gate only spares them a dead end.
+  const isPastDue = (item) => {
+    const dueAt = boundaryTime(item?.rawDueDate, 'end');
+    return dueAt > 0 && Date.now() > dueAt;
+  };
+
   // Use ONLY real Firestore data - combine assessments AND assignments
   const quizzes = [
     // Assessments (quizzes)
     ...(firestoreAssessments || []).map(assessment => {
-      const formattedDueDate = assessment.dueDate ? new Date(assessment.dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : 'No due date';
+      const formattedDueDate = formatDueDate(assessment.dueDate);
       return {
         ...assessment,
         id: assessment.id,
+        // Which collection this item came from. Attempts hang off that same
+        // document, so every attempt lookup has to carry it.
+        kind: 'assessment',
         title: assessment.title,
         author: assessment.author,
         dueDate: formattedDueDate,
+        // Keep the unformatted deadline: the display string can't be compared.
+        rawDueDate: assessment.dueDate,
         duration: assessment.timeLimit || 0,
         totalPoints: assessment.totalPoints,
         questions: assessment.questions || []
@@ -1008,10 +1108,11 @@ const StudentCourse = ({ previewMode = false }) => {
     }),
     // Assignments (regular assignments)
     ...(firestoreAssignments || []).map(assignment => {
-      const formattedDueDate = assignment.dueDate ? new Date(assignment.dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : 'No due date';
+      const formattedDueDate = formatDueDate(assignment.dueDate);
       return {
         ...assignment,
         id: assignment.id,
+        kind: 'assignment',
         title: assignment.title,
         author: assignment.author,
         dueDate: formattedDueDate,
@@ -1058,15 +1159,6 @@ const StudentCourse = ({ previewMode = false }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attemptedAssessmentIds, submittedTaskIds, assessmentItems.length, submissionTasks.length, enrollmentData?.id, courseId, user?.uid, previewMode]);
 
-  // An assessment/task is open once its "available from" date has passed
-  // (or if none is set). Trainees can't start it before then.
-  const isAssessmentOpen = (item) =>
-    !item?.availableDate || new Date(item.availableDate).getTime() <= Date.now();
-  const availableFromLabel = (item) =>
-    item?.availableDate
-      ? new Date(item.availableDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
-      : '';
-
   // Timer effect
   useEffect(() => {
     let interval;
@@ -1074,7 +1166,7 @@ const StudentCourse = ({ previewMode = false }) => {
       interval = setInterval(() => {
         setTimeRemaining(prev => {
           if (prev <= 1) {
-            handleSubmitQuiz();
+            handleSubmitQuiz({ allowIncomplete: true });
             return 0;
           }
           return prev - 1;
@@ -1190,10 +1282,15 @@ const StudentCourse = ({ previewMode = false }) => {
       addToast(`This assessment opens ${availableFromLabel(quiz)}.`, 'info');
       return;
     }
+    // Deadline passed and never attempted — it stays closed and is scored 0.
+    if (!previewMode && isPastDue(quiz) && !isQuizTaken(quiz.id)) {
+      addToast(`The deadline passed on ${quiz.dueDate}. This assessment is scored 0.`, 'error');
+      return;
+    }
     // Check if student has already attempted this assessment
     try {
       if (!previewMode && courseId && user?.uid) {
-        const hasAttempted = await hasStudentAttempted(courseId, quiz.id, user.uid);
+        const hasAttempted = await hasStudentAttempted(courseId, quiz.id, user.uid, quiz.kind);
         if (hasAttempted && quiz?.settings?.oneResponsePerUser) {
           setStudentHasAttempted(true);
           addToast('You have already answered this assessment and cannot retake it', 'warning');
@@ -1215,6 +1312,8 @@ const StudentCourse = ({ previewMode = false }) => {
   };
 
   const handleBeginQuiz = () => {
+    submittingQuizRef.current = false;
+    setIsSubmittingQuiz(false);
     setQuizStarted(true);
     setTimeRemaining(previewMode ? 0 : Number(selectedQuiz.duration || 0) * 60);
     if (!previewMode) enterFullscreen();
@@ -1379,6 +1478,18 @@ const StudentCourse = ({ previewMode = false }) => {
     });
   };
 
+  // Checkbox grids store a { [rowIndex]: columnIndex[] } map.
+  const handleCheckboxGridToggle = (questionId, rowIndex, colIndex) => {
+    setAnswers(prev => {
+      const current = prev[questionId] && typeof prev[questionId] === 'object' ? prev[questionId] : {};
+      const row = Array.isArray(current[rowIndex]) ? current[rowIndex] : [];
+      const nextRow = row.includes(colIndex)
+        ? row.filter(index => index !== colIndex)
+        : [...row, colIndex];
+      return { ...prev, [questionId]: { ...current, [rowIndex]: nextRow } };
+    });
+  };
+
   // Render the answer input for a question, by type.
   const renderQuestionInput = (q) => {
     if (!q) return null;
@@ -1412,7 +1523,7 @@ const StudentCourse = ({ previewMode = false }) => {
     }
 
     // Multi-select checkboxes
-    if (type === 'checkbox') {
+    if (type === 'checkbox' || type === 'checkboxes') {
       const selectedList = Array.isArray(answer) ? answer : [];
       return options.map((option, index) => {
         const selected = selectedList.includes(index);
@@ -1547,37 +1658,75 @@ const StudentCourse = ({ previewMode = false }) => {
       );
     }
 
+    if (type === 'checkbox-grid') {
+      const rows = Array.isArray(q.rows) ? q.rows : [];
+      const columns = Array.isArray(q.columns) ? q.columns : [];
+      const gridAnswer = answer && typeof answer === 'object' ? answer : {};
+      return (
+        <div className="overflow-x-auto">
+          <table className="min-w-[36rem] w-full border-collapse">
+            <thead>
+              <tr>
+                <th className="p-2" />
+                {columns.map((col, cIdx) => (
+                  <th key={cIdx} className="p-2 text-sm font-medium text-gray-600 text-center">{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rIdx) => (
+                <tr key={rIdx} className="border-t border-gray-100">
+                  <td className="p-2 text-sm font-medium text-gray-700">{row}</td>
+                  {columns.map((_, cIdx) => {
+                    const selected = Array.isArray(gridAnswer[rIdx]) && gridAnswer[rIdx].includes(cIdx);
+                    return (
+                      <td key={cIdx} className="p-2 text-center">
+                        <button
+                          onClick={() => handleCheckboxGridToggle(q.id, rIdx, cIdx)}
+                          className={`w-6 h-6 rounded-md border-2 flex items-center justify-center mx-auto ${
+                            selected ? 'border-orange-500 bg-orange-500' : 'border-gray-300 hover:border-orange-300'
+                          }`}
+                          aria-label={`${row} - ${columns[cIdx]}`}
+                        >
+                          {selected && <CheckCircle className="w-4 h-4 text-white" />}
+                        </button>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
     // Unknown type — show a note rather than crashing.
     return <p className="text-sm text-gray-400 italic">This question type isn’t supported yet.</p>;
   };
 
-  const handleSubmitQuiz = async () => {
+  const handleSubmitQuiz = async ({ allowIncomplete = false } = {}) => {
     if (previewMode) {
       addToast('Trainee preview is read-only. No attempt was submitted.', 'info');
       return;
     }
-    if (!selectedQuiz || !courseId || !user?.uid) return;
+    if (!selectedQuiz || !courseId || !user?.uid || submittingQuizRef.current) return;
 
-    const unansweredRequired = (selectedQuiz.questions || []).find((question) => {
-      if (!question.required) return false;
-      const answer = answers[question.id];
-      if (Array.isArray(answer)) return answer.length === 0;
-      if (answer && typeof answer === 'object') {
-        const requiredRows = Array.isArray(question.rows) ? question.rows.length : 1;
-        return Object.keys(answer).length < requiredRows;
-      }
-      return answer === undefined || answer === null || String(answer).trim() === '';
-    });
-    if (unansweredRequired) {
+    const unansweredRequired = (selectedQuiz.questions || [])
+      .find((question) => isRequiredAnswerMissing(question, answers[question.id]));
+    if (unansweredRequired && !allowIncomplete) {
       const questionIndex = selectedQuiz.questions.findIndex((question) => question.id === unansweredRequired.id);
       setCurrentQuestion(Math.max(0, questionIndex));
       addToast('Answer all required questions before submitting.', 'error');
       return;
     }
 
+    submittingQuizRef.current = true;
+    setIsSubmittingQuiz(true);
     try {
       const gradedAttempt = await submitQuizAttempt(courseId, selectedQuiz.id, user.uid, {
         answers,
+        timedOut: allowIncomplete,
         timeTaken: Math.max(
           0,
           (Number(selectedQuiz.duration || 0) * 60) - Number(timeRemaining || 0)
@@ -1603,7 +1752,12 @@ const StudentCourse = ({ previewMode = false }) => {
       setAttemptedAssessmentIds((prev) => new Set([...prev, String(selectedQuiz.id)]));
       setQuizSubmitted(true);
 
-      const refreshedAttempts = await getStudentQuizAttempts(courseId, selectedQuiz.id, user.uid);
+      const refreshedAttempts = await getStudentQuizAttempts(
+        courseId,
+        selectedQuiz.id,
+        user.uid,
+        gradedAttempt.kind || selectedQuiz.kind
+      );
       const normalizedRefreshed = (refreshedAttempts || []).map((attempt) => {
         const submittedDate = attempt.submittedAt?.toDate
           ? attempt.submittedAt.toDate()
@@ -1633,8 +1787,11 @@ const StudentCourse = ({ previewMode = false }) => {
     } catch (error) {
       console.error('Error saving quiz attempt:', error);
       addToast(error?.message || 'Failed to submit assessment', 'error');
+    } finally {
+      submittingQuizRef.current = false;
+      setIsSubmittingQuiz(false);
+      exitFullscreen();
     }
-    exitFullscreen();
   };
 
   const handleCloseQuiz = () => {
@@ -1805,8 +1962,18 @@ const StudentCourse = ({ previewMode = false }) => {
   // Calculate stats from Firestore data
   const attemptedQuizCount = new Set(quizAttemptHistory.map((attempt) => attempt.quizId)).size;
   const passedAttemptCount = quizAttemptHistory.filter((attempt) => attempt.passed).length;
-  const averageQuizScore = quizAttemptHistory.length
-    ? Math.round(quizAttemptHistory.reduce((total, attempt) => total + attempt.score, 0) / quizAttemptHistory.length)
+  // A missed deadline is a real 0, not a blank: it counts against the average
+  // the same way a failed attempt does. Nothing is written to Firestore for it —
+  // the zero is derived from "no attempt + deadline passed" wherever it's shown.
+  const missedAssessments = assessmentItems.filter(
+    (quiz) => !isQuizTaken(quiz.id) && isPastDue(quiz)
+  );
+  const scoredAssessmentCount = quizAttemptHistory.length + missedAssessments.length;
+  const averageQuizScore = scoredAssessmentCount
+    ? Math.round(
+        quizAttemptHistory.reduce((total, attempt) => total + attempt.score, 0)
+        / scoredAssessmentCount
+      )
     : 0;
   const bestQuizScore = quizAttemptHistory.length
     ? Math.max(...quizAttemptHistory.map((attempt) => attempt.score))
@@ -2284,10 +2451,14 @@ const StudentCourse = ({ previewMode = false }) => {
                   key={quiz.id}
                   className="p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors relative"
                 >
-                  {/* "Already Answered" Badge */}
-                  {isQuizTaken(quiz.id) && (
+                  {/* "Already Answered" Badge, or a missed deadline scored 0 */}
+                  {isQuizTaken(quiz.id) ? (
                     <div className="absolute top-3 right-3 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">
                       ✓ Answered
+                    </div>
+                  ) : isPastDue(quiz) && (
+                    <div className="absolute top-3 right-3 bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-semibold">
+                      Missed · 0%
                     </div>
                   )}
                   
@@ -2342,6 +2513,11 @@ const StudentCourse = ({ previewMode = false }) => {
                       <div className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-500 rounded-lg font-medium cursor-not-allowed">
                         <Timer className="w-4 h-4" />
                         Opens {availableFromLabel(quiz)}
+                      </div>
+                    ) : isPastDue(quiz) ? (
+                      <div className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 text-red-600 rounded-lg font-medium cursor-not-allowed">
+                        <XCircle className="w-4 h-4" />
+                        Deadline passed
                       </div>
                     ) : quiz.type === 'Submission' ? (
                       <button
@@ -2598,12 +2774,18 @@ const StudentCourse = ({ previewMode = false }) => {
                     <tbody className="divide-y divide-gray-100">
                       {assessmentItems.map((quiz) => {
                         const isCompleted = isQuizTaken(quiz.id);
+                        // Never attempted and past the deadline: permanently 0.
+                        const isMissed = !isCompleted && isPastDue(quiz);
                         const attempt = quizAttemptHistory.find((a) => String(a.quizId) === String(quiz.id) || String(a.id) === String(quiz.id));
-                        const statusColor = isCompleted 
+                        const statusColor = isCompleted
                           ? (attempt?.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')
+                          : isMissed
+                          ? 'bg-red-100 text-red-700'
                           : 'bg-orange-100 text-orange-700';
-                        const statusText = isCompleted 
+                        const statusText = isCompleted
                           ? (attempt?.passed ? 'Passed' : 'Not Passed')
+                          : isMissed
+                          ? 'Missed'
                           : 'Not Started';
 
                         return (
@@ -2651,6 +2833,8 @@ const StudentCourse = ({ previewMode = false }) => {
                                 <span className={`font-bold text-lg ${attempt.passed ? 'text-green-600' : 'text-red-600'}`}>
                                   {attempt.score}%
                                 </span>
+                              ) : isMissed ? (
+                                <span className="font-bold text-lg text-red-600">0%</span>
                               ) : (
                                 <span className="text-gray-400">-</span>
                               )}
@@ -2660,6 +2844,11 @@ const StudentCourse = ({ previewMode = false }) => {
                                 <span className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-500">
                                   <Clock className="w-4 h-4" />
                                   Opens {availableFromLabel(quiz)}
+                                </span>
+                              ) : isMissed ? (
+                                <span className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium bg-red-50 text-red-600">
+                                  <XCircle className="w-4 h-4" />
+                                  Closed
                                 </span>
                               ) : quiz.type === 'Submission' ? (
                                 <button
@@ -3087,18 +3276,24 @@ const StudentCourse = ({ previewMode = false }) => {
               >
                 Close
               </button>
-              <button
-                onClick={() => {
-                  if (isQuizTaken(selectedQuizInfo?.id)) return;
-                  setShowQuizInfoModal(false);
-                  openAssessment(selectedQuizInfo);
-                }}
-                disabled={isQuizTaken(selectedQuizInfo?.id)}
-                className="px-5 py-2.5 bg-orange-500 text-white rounded-xl font-medium hover:bg-orange-600 transition-colors flex items-center gap-2 disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-gray-300"
-              >
-                {isQuizTaken(selectedQuizInfo?.id) ? <CheckCircle className="w-4 h-4" /> : selectedQuizInfo?.type === 'Submission' ? <FileText className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                {isQuizTaken(selectedQuizInfo?.id) ? 'Taken' : selectedQuizInfo?.type === 'Submission' ? 'Open & Submit' : 'Start Quiz'}
-              </button>
+              {(() => {
+                const taken = isQuizTaken(selectedQuizInfo?.id);
+                const missed = !taken && isPastDue(selectedQuizInfo);
+                return (
+                  <button
+                    onClick={() => {
+                      if (taken || missed) return;
+                      setShowQuizInfoModal(false);
+                      openAssessment(selectedQuizInfo);
+                    }}
+                    disabled={taken || missed}
+                    className="px-5 py-2.5 bg-orange-500 text-white rounded-xl font-medium hover:bg-orange-600 transition-colors flex items-center gap-2 disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:bg-gray-300"
+                  >
+                    {taken ? <CheckCircle className="w-4 h-4" /> : missed ? <XCircle className="w-4 h-4" /> : selectedQuizInfo?.type === 'Submission' ? <FileText className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    {taken ? 'Taken' : missed ? 'Missed — scored 0' : selectedQuizInfo?.type === 'Submission' ? 'Open & Submit' : 'Start Quiz'}
+                  </button>
+                );
+              })()}
             </div>
           </div>
           </div>
@@ -3435,11 +3630,12 @@ const StudentCourse = ({ previewMode = false }) => {
                         
                         {currentQuestion === selectedQuiz.questions.length - 1 ? (
                           <button
-                            onClick={previewMode ? handleCloseQuiz : handleSubmitQuiz}
-                            className="px-6 py-2.5 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center gap-2"
+                            onClick={previewMode ? handleCloseQuiz : () => handleSubmitQuiz()}
+                            disabled={!previewMode && isSubmittingQuiz}
+                            className="px-6 py-2.5 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <CheckCircle className="w-5 h-5" />
-                            {previewMode ? 'Finish Preview' : 'Submit Quiz'}
+                            {previewMode ? 'Finish Preview' : isSubmittingQuiz ? 'Submitting…' : 'Submit Quiz'}
                           </button>
                         ) : (
                           <button

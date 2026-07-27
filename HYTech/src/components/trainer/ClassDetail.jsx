@@ -4,7 +4,7 @@ import { BookOpen, Check, Users, Save, ExternalLink, Calendar, Send, FileText, V
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
-import { getCourseByName, getCourseTemplateById, getCourseEnrollmentsWithAvatars, getSectorById, getAnnouncements, subscribeToAnnouncements, createAnnouncement, getModules, createModule, getAssessments, createAssessment, updateAnnouncement, deleteAnnouncement, updateAssessment, deleteAssessment, getClassActivityFeed, storeAnnouncementAttachment, uploadMaterial, compressAndStoreFile, addCommentToAnnouncement, getAnnouncementComments, deleteComment, subscribeToComments, downloadAttachment, createAssignment, updateAssignment, getAssignments, removeEnrollment, approveEnrollment, getUserProfile, subscribeToEnrollments, getAssessmentAttempts, createMaterial, getClassMaterials, publishMaterial, unpublishMaterial, updateMaterial, deleteMaterial, createTopic, getClassTopics, subscribeToClassTopics, updateTopic, deleteTopic, publishTopic, unpublishTopic, updateEnrollmentStatus, getAssignmentSubmissions, gradeSubmission, getClassGradebook, getStudents, adminAddStudentToClass, getTrainers, addCoTrainer, removeCoTrainer, transferClassOwnership, getClassActivity, toDate, reorderTopics, setModuleItemTopic, deleteAssignment } from '../../utils/firestoreService';
+import { getCourseByName, getCourseTemplateById, getCourseEnrollmentsWithAvatars, getSectorById, getAnnouncements, subscribeToAnnouncements, createAnnouncement, getModules, createModule, getAssessments, createAssessment, updateAnnouncement, deleteAnnouncement, updateAssessment, deleteAssessment, getClassActivityFeed, storeAnnouncementAttachment, uploadMaterial, compressAndStoreFile, addCommentToAnnouncement, getAnnouncementComments, deleteComment, subscribeToComments, downloadAttachment, createAssignment, updateAssignment, getAssignments, removeEnrollment, approveEnrollment, getUserProfile, subscribeToEnrollments, getAssessmentAttempts, createMaterial, getClassMaterials, publishMaterial, unpublishMaterial, updateMaterial, deleteMaterial, createTopic, getClassTopics, subscribeToClassTopics, updateTopic, deleteTopic, publishTopic, unpublishTopic, updateEnrollmentStatus, getAssignmentSubmissions, gradeSubmission, gradeAssessmentAttempt, getClassGradebook, getStudents, adminAddStudentToClass, getTrainers, addCoTrainer, removeCoTrainer, transferClassOwnership, getClassActivity, toDate, reorderTopics, setModuleItemTopic, deleteAssignment } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
 
 const FORM_QUESTION_TYPES = [
@@ -61,6 +61,51 @@ const ClassDetail = () => {
     return d;
   };
   const maxDateStr = getMaxDate().toISOString().split('T')[0];
+  // Deadlines carry a time of day, so the pickers are datetime-local and every
+  // value is formatted/parsed in the trainer's own timezone. Building these
+  // strings from getFullYear()/getMonth() rather than toISOString() matters:
+  // toISOString() is UTC, so it reports the wrong calendar day for part of
+  // every day (and a bare "YYYY-MM-DD" parses as UTC midnight, which is how a
+  // quiz due "today" used to land in the past the moment it was published).
+  const pad2 = (part) => String(part).padStart(2, '0');
+  const toDateTimeInputValue = (value, defaultTime = '') => {
+    if (!value) return '';
+    // A legacy date-only string has no time to preserve — keep it in local time
+    // by appending the default rather than letting Date() read it as UTC.
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return defaultTime ? `${value}T${defaultTime}` : value;
+    }
+    const date = value?.toDate ? value.toDate() : new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+      + `T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  };
+  // datetime-local gives "YYYY-MM-DDTHH:mm", which Date() reads as local time —
+  // exactly what we want. Date-only input (legacy drafts) gets the fallback
+  // time applied locally so it never silently means UTC midnight.
+  const dateTimeInputToDate = (value, defaultTime = '23:59') => {
+    if (!value) return null;
+    const withTime = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T${defaultTime}` : value;
+    const date = new Date(withTime);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+  const localDateTimeNow = () => toDateTimeInputValue(new Date());
+  const maxDateTimeStr = `${maxDateStr}T23:59`;
+  // Deadlines are shown with their time so trainees see the real cutoff.
+  const formatDeadline = (value, fallback = '—') => {
+    const date = dateTimeInputToDate(
+      typeof value === 'string' ? value : null,
+      '23:59'
+    ) || (value?.toDate ? value.toDate() : value ? new Date(value) : null);
+    if (!date || Number.isNaN(date.getTime())) return fallback;
+    return date.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
   const [classData, setClassData] = useState(null);
   const [courseData, setCourseData] = useState(null);
   const [sectorName, setSectorName] = useState('N/A');
@@ -200,6 +245,7 @@ const ClassDetail = () => {
   // Submission-type assignment grading
   const [itemSubmissions, setItemSubmissions] = useState([]);
   const [gradingStudentId, setGradingStudentId] = useState(null);
+  const [gradingAttemptId, setGradingAttemptId] = useState(null);
   const [gradeInput, setGradeInput] = useState('');
   const [feedbackInput, setFeedbackInput] = useState('');
   const [savingGrade, setSavingGrade] = useState(false);
@@ -636,27 +682,27 @@ const ClassDetail = () => {
     try {
       let formattedDueDate = null;
       if (formBuilderDueDate) {
-        const dueDate = new Date(formBuilderDueDate);
+        // The trainer picks the exact closing time; a date with no time falls
+        // back to 11:59 PM local, matching what the field used to imply.
+        const dueDate = dateTimeInputToDate(formBuilderDueDate, '23:59');
         // Cap at one year out (and reject nonsensical typed-in years).
-        if (isNaN(dueDate.getTime()) || dueDate > getMaxDate()) {
+        if (!dueDate || dueDate > getMaxDate()) {
           addToast('Please enter a due date within the next year.', 'error');
           setIsSubmittingItem(false);
           return;
         }
-        dueDate.setHours(23, 59, 0, 0);
         formattedDueDate = dueDate.toISOString();
       }
 
       // Available-from date (when students can start). Defaults to now (open).
       let formattedAvailableDate = null;
       if (formBuilderAvailableDate) {
-        const availableDate = new Date(formBuilderAvailableDate);
-        if (isNaN(availableDate.getTime()) || availableDate > getMaxDate()) {
+        const availableDate = dateTimeInputToDate(formBuilderAvailableDate, '00:00');
+        if (!availableDate || availableDate > getMaxDate()) {
           addToast('Please enter an available date within the next year.', 'error');
           setIsSubmittingItem(false);
           return;
         }
-        availableDate.setHours(0, 0, 0, 0);
         formattedAvailableDate = availableDate.toISOString();
       }
 
@@ -1851,12 +1897,19 @@ const ClassDetail = () => {
     setItemSubmissions([]);
     setAssessmentResponses([]);
     setGradingStudentId(null);
+    setGradingAttemptId(null);
     try {
       if (!classData?.id) return;
       if (assessment.type === 'Submission') {
         await loadItemSubmissions(assessment);
       } else {
-        const responses = await getAssessmentAttempts(classData.id, assessment.id);
+        // Form-builder quizzes live in `assignments`; builder quizzes in
+        // `assessments`. Attempts hang off whichever document authored them.
+        const responses = await getAssessmentAttempts(
+          classData.id,
+          assessment.id,
+          assessment.kind || (assessments.some((a) => a.id === assessment.id) ? 'assessment' : 'assignment')
+        );
         setAssessmentResponses(responses || []);
       }
     } catch (error) {
@@ -1869,8 +1922,43 @@ const ClassDetail = () => {
 
   const startGrading = (submission) => {
     setGradingStudentId(submission.studentId);
-    setGradeInput(submission.grade ?? '');
-    setFeedbackInput(submission.feedback || '');
+    setGradeInput(submission.status === 'graded' ? submission.grade ?? '' : '');
+    setFeedbackInput(submission.status === 'graded' ? submission.feedback || '' : '');
+  };
+
+  const startAttemptGrading = (response) => {
+    setGradingAttemptId(response.id);
+    setGradeInput(response.earnedPoints ?? '');
+    setFeedbackInput(response.feedback || '');
+  };
+
+  const handleSaveAttemptGrade = async (response) => {
+    if (!classData?.id || !selectedAssessmentForResponses) return;
+    const points = Number(gradeInput);
+    if (!Number.isFinite(points) || points < 0 || points > Number(response.totalPoints || 0)) {
+      addToast(`Enter a score from 0 to ${response.totalPoints || 0}.`, 'error');
+      return;
+    }
+    setSavingGrade(true);
+    try {
+      await gradeAssessmentAttempt(
+        classData.id,
+        selectedAssessmentForResponses.id,
+        response.id,
+        selectedAssessmentForResponses.kind
+          || (assessments.some((item) => item.id === selectedAssessmentForResponses.id)
+            ? 'assessment'
+            : 'assignment'),
+        { earnedPoints: points, feedback: feedbackInput }
+      );
+      addToast('Response grade saved.', 'success');
+      setGradingAttemptId(null);
+      await openAssessmentResponses(selectedAssessmentForResponses);
+    } catch (error) {
+      addToast(error.message || 'Unable to save response grade.', 'error');
+    } finally {
+      setSavingGrade(false);
+    }
   };
 
   const handleSaveGrade = async (submission) => {
@@ -1908,12 +1996,17 @@ const ClassDetail = () => {
       addToast('Pick at least one allowed submission type.', 'error');
       return;
     }
+    // Store an absolute instant, not the raw "YYYY-MM-DD" the picker hands
+    // back: a bare date string is read as UTC midnight everywhere downstream,
+    // which made a task due today already overdue.
+    let formattedTaskDue = null;
     if (newTaskDue) {
-      const parsedDue = new Date(newTaskDue);
-      if (isNaN(parsedDue.getTime()) || parsedDue > getMaxDate()) {
+      const parsedDue = dateTimeInputToDate(newTaskDue, '23:59');
+      if (!parsedDue || parsedDue > getMaxDate()) {
         addToast('Please enter a due date within the next year.', 'error');
         return;
       }
+      formattedTaskDue = parsedDue.toISOString();
     }
     setCreatingTask(true);
     try {
@@ -1923,7 +2016,7 @@ const ClassDetail = () => {
         type: 'Submission',
         author: user?.displayName || user?.email || 'Trainor',
         authorId: user?.uid,
-        dueDate: newTaskDue || null,
+        dueDate: formattedTaskDue,
         points: parseInt(newTaskPoints, 10) || 100,
         questions: [],
         allowedUploadTypes: newTaskUploadTypes,
@@ -2111,14 +2204,6 @@ const ClassDetail = () => {
   const openAssessmentEditor = (assessment) => {
     if (!assessment?.id || assessment._source !== 'assessment') return;
 
-    const toDateInputValue = (value) => {
-      if (!value) return '';
-      const date = value?.toDate ? value.toDate() : new Date(value);
-      if (Number.isNaN(date.getTime())) return '';
-      const pad = (part) => String(part).padStart(2, '0');
-      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-    };
-
     const timeLimit = Number(assessment.timeLimit || assessment.duration || 0);
     setCurrentQuizDraftId(assessment.id);
     setCurrentQuizStatus(String(assessment.status || 'active'));
@@ -2129,8 +2214,8 @@ const ClassDetail = () => {
     setQuizTimeLimit(timeLimit > 0 ? String(timeLimit) : '');
     setQuizPoints(String(assessment.totalPoints || 100));
     setQuizPassingScore(String(assessment.passingScore ?? 60));
-    setQuizAvailableDate(toDateInputValue(assessment.availableDate));
-    setQuizDueDate(toDateInputValue(assessment.dueDate));
+    setQuizAvailableDate(toDateTimeInputValue(assessment.availableDate, '00:00'));
+    setQuizDueDate(toDateTimeInputValue(assessment.dueDate, '23:59'));
     setQuizQuestions(assessment.questions || []);
     setAssessmentSettings((prev) => ({ ...prev, ...(assessment.settings || {}) }));
     setShowQuizModal(true);
@@ -2255,8 +2340,8 @@ const ClassDetail = () => {
         passingScore,
         questions: quizQuestions,
         settings: assessmentSettings,
-        availableDate: quizAvailableDate ? new Date(new Date(quizAvailableDate).setHours(0, 0, 0, 0)).toISOString() : null,
-        dueDate: quizDueDate ? new Date(new Date(quizDueDate).setHours(23, 59, 0, 0)).toISOString() : null,
+        availableDate: dateTimeInputToDate(quizAvailableDate, '00:00')?.toISOString() || null,
+        dueDate: dateTimeInputToDate(quizDueDate, '23:59')?.toISOString() || null,
         author: user?.displayName || 'Trainor',
         authorId: user?.uid,
         createdByAvatar: null,
@@ -2318,8 +2403,8 @@ const ClassDetail = () => {
         passingScore,
         questions: quizQuestions,
         settings: assessmentSettings,
-        availableDate: quizAvailableDate ? new Date(new Date(quizAvailableDate).setHours(0, 0, 0, 0)).toISOString() : null,
-        dueDate: quizDueDate ? new Date(new Date(quizDueDate).setHours(23, 59, 0, 0)).toISOString() : null,
+        availableDate: dateTimeInputToDate(quizAvailableDate, '00:00')?.toISOString() || null,
+        dueDate: dateTimeInputToDate(quizDueDate, '23:59')?.toISOString() || null,
         status: 'active'
       });
 
@@ -3946,10 +4031,11 @@ const ClassDetail = () => {
         {/* People Tab */}
         {activeTab === 'students' && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-              <div className="rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white p-5 shadow-sm">
+            {/* Two columns on phones so the roster is not five cards down. */}
+            <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-5 gap-3 sm:gap-4">
+              <div className="rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white p-4 sm:p-5 shadow-sm">
                 <p className="text-white/70 text-sm">Total Participants</p>
-                <div className="mt-2 text-4xl font-bold">
+                <div className="mt-2 text-3xl sm:text-4xl font-bold">
                   {enrollments.filter((enrollment) => enrollment.status !== 'pending').length + 1 + coTrainerIds.length}
                 </div>
                 <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-sm">
@@ -3957,17 +4043,17 @@ const ClassDetail = () => {
                   Class members
                 </div>
               </div>
-              <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm">
+              <div className="rounded-2xl bg-white border border-gray-100 p-4 sm:p-5 shadow-sm">
                 <p className="text-gray-500 text-sm">Trainors</p>
-                <div className="mt-2 text-4xl font-bold text-gray-900">{1 + coTrainerIds.length}</div>
+                <div className="mt-2 text-3xl sm:text-4xl font-bold text-gray-900">{1 + coTrainerIds.length}</div>
                 <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-purple-50 px-3 py-2 text-sm text-purple-700">
                   <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-purple-100">T</span>
                   {coTrainerIds.length > 0 ? `Lead + ${coTrainerIds.length} co-trainer${coTrainerIds.length > 1 ? 's' : ''}` : 'Lead trainer'}
                 </div>
               </div>
-              <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm">
+              <div className="rounded-2xl bg-white border border-gray-100 p-4 sm:p-5 shadow-sm">
                 <p className="text-gray-500 text-sm">Active Trainees</p>
-                <div className="mt-2 text-4xl font-bold text-gray-900">
+                <div className="mt-2 text-3xl sm:text-4xl font-bold text-gray-900">
                   {enrollments.filter((enrollment) => !['completed', 'pending'].includes(enrollment.status)).length}
                 </div>
                 <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
@@ -3975,17 +4061,17 @@ const ClassDetail = () => {
                   Currently enrolled
                 </div>
               </div>
-              <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm">
+              <div className="rounded-2xl bg-white border border-gray-100 p-4 sm:p-5 shadow-sm">
                 <p className="text-gray-500 text-sm">Graduated</p>
-                <div className="mt-2 text-4xl font-bold text-gray-900">{enrollments.filter(e => e.status === 'completed').length}</div>
+                <div className="mt-2 text-3xl sm:text-4xl font-bold text-gray-900">{enrollments.filter(e => e.status === 'completed').length}</div>
                 <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2 text-sm text-blue-700">
                   <Award className="w-4 h-4" />
                   Certificates issued
                 </div>
               </div>
-              <div className="rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white p-5 shadow-sm">
+              <div className="col-span-2 sm:col-span-1 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white p-4 sm:p-5 shadow-sm">
                 <p className="text-white/70 text-sm">Class Code</p>
-                <div className="mt-2 text-2xl font-bold font-mono tracking-wider">{classData?.classCode || 'N/A'}</div>
+                <div className="mt-2 text-2xl font-bold font-mono tracking-wider break-all">{classData?.classCode || 'N/A'}</div>
                 <button
                   onClick={handleCopyClassCode}
                   className="mt-3 inline-flex items-center gap-2 rounded-xl bg-white/20 hover:bg-white/30 px-3 py-2 text-sm font-medium transition-colors"
@@ -3998,15 +4084,15 @@ const ClassDetail = () => {
 
             {/* One role-annotated roster for everyone with class access. */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <div>
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                <div className="min-w-0">
                   <h3 className="font-bold text-gray-900 text-lg">
                     People ({enrollments.filter((enrollment) => enrollment.status !== 'pending').length + 1 + coTrainerIds.length})
                   </h3>
                   <p className="text-sm text-gray-500 mt-1">Lead trainer, co-trainers, and trainees with access to this class.</p>
                 </div>
                 {isLead && (
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={openAddCoTrainer}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
@@ -4072,21 +4158,21 @@ const ClassDetail = () => {
                 )}
               </div>
               <div className="mt-6 border-t border-gray-100 pt-5">
-                <div className="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
-                  <div>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <h3 className="font-bold text-gray-900 text-lg">Trainees ({enrollments.filter((e) => e.status !== 'pending').length})</h3>
                     <p className="text-sm text-gray-500 mt-1">All trainees including graduates</p>
                   </div>
                   <button
                     onClick={openAddTrainee}
-                    className="flex-shrink-0 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                     Add Trainee
                   </button>
                 </div>
 
-                <div className="p-5">
+                <div className="pt-5">
                   {/* Pending join requests awaiting approval */}
                   {enrollments.filter((e) => e.status === 'pending').length > 0 && (
                     <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
@@ -4171,16 +4257,19 @@ const ClassDetail = () => {
                         const progressValue = enrollment?.progress?.overallProgress ?? enrollment?.progress?.completion ?? enrollment?.progress?.percentage ?? 0;
 
                         return (
-                          <div key={enrollment.id} className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 p-4 hover:border-gray-300 hover:bg-gray-50 transition-colors">
-                            <div className="flex items-center gap-4 min-w-0">
+                          // The row only has space for a side-by-side layout when the
+                          // card is full width: single-column (sm) and again at xl.
+                          // In the md/lg two-column grid it has to stack.
+                          <div key={enrollment.id} className="flex flex-col sm:flex-row md:flex-col xl:flex-row sm:items-center md:items-stretch xl:items-center justify-between gap-3 sm:gap-4 rounded-2xl border border-gray-200 p-4 hover:border-gray-300 hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                               {enrollment.studentAvatar || enrollment.avatar || enrollment.avatarBase64 ? (
                                 <img
                                   src={enrollment.studentAvatar || enrollment.avatar || enrollment.avatarBase64}
                                   alt={displayName}
-                                  className="h-14 w-14 rounded-full object-cover flex-shrink-0 border border-gray-200"
+                                  className="h-12 w-12 sm:h-14 sm:w-14 rounded-full object-cover flex-shrink-0 border border-gray-200"
                                 />
                               ) : (
-                                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-lg shadow-sm flex-shrink-0">
+                                <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-lg shadow-sm flex-shrink-0">
                                   {initials || 'S'}
                                 </div>
                               )}
@@ -4196,34 +4285,40 @@ const ClassDetail = () => {
                                       ? 'bg-blue-100 text-blue-700' 
                                       : 'bg-green-100 text-green-700'
                                   }`}>
-                                    {enrollment.status === 'completed' ? 'Graduated' : enrollment.status || 'Active'}
+                                    {enrollment.status === 'completed'
+                                      ? 'Graduated'
+                                      : enrollment.status
+                                        ? enrollment.status.charAt(0).toUpperCase() + enrollment.status.slice(1)
+                                        : 'Active'}
                                   </span>
                                   <span>Joined {enrollment.joinedAt ? new Date(enrollment.joinedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}</span>
                                 </div>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-3 flex-shrink-0">
-                              <div className="hidden sm:block text-right">
+                            <div className="flex items-center justify-between gap-2 sm:gap-3 flex-shrink-0 border-t border-gray-100 pt-3 sm:border-t-0 sm:pt-0 md:border-t md:pt-3 xl:border-t-0 xl:pt-0">
+                              <div className="text-left sm:text-right">
                                 <p className="text-xs uppercase tracking-wide text-gray-400">Progress</p>
                                 <p className="text-lg font-bold text-gray-900">{Math.round(Number(progressValue) || 0)}%</p>
                               </div>
-                              {enrollment.status !== 'completed' && (
+                              <div className="flex items-center gap-1 sm:gap-2">
+                                {enrollment.status !== 'completed' && (
+                                  <button
+                                    onClick={() => handleGraduateStudent(enrollment.id, displayName)}
+                                    className="rounded-xl px-3 sm:px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-2"
+                                    title="Mark student as graduated and issue certificate"
+                                  >
+                                    <Award className="w-4 h-4" />
+                                    Graduate
+                                  </button>
+                                )}
                                 <button
-                                  onClick={() => handleGraduateStudent(enrollment.id, displayName)}
-                                  className="rounded-xl px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-2"
-                                  title="Mark student as graduated and issue certificate"
+                                  onClick={() => handleRemoveStudent(enrollment.id, displayName)}
+                                  className="rounded-xl px-3 sm:px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
                                 >
-                                  <Award className="w-4 h-4" />
-                                  Graduate
+                                  Remove
                                 </button>
-                              )}
-                              <button
-                                onClick={() => handleRemoveStudent(enrollment.id, displayName)}
-                                className="rounded-xl px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
-                              >
-                                Remove
-                              </button>
+                              </div>
                             </div>
                           </div>
                         );
@@ -4885,13 +4980,15 @@ const ClassDetail = () => {
                       <div className="bg-red-50 rounded-lg p-4 border border-red-200">
                         <p className="text-red-600 text-sm font-medium">Failed</p>
                         <p className="text-2xl font-bold text-red-900 mt-1">
-                          {assessmentResponses.filter(r => !r.passed).length}
+                          {assessmentResponses.filter(r => !r.passed && !r.requiresManualGrading).length}
                         </p>
                       </div>
                       <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
                         <p className="text-purple-600 text-sm font-medium">Avg Score</p>
                         <p className="text-2xl font-bold text-purple-900 mt-1">
-                          {Math.round(assessmentResponses.reduce((sum, r) => sum + ((r.earnedPoints / r.totalPoints) * 100), 0) / assessmentResponses.length)}%
+                          {Math.round(assessmentResponses.reduce((sum, r) => (
+                            sum + (Number(r.totalPoints) > 0 ? (Number(r.earnedPoints || 0) / Number(r.totalPoints)) * 100 : 0)
+                          ), 0) / assessmentResponses.length)}%
                         </p>
                       </div>
                     </div>
@@ -4918,10 +5015,14 @@ const ClassDetail = () => {
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {assessmentResponses.map((response, index) => {
-                            const percentage = Math.round((response.earnedPoints / response.totalPoints) * 100);
-                            const statusColor = response.passed 
-                              ? 'bg-green-100 text-green-700' 
-                              : 'bg-red-100 text-red-700';
+                            const percentage = Number(response.totalPoints) > 0
+                              ? Math.round((Number(response.earnedPoints || 0) / Number(response.totalPoints)) * 100)
+                              : 0;
+                            const statusColor = response.requiresManualGrading
+                              ? 'bg-amber-100 text-amber-700'
+                              : response.passed
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-red-100 text-red-700';
                             return (
                               <tr key={index} className="hover:bg-gray-50 transition-colors">
                                 <td className="px-6 py-4 text-sm">
@@ -4934,14 +5035,18 @@ const ClassDetail = () => {
                                 </td>
                                 <td className="px-6 py-4 text-center">
                                   <div className="flex items-center justify-center gap-2">
-                                    <span className={`font-bold text-lg ${response.passed ? 'text-green-600' : 'text-red-600'}`}>
+                                    <span className={`font-bold text-lg ${
+                                      response.requiresManualGrading
+                                        ? 'text-amber-600'
+                                        : response.passed ? 'text-green-600' : 'text-red-600'
+                                    }`}>
                                       {percentage}%
                                     </span>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 text-center">
                                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColor}`}>
-                                    {response.passed ? 'Passed' : 'Not Passed'}
+                                    {response.requiresManualGrading ? 'Needs review' : response.passed ? 'Passed' : 'Not Passed'}
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 text-center">
@@ -4959,12 +5064,64 @@ const ClassDetail = () => {
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                  <button
-                                    onClick={() => setSelectedResponseDetail(response)}
-                                    className="text-blue-600 hover:text-blue-700 font-medium text-sm"
-                                  >
-                                    View Details
-                                  </button>
+                                  <div className="flex flex-col items-center gap-2">
+                                    <button
+                                      onClick={() => setSelectedResponseDetail(response)}
+                                      className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                    >
+                                      View Details
+                                    </button>
+                                    {gradingAttemptId === response.id ? (
+                                      <div className="w-52 space-y-2 rounded-lg border border-gray-200 bg-white p-2 text-left shadow-sm">
+                                        <label className="block text-xs font-medium text-gray-600">
+                                          Final points (max {response.totalPoints || 0})
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          max={response.totalPoints || 0}
+                                          step="0.01"
+                                          value={gradeInput}
+                                          onChange={(event) => setGradeInput(event.target.value)}
+                                          className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+                                        />
+                                        <textarea
+                                          rows={2}
+                                          value={feedbackInput}
+                                          onChange={(event) => setFeedbackInput(event.target.value)}
+                                          placeholder="Feedback (optional)"
+                                          className="w-full resize-y rounded-md border border-gray-200 px-2 py-1.5 text-sm"
+                                        />
+                                        <div className="flex gap-2">
+                                          <button
+                                            onClick={() => handleSaveAttemptGrade(response)}
+                                            disabled={savingGrade}
+                                            className="flex-1 rounded-md bg-blue-600 px-2 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                                          >
+                                            {savingGrade ? 'Saving…' : 'Save'}
+                                          </button>
+                                          <button
+                                            onClick={() => setGradingAttemptId(null)}
+                                            disabled={savingGrade}
+                                            className="rounded-md bg-gray-100 px-2 py-1.5 text-xs text-gray-700"
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => startAttemptGrading(response)}
+                                        className={`rounded-md px-2 py-1 text-xs font-medium ${
+                                          response.requiresManualGrading
+                                            ? 'bg-amber-100 text-amber-800'
+                                            : 'bg-gray-100 text-gray-700'
+                                        }`}
+                                      >
+                                        {response.requiresManualGrading ? 'Review & grade' : 'Edit grade'}
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -5699,11 +5856,11 @@ const ClassDetail = () => {
                     <div className="relative">
                       <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                       <input
-                        type="date"
+                        type="datetime-local"
                         value={formBuilderAvailableDate}
                         onChange={(e) => setFormBuilderAvailableDate(e.target.value)}
-                        min={new Date().toISOString().split('T')[0]}
-                        max={maxDateStr}
+                        min={localDateTimeNow()}
+                        max={maxDateTimeStr}
                         className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                       />
                     </div>
@@ -5714,15 +5871,15 @@ const ClassDetail = () => {
                     <div className="relative">
                       <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                       <input
-                        type="date"
+                        type="datetime-local"
                         value={formBuilderDueDate}
                         onChange={(e) => setFormBuilderDueDate(e.target.value)}
-                        min={formBuilderAvailableDate || new Date().toISOString().split('T')[0]}
-                        max={maxDateStr}
+                        min={formBuilderAvailableDate || localDateTimeNow()}
+                        max={maxDateTimeStr}
                         className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                       />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Will be set to 11:59 PM</p>
+                    <p className="text-xs text-gray-500 mt-1">Closes at this exact time</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Points</label>
@@ -5832,8 +5989,14 @@ const ClassDetail = () => {
                   {' · '}
                   {Math.round(((selectedResponseDetail.earnedPoints || 0) / (selectedResponseDetail.totalPoints || 1)) * 100)}%
                   {' · '}
-                  <span className={selectedResponseDetail.passed ? 'text-green-600' : 'text-red-600'}>
-                    {selectedResponseDetail.passed ? 'Passed' : 'Not Passed'}
+                  <span className={
+                    selectedResponseDetail.requiresManualGrading
+                      ? 'text-amber-600'
+                      : selectedResponseDetail.passed ? 'text-green-600' : 'text-red-600'
+                  }>
+                    {selectedResponseDetail.requiresManualGrading
+                      ? 'Needs review'
+                      : selectedResponseDetail.passed ? 'Passed' : 'Not Passed'}
                   </span>
                 </p>
               </div>
@@ -5851,19 +6014,31 @@ const ClassDetail = () => {
                 (selectedAssessmentForResponses?.questions || []).map((q, idx) => {
                   const answers = selectedResponseDetail.answers || {};
                   const studentAnswer = answers[q.id];
-                  const isCorrect = studentAnswer === q.correctAnswer;
                   const options = q.options || [];
+                  const hasCorrectAnswer = q.correctAnswer !== undefined && q.correctAnswer !== null;
+                  const isCorrect = hasCorrectAnswer && (
+                    Array.isArray(studentAnswer) && Array.isArray(q.correctAnswer)
+                      ? [...studentAnswer].sort().join(',') === [...q.correctAnswer].sort().join(',')
+                      : studentAnswer === q.correctAnswer
+                  );
+                  const needsManualReview = q.type === 'paragraph' || !hasCorrectAnswer;
                   return (
                     <div
                       key={q.id || idx}
-                      className={`rounded-xl border p-4 ${isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}
+                      className={`rounded-xl border p-4 ${
+                        needsManualReview
+                          ? 'border-amber-200 bg-amber-50'
+                          : isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                      }`}
                     >
                       <p className="font-semibold text-gray-900 mb-2">
                         {idx + 1}. {q.question || q.text || 'Question'}
                       </p>
                       <div className="space-y-1 text-sm">
                         {options.map((opt, optIdx) => {
-                          const chosen = studentAnswer === optIdx;
+                          const chosen = Array.isArray(studentAnswer)
+                            ? studentAnswer.includes(optIdx)
+                            : studentAnswer === optIdx;
                           const correct = q.correctAnswer === optIdx;
                           return (
                             <div
@@ -5879,6 +6054,13 @@ const ClassDetail = () => {
                             </div>
                           );
                         })}
+                        {options.length === 0 && studentAnswer !== undefined && (
+                          <div className="whitespace-pre-wrap break-words rounded-lg bg-white/70 px-3 py-2 text-gray-800">
+                            {typeof studentAnswer === 'object'
+                              ? JSON.stringify(studentAnswer)
+                              : String(studentAnswer)}
+                          </div>
+                        )}
                         {studentAnswer === undefined && (
                           <p className="text-xs text-gray-500 italic">No answer submitted.</p>
                         )}
@@ -5960,16 +6142,12 @@ const ClassDetail = () => {
                         setFormBuilderDescription(selectedAssignmentDetail.message || selectedAssignmentDetail.description || '');
                         setFormBuilderQuestions(selectedAssignmentDetail.questions || []);
 
-                        // Safely parse a date (string, Date, or Firestore Timestamp) → YYYY-MM-DD.
-                        const toDateInput = (val) => {
-                          if (!val) return '';
-                          if (typeof val === 'string') return val.split('T')[0];
-                          if (val instanceof Date) return val.toISOString().split('T')[0];
-                          if (val.toDate) return val.toDate().toISOString().split('T')[0];
-                          return '';
-                        };
-                        setFormBuilderAvailableDate(toDateInput(selectedAssignmentDetail.availableDate));
-                        setFormBuilderDueDate(toDateInput(selectedAssignmentDetail.dueDate));
+                        setFormBuilderAvailableDate(
+                          toDateTimeInputValue(selectedAssignmentDetail.availableDate, '00:00')
+                        );
+                        setFormBuilderDueDate(
+                          toDateTimeInputValue(selectedAssignmentDetail.dueDate, '23:59')
+                        );
                         setFormBuilderPoints(selectedAssignmentDetail.points?.toString() || '100');
                         
                         // Set edit mode and close current modal
@@ -6025,13 +6203,13 @@ const ClassDetail = () => {
                     <p className="text-sm text-gray-700">
                       <span className="font-semibold">Available from:</span>{' '}
                       {selectedAssignmentDetail.availableDate
-                        ? new Date(selectedAssignmentDetail.availableDate).toLocaleDateString()
+                        ? formatDeadline(selectedAssignmentDetail.availableDate)
                         : 'Open immediately'}
                     </p>
                     <p className="text-sm text-gray-700">
                       <span className="font-semibold">Due Date:</span>{' '}
                       {selectedAssignmentDetail.dueDate
-                        ? `${new Date(selectedAssignmentDetail.dueDate).toLocaleDateString()} at 11:59 PM`
+                        ? formatDeadline(selectedAssignmentDetail.dueDate)
                         : 'No due date'}
                     </p>
                     <p className="text-sm text-gray-700">
@@ -6181,7 +6359,7 @@ const ClassDetail = () => {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Due date</label>
-                  <input type="date" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} min={new Date().toISOString().split('T')[0]} max={maxDateStr} className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  <input type="datetime-local" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} min={localDateTimeNow()} max={maxDateTimeStr} className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Points</label>
@@ -6655,11 +6833,11 @@ const ClassDetail = () => {
                     <div className="relative">
                       <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                       <input
-                        type="date"
+                        type="datetime-local"
                         value={quizAvailableDate}
                         onChange={(e) => setQuizAvailableDate(e.target.value)}
-                        min={new Date().toISOString().split('T')[0]}
-                        max={maxDateStr}
+                        min={localDateTimeNow()}
+                        max={maxDateTimeStr}
                         className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
                       />
                     </div>
@@ -6670,11 +6848,11 @@ const ClassDetail = () => {
                     <div className="relative">
                       <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                       <input
-                        type="date"
+                        type="datetime-local"
                         value={quizDueDate}
                         onChange={(e) => setQuizDueDate(e.target.value)}
-                        min={quizAvailableDate || new Date().toISOString().split('T')[0]}
-                        max={maxDateStr}
+                        min={quizAvailableDate || localDateTimeNow()}
+                        max={maxDateTimeStr}
                         className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
                       />
                     </div>
