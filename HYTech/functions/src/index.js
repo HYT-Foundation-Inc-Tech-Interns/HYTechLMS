@@ -438,6 +438,25 @@ const sameIndexSet = (left, right) => {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 };
 
+// Deadlines are now stored as full ISO instants by the authoring UI, but older
+// items hold a bare "YYYY-MM-DD" that Date() reads as UTC midnight — which put
+// anything due today several hours in the past and rejected the submission.
+// Resolve a date-only value against the institute's timezone instead, taking
+// the end of that day for a deadline and the start of it for an open date.
+const LOCAL_UTC_OFFSET = '+08:00'; // Asia/Manila — matches the asia-southeast1 deployment
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+const resolveBoundary = (value, edge) => {
+  if (!value) return 0;
+  if (typeof value === 'string' && DATE_ONLY.test(value)) {
+    const time = edge === 'end' ? '23:59:59.999' : '00:00:00.000';
+    return new Date(`${value}T${time}${LOCAL_UTC_OFFSET}`).getTime();
+  }
+  const parsed = value?.toDate ? value.toDate() : new Date(value);
+  const time = parsed instanceof Date ? parsed.getTime() : NaN;
+  return Number.isFinite(time) ? time : 0;
+};
+
 const gradeAnswer = (question, answer, correctAnswer) => {
   const type = String(question?.type || 'multiple-choice');
   if (type === 'paragraph') return { autoGraded: false, isCorrect: false };
@@ -468,6 +487,16 @@ const gradeAnswer = (question, answer, correctAnswer) => {
         && keys.every((key) => Number(actual[key]) === Number(expected[key])),
     };
   }
+  if (type === 'checkbox-grid') {
+    const actual = answer && typeof answer === 'object' ? answer : {};
+    const expected = correctAnswer && typeof correctAnswer === 'object' ? correctAnswer : {};
+    const keys = Object.keys(expected);
+    return {
+      autoGraded: true,
+      isCorrect: keys.length > 0
+        && keys.every((key) => sameIndexSet(actual[key], expected[key])),
+    };
+  }
   return {
     autoGraded: true,
     isCorrect: answer !== '' && answer !== null && answer !== undefined
@@ -485,6 +514,7 @@ exports.submitAssessmentAttempt = boundedFunctions.https.onCall(async (data, con
   const assessmentId = String(data?.assessmentId || '').trim();
   const answers = data?.answers && typeof data.answers === 'object' ? data.answers : {};
   const timeTaken = Math.max(0, Number(data?.timeTaken) || 0);
+  const timedOut = data?.timedOut === true;
   if (!classId || !assessmentId) {
     throw new functions.https.HttpsError(
       'invalid-argument',
@@ -500,14 +530,20 @@ exports.submitAssessmentAttempt = boundedFunctions.https.onCall(async (data, con
 
   const userRef = db.collection('users').doc(studentId);
   const classRef = db.collection('classes').doc(classId);
+  // A graded item is authored either through the assessment builder
+  // (classes/{id}/assessments) or the assignment form builder
+  // (classes/{id}/assignments). Trainees answer both through the same quiz
+  // runner, so resolve the id against both collections instead of assuming
+  // one — assuming `assessments` made every form-builder quiz fail with
+  // "Assessment not found".
   const assessmentRef = classRef.collection('assessments').doc(assessmentId);
-  const keyRef = assessmentRef.collection('private').doc('answerKey');
+  const assignmentRef = classRef.collection('assignments').doc(assessmentId);
 
-  const [userSnap, classSnap, assessmentSnap, keySnap, enrollmentSnap] = await Promise.all([
+  const [userSnap, classSnap, assessmentSnap, assignmentSnap, enrollmentSnap] = await Promise.all([
     userRef.get(),
     classRef.get(),
     assessmentRef.get(),
-    keyRef.get(),
+    assignmentRef.get(),
     db.collection('enrollments')
       .where('studentId', '==', studentId)
       .where('classId', '==', classId)
@@ -527,7 +563,9 @@ exports.submitAssessmentAttempt = boundedFunctions.https.onCall(async (data, con
       'Verify your email before submitting an assessment.'
     );
   }
-  if (!classSnap.exists || !assessmentSnap.exists) {
+  const itemSnap = assessmentSnap.exists ? assessmentSnap : assignmentSnap;
+  const itemRef = assessmentSnap.exists ? assessmentRef : assignmentRef;
+  if (!classSnap.exists || !itemSnap.exists) {
     throw new functions.https.HttpsError('not-found', 'Assessment not found.');
   }
   const hasActiveSeat = enrollmentSnap.docs.some((entry) =>
@@ -540,13 +578,27 @@ exports.submitAssessmentAttempt = boundedFunctions.https.onCall(async (data, con
     );
   }
 
-  const assessment = assessmentSnap.data() || {};
+  const assessment = itemSnap.data() || {};
   if (String(assessment.status || 'active') === 'draft') {
     throw new functions.https.HttpsError('failed-precondition', 'This assessment is not published.');
   }
+  // Submission tasks collect uploaded work through assignments/{id}/submissions
+  // and are never graded as quiz attempts.
+  if (String(assessment.type || '') === 'Submission') {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'This task is handed in as work, not as a quiz attempt.'
+    );
+  }
+  if (assessment.acceptResponses === false) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'Responses are closed for this assessment.'
+    );
+  }
   const now = Date.now();
-  const availableAt = assessment.availableDate ? new Date(assessment.availableDate).getTime() : 0;
-  const dueAt = assessment.dueDate ? new Date(assessment.dueDate).getTime() : 0;
+  const availableAt = resolveBoundary(assessment.availableDate, 'start');
+  const dueAt = resolveBoundary(assessment.dueDate, 'end');
   if (availableAt && Number.isFinite(availableAt) && now < availableAt) {
     throw new functions.https.HttpsError('failed-precondition', 'This assessment is not open yet.');
   }
@@ -554,11 +606,12 @@ exports.submitAssessmentAttempt = boundedFunctions.https.onCall(async (data, con
     throw new functions.https.HttpsError('deadline-exceeded', 'The assessment deadline has passed.');
   }
 
-  const attemptsRef = assessmentRef.collection('attempts');
+  const attemptsRef = itemRef.collection('attempts');
 
+  const keySnap = await itemRef.collection('private').doc('answerKey').get();
   const answerKey = keySnap.exists ? keySnap.data()?.answers || {} : {};
   const questions = Array.isArray(assessment.questions) ? assessment.questions : [];
-  const unansweredRequired = questions.find((question) => {
+  const unansweredRequired = !timedOut && questions.find((question) => {
     if (question?.required !== true) return false;
     const answer = answers[question.id];
     if (Array.isArray(answer)) return answer.length === 0;
@@ -633,6 +686,7 @@ exports.submitAssessmentAttempt = boundedFunctions.https.onCall(async (data, con
     passingScore,
     submittedAt: admin.firestore.FieldValue.serverTimestamp(),
     status: requiresManualGrading ? 'pending_review' : 'submitted',
+    timedOut,
   };
   const attemptRef = assessment.settings?.oneResponsePerUser
     ? attemptsRef.doc(studentId)
@@ -653,10 +707,89 @@ exports.submitAssessmentAttempt = boundedFunctions.https.onCall(async (data, con
   return {
     id: attemptRef.id,
     ...attempt,
+    // Tells the client which subcollection now holds this attempt so it reads
+    // the history back from the same place.
+    kind: assessmentSnap.exists ? 'assessment' : 'assignment',
     submittedAt: new Date().toISOString(),
     questionResults,
     showCorrectAnswers: Boolean(showCorrectAnswers),
   };
+});
+
+exports.gradeAssessmentAttempt = boundedFunctions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in before grading.');
+  }
+
+  const classId = String(data?.classId || '').trim();
+  const assessmentId = String(data?.assessmentId || '').trim();
+  const attemptId = String(data?.attemptId || '').trim();
+  const collectionName = data?.kind === 'assignments' ? 'assignments' : 'assessments';
+  const earnedPoints = Number(data?.earnedPoints);
+  const feedback = String(data?.feedback || '').trim();
+  if (!classId || !assessmentId || !attemptId || !Number.isFinite(earnedPoints)) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'Class, assessment, response, and a numeric final score are required.'
+    );
+  }
+  if (feedback.length > 5000) {
+    throw new functions.https.HttpsError('invalid-argument', 'Feedback is too long.');
+  }
+
+  const userRef = db.collection('users').doc(context.auth.uid);
+  const classRef = db.collection('classes').doc(classId);
+  const attemptRef = classRef.collection(collectionName)
+    .doc(assessmentId).collection('attempts').doc(attemptId);
+  const [userSnap, classSnap, attemptSnap] = await Promise.all([
+    userRef.get(),
+    classRef.get(),
+    attemptRef.get(),
+  ]);
+  const userData = userSnap.data() || {};
+  const classData = classSnap.data() || {};
+  const isAdmin = userData.role === 'admin';
+  const isClassTrainer = userData.role === 'trainer' && (
+    classData.trainerId === context.auth.uid
+    || (Array.isArray(classData.coTrainerIds) && classData.coTrainerIds.includes(context.auth.uid))
+  );
+  if (
+    !userSnap.exists
+    || String(userData.status || '').toLowerCase() !== 'active'
+    || (!isAdmin && !isClassTrainer)
+  ) {
+    throw new functions.https.HttpsError(
+      'permission-denied',
+      'Only an active trainer for this class can grade this response.'
+    );
+  }
+  if (!classSnap.exists || !attemptSnap.exists) {
+    throw new functions.https.HttpsError('not-found', 'The response was not found.');
+  }
+
+  const attempt = attemptSnap.data() || {};
+  const totalPoints = Math.max(0, Number(attempt.totalPoints) || 0);
+  if (earnedPoints < 0 || earnedPoints > totalPoints) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      `Final score must be between 0 and ${totalPoints}.`
+    );
+  }
+  const finalPoints = Math.round(earnedPoints * 100) / 100;
+  const score = totalPoints > 0 ? Math.round((finalPoints / totalPoints) * 100) : 0;
+  const passingScore = Math.min(100, Math.max(0, Number(attempt.passingScore) || 60));
+  const passed = score >= passingScore;
+  await attemptRef.update({
+    earnedPoints: finalPoints,
+    score,
+    passed,
+    requiresManualGrading: false,
+    status: 'reviewed',
+    feedback,
+    gradedBy: context.auth.uid,
+    gradedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return { id: attemptId, earnedPoints: finalPoints, totalPoints, score, passed, feedback };
 });
 
 // One-time, idempotent repair for assessments created before answer keys were

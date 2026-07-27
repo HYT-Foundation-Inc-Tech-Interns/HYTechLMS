@@ -3801,6 +3801,60 @@ export const deleteTopic = async (classId, topicId) => {
  * Create an assessment/quiz for a class (Google Forms style)
  * Supports multiple question types: multiple-choice, checkbox, short-answer, paragraph
  */
+// Merges the private answer key back into a question list for staff, and
+// migrates legacy items that still carry `correctAnswer` inline. A trainee is
+// denied the private doc, so they always end up with answer-free questions.
+const hydrateAnswerKey = async (parentRef, rawQuestions) => {
+  const questions = Array.isArray(rawQuestions) ? rawQuestions : [];
+  if (questions.length === 0) return questions;
+
+  const answerKeyRef = doc(parentRef, 'private', 'answerKey');
+  try {
+    const keySnapshot = await getDoc(answerKeyRef);
+    const legacyAnswers = questions.reduce((answers, question) => {
+      if (question?.id && Object.prototype.hasOwnProperty.call(question, 'correctAnswer')) {
+        answers[question.id] = question.correctAnswer;
+      }
+      return answers;
+    }, {});
+    const privateAnswers = keySnapshot.exists()
+      ? keySnapshot.data()?.answers || {}
+      : legacyAnswers;
+
+    if (!keySnapshot.exists() && Object.keys(legacyAnswers).length > 0) {
+      const batch = writeBatch(db);
+      batch.set(answerKeyRef, { answers: legacyAnswers, migratedAt: serverTimestamp() });
+      batch.update(parentRef, {
+        questions: questions.map(({ correctAnswer: _answer, ...question }) => question),
+        updatedAt: serverTimestamp(),
+      });
+      await batch.commit();
+    }
+
+    return questions.map((question) => ({
+      ...question,
+      correctAnswer: Object.prototype.hasOwnProperty.call(privateAnswers, question.id)
+        ? privateAnswers[question.id]
+        : question.correctAnswer,
+    }));
+  } catch {
+    return questions.map(({ correctAnswer: _answer, ...question }) => question);
+  }
+};
+
+// Splits authored questions into the class-readable copy and the private
+// answer key, so `correctAnswer` never reaches a trainee's device.
+const splitAnswerKey = (questions) => {
+  const list = Array.isArray(questions) ? questions : [];
+  return {
+    publicQuestions: list.map(({ correctAnswer: _correctAnswer, ...question }) => question),
+    answerKey: list.reduce((result, question) => {
+      if (question?.id) result[question.id] = question.correctAnswer ?? null;
+      return result;
+    }, {}),
+  };
+};
+
 export const createAssessment = async (classId, {
   title,
   description,
@@ -3989,7 +4043,13 @@ export const createAssignment = async (classId, {
     }
 
     const assignmentsRef = collection(db, 'classes', classId, 'assignments');
-    
+    const assignmentRef = doc(assignmentsRef);
+
+    // Form-builder assignments are answered like quizzes, so the correct
+    // answers must not sit in the document every class member can read. They
+    // go to private/answerKey, which only staff and the grading function read.
+    const { publicQuestions, answerKey } = splitAnswerKey(questions);
+
     const assignment = {
       title,
       description,
@@ -4000,7 +4060,7 @@ export const createAssignment = async (classId, {
       availableDate,
       dueDate,
       points,
-      questions,
+      questions: publicQuestions,
       // For Submission tasks: which upload kinds the trainee may hand in.
       // Empty = no restriction (legacy behaviour: text + any file).
       allowedUploadTypes: Array.isArray(allowedUploadTypes) ? allowedUploadTypes : [],
@@ -4010,8 +4070,15 @@ export const createAssignment = async (classId, {
       status
     };
 
-    const docRef = await addDoc(assignmentsRef, assignment);
-    return { id: docRef.id, ...assignment };
+    const batch = writeBatch(db);
+    batch.set(assignmentRef, assignment);
+    batch.set(doc(assignmentRef, 'private', 'answerKey'), {
+      answers: answerKey,
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+
+    return { id: assignmentRef.id, ...assignment, questions };
   } catch (error) {
     console.error('Error creating assignment:', error);
     throw error;
@@ -4026,12 +4093,19 @@ export const getAssignments = async (classId) => {
     const assignmentsRef = collection(db, 'classes', classId, 'assignments');
     const q = query(assignmentsRef, orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
-    
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate?.() || new Date(doc.data().createdAt),
-      dueDate: doc.data().dueDate ? (typeof doc.data().dueDate === 'string' ? new Date(doc.data().dueDate) : doc.data().dueDate?.toDate?.()) : null
+
+    return Promise.all(snapshot.docs.map(async (assignmentDoc) => {
+      const data = assignmentDoc.data();
+      // Staff get the answer key merged back so they can edit the quiz;
+      // trainees are denied the private doc and keep answer-free questions.
+      const questions = await hydrateAnswerKey(assignmentDoc.ref, data.questions);
+      return {
+        id: assignmentDoc.id,
+        ...data,
+        questions,
+        createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
+        dueDate: data.dueDate ? (typeof data.dueDate === 'string' ? new Date(data.dueDate) : data.dueDate?.toDate?.()) : null
+      };
     }));
   } catch (error) {
     console.error('Error getting assignments:', error);
@@ -4074,10 +4148,24 @@ export const updateAssignment = async (classId, assignmentId, updates) => {
       }
     }
 
-    await updateDoc(assignmentRef, {
-      ...updates,
+    const nextUpdates = { ...updates };
+    const batch = writeBatch(db);
+
+    if (Array.isArray(nextUpdates.questions)) {
+      const { publicQuestions, answerKey } = splitAnswerKey(nextUpdates.questions);
+      nextUpdates.questions = publicQuestions;
+      batch.set(
+        doc(assignmentRef, 'private', 'answerKey'),
+        { answers: answerKey, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
+    }
+
+    batch.update(assignmentRef, {
+      ...nextUpdates,
       updatedAt: serverTimestamp()
     });
+    await batch.commit();
 
     return { id: assignmentId, ...updates };
   } catch (error) {
@@ -4298,55 +4386,9 @@ export const getAssessments = async (classId) => {
     
     return Promise.all(snapshot.docs.map(async (assessmentDoc) => {
       const data = assessmentDoc.data();
-      let questions = Array.isArray(data.questions) ? data.questions : [];
-      try {
-        const answerKeyRef = doc(
-          db,
-          'classes',
-          classId,
-          'assessments',
-          assessmentDoc.id,
-          'private',
-          'answerKey'
-        );
-        const keySnapshot = await getDoc(answerKeyRef);
-        const legacyAnswers = questions.reduce((answers, question) => {
-          if (
-            question?.id
-            && Object.prototype.hasOwnProperty.call(question, 'correctAnswer')
-          ) {
-            answers[question.id] = question.correctAnswer;
-          }
-          return answers;
-        }, {});
-        const privateAnswers = keySnapshot.exists()
-          ? keySnapshot.data()?.answers || {}
-          : legacyAnswers;
-
-        if (!keySnapshot.exists() && Object.keys(legacyAnswers).length > 0) {
-          const batch = writeBatch(db);
-          batch.set(answerKeyRef, {
-            answers: legacyAnswers,
-            migratedAt: serverTimestamp(),
-          });
-          batch.update(assessmentDoc.ref, {
-            questions: questions.map(({ correctAnswer: _answer, ...question }) => question),
-            updatedAt: serverTimestamp(),
-          });
-          await batch.commit();
-        }
-
-        questions = questions.map((question) => ({
-          ...question,
-          correctAnswer: Object.prototype.hasOwnProperty.call(privateAnswers, question.id)
-            ? privateAnswers[question.id]
-            : question.correctAnswer,
-        }));
-      } catch {
-        // Trainees cannot read the private answer key. Their public question
-        // payload remains answer-free; trainers/admins receive it for editing.
-        questions = questions.map(({ correctAnswer: _answer, ...question }) => question);
-      }
+      // Trainees cannot read the private answer key. Their public question
+      // payload stays answer-free; trainers/admins get it back for editing.
+      const questions = await hydrateAnswerKey(assessmentDoc.ref, data.questions);
       return {
         id: assessmentDoc.id,
         ...data,
@@ -4374,19 +4416,9 @@ export const getAssessmentById = async (classId, assessmentId) => {
     }
     
     const data = docSnapshot.data();
-    let questions = Array.isArray(data.questions) ? data.questions : [];
-    if (templateMode !== 'template') try {
-      const keySnapshot = await getDoc(
-        doc(assessmentRef, 'private', 'answerKey')
-      );
-      const answers = keySnapshot.exists() ? keySnapshot.data()?.answers || {} : {};
-      questions = questions.map((question) => ({
-        ...question,
-        correctAnswer: answers[question.id],
-      }));
-    } catch {
-      questions = questions.map(({ correctAnswer: _answer, ...question }) => question);
-    }
+    // `templateMode` was referenced here but belongs to createClass, so every
+    // call threw a ReferenceError before reaching the answer-key merge.
+    const questions = await hydrateAnswerKey(assessmentRef, data.questions);
     return {
       id: docSnapshot.id,
       ...data,
@@ -4592,7 +4624,7 @@ export const submitQuizAttempt = async (
   classId,
   assessmentId,
   studentId,
-  { answers, timeTaken = 0 }
+  { answers, timeTaken = 0, timedOut = false }
 ) => {
   try {
     if (!functions || !auth?.currentUser || auth.currentUser.uid !== studentId) {
@@ -4604,6 +4636,7 @@ export const submitQuizAttempt = async (
       assessmentId,
       answers: answers || {},
       timeTaken: Math.max(0, Number(timeTaken) || 0),
+      timedOut: Boolean(timedOut),
     });
     return result.data;
   } catch (error) {
@@ -4613,11 +4646,42 @@ export const submitQuizAttempt = async (
 };
 
 /**
+ * Finalize a quiz/form attempt that contains trainer-reviewed answers.
+ */
+export const gradeAssessmentAttempt = async (
+  classId,
+  assessmentId,
+  attemptId,
+  kind,
+  { earnedPoints, feedback = '' }
+) => {
+  if (!functions || !auth?.currentUser) {
+    throw new Error('A signed-in trainer is required to grade this response.');
+  }
+  const gradeAttempt = httpsCallable(functions, 'gradeAssessmentAttempt');
+  const result = await gradeAttempt({
+    classId,
+    assessmentId,
+    attemptId,
+    kind: attemptsCollectionFor(kind),
+    earnedPoints: Number(earnedPoints),
+    feedback: String(feedback || ''),
+  });
+  return result.data;
+};
+
+// Graded items live in two collections: `assessments` (assessment builder) and
+// `assignments` (form builder). Attempts hang off whichever document the item
+// came from, so every attempt helper takes the item's kind.
+const attemptsCollectionFor = (kind) =>
+  String(kind) === 'assignment' ? 'assignments' : 'assessments';
+
+/**
  * Get a student's quiz attempts
  */
-export const getStudentQuizAttempts = async (classId, assessmentId, studentId) => {
+export const getStudentQuizAttempts = async (classId, assessmentId, studentId, kind = 'assessment') => {
   try {
-    const attemptsRef = collection(db, 'classes', classId, 'assessments', assessmentId, 'attempts');
+    const attemptsRef = collection(db, 'classes', classId, attemptsCollectionFor(kind), assessmentId, 'attempts');
     // Sort in memory: combining studentId equality with submittedAt ordering
     // otherwise requires a composite index and made successful submissions
     // appear to fail while refreshing their attempt history.
@@ -4643,9 +4707,9 @@ export const getStudentQuizAttempts = async (classId, assessmentId, studentId) =
 /**
  * Check if a student has already attempted an assessment
  */
-export const hasStudentAttempted = async (classId, assessmentId, studentId) => {
+export const hasStudentAttempted = async (classId, assessmentId, studentId, kind = 'assessment') => {
   try {
-    const attempts = await getStudentQuizAttempts(classId, assessmentId, studentId);
+    const attempts = await getStudentQuizAttempts(classId, assessmentId, studentId, kind);
     return attempts && attempts.length > 0;
   } catch (error) {
     console.error('Error checking student attempts:', error);
@@ -4656,9 +4720,9 @@ export const hasStudentAttempted = async (classId, assessmentId, studentId) => {
 /**
  * Get all attempts for an assessment (trainer view - to see responses)
  */
-export const getAssessmentAttempts = async (classId, assessmentId) => {
+export const getAssessmentAttempts = async (classId, assessmentId, kind = 'assessment') => {
   try {
-    const attemptsRef = collection(db, 'classes', classId, 'assessments', assessmentId, 'attempts');
+    const attemptsRef = collection(db, 'classes', classId, attemptsCollectionFor(kind), assessmentId, 'attempts');
     const q = query(attemptsRef, orderBy('submittedAt', 'desc'));
     const snapshot = await getDocs(q);
     
@@ -4708,6 +4772,21 @@ export const getAssessmentAttempts = async (classId, assessmentId) => {
 // ==================== GRADEBOOK ====================
 
 /**
+ * True once a deadline has passed. Deadlines are stored as full ISO instants,
+ * but older items hold a bare "YYYY-MM-DD" that Date() would read as UTC
+ * midnight — those resolve to the end of that day in local time instead.
+ */
+export const isDeadlinePassed = (dueDate) => {
+  if (!dueDate) return false;
+  const raw = typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueDate)
+    ? `${dueDate}T23:59:59.999`
+    : dueDate;
+  const date = raw?.toDate ? raw.toDate() : new Date(raw);
+  const time = date instanceof Date ? date.getTime() : NaN;
+  return Number.isFinite(time) && Date.now() > time;
+};
+
+/**
  * Build a class gradebook: every enrolled student scored across all quizzes
  * (best attempt) and submission-type assignments (graded value). Computed
  * client-side from existing data — no new storage.
@@ -4751,7 +4830,9 @@ export const getClassGradebook = async (classId) => {
         const byStudent = {};
         subs.forEach((s) => {
           byStudent[s.studentId] =
-            s.grade === null || s.grade === undefined ? null : Number(s.grade);
+            s.status !== 'graded' || s.grade === null || s.grade === undefined
+              ? null
+              : Number(s.grade);
         });
         submissionGrades[a.id] = byStudent;
       })
@@ -4777,12 +4858,17 @@ export const getClassGradebook = async (classId) => {
         title: a.title || 'Quiz',
         kind: 'assessment',
         points: a.totalPoints || a.points || 100,
+        // Past this instant an unattempted quiz is a 0, not a blank.
+        pastDue: isDeadlinePassed(a.dueDate),
       })),
       ...submissionAssignments.map((a) => ({
         id: a.id,
         title: a.title || 'Assignment',
         kind: 'submission',
         points: a.points || 100,
+        // A task the trainer marked as accepting late work stays open-ended, so
+        // an empty cell is still "not yet handed in" rather than a 0.
+        pastDue: a.allowLateSubmissions === true ? false : isDeadlinePassed(a.dueDate),
       })),
     ];
 
@@ -4792,6 +4878,11 @@ export const getClassGradebook = async (classId) => {
           col.kind === 'assessment'
             ? assessmentScores[col.id]?.[e.studentId]
             : submissionGrades[col.id]?.[e.studentId];
+        // Nothing handed in and the deadline has passed → scored 0 and flagged
+        // as missed, so the average reflects it instead of skipping the column.
+        if ((raw === undefined || raw === null) && col.pastDue) {
+          return { columnId: col.id, kind: col.kind, score: 0, missed: true };
+        }
         return { columnId: col.id, kind: col.kind, score: raw === undefined ? null : raw };
       });
       const graded = cells.filter((c) => c.score !== null && c.score !== undefined);

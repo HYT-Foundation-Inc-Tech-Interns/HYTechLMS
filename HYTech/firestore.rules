@@ -118,15 +118,20 @@ service cloud.firestore {
       // Self-signup may only create a plain Active student, and only while an
       // admin has left self-registration enabled.
       // Admin may create any user doc (Add User writes as admin).
+      // `createdBy == 'admin'` waives the email-verification gate in
+      // canUseLms(), so a self-registering account must never be able to set
+      // it — otherwise anyone could sign up with an address they do not own
+      // and skip verification entirely.
       allow create: if isAdmin()
         || (isSelf(uid)
             && request.resource.data.get('role', '') == 'student'
             && request.resource.data.get('status', '') == 'Active'
+            && request.resource.data.get('createdBy', '') != 'admin'
             && selfRegistrationAllowed());
 
-      // Owner edits profile but NEVER role or status.
+      // Owner edits profile but NEVER role, status, or the verification waiver.
       allow update: if isAdmin()
-        || (isSelf(uid) && !changedKeys().hasAny(['role', 'status']));
+        || (isSelf(uid) && !changedKeys().hasAny(['role', 'status', 'createdBy']));
 
       allow delete: if isAdmin();
 
@@ -181,8 +186,15 @@ service cloud.firestore {
     // notification toggles). Public read is required so pre-auth pages (the
     // branded landing/sign-in and the self-registration gate) can read it; the
     // contents are non-sensitive. Admin-only writes.
-    match /config/{docId} {
+    match /config/appSettings {
       allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Any other config document is staff-only: public read is scoped to the
+    // one branding/policy doc that pre-auth pages actually need.
+    match /config/{docId} {
+      allow read: if isAdmin() || isTrainer();
       allow write: if isAdmin();
     }
 
@@ -293,6 +305,24 @@ service cloud.firestore {
       match /assignments/{assignmentId} {
         allow read: if isAdmin() || classTrainer(classId) || classMember(classId);
         allow write: if isAdmin() || classTrainer(classId);
+
+        // Answer key for form-builder quizzes. Kept out of the assignment doc
+        // itself so class members cannot read the correct answers.
+        match /private/{privateId} {
+          allow read, write: if isAdmin() || classTrainer(classId);
+        }
+
+        // Graded attempts for form-builder quizzes, mirroring the assessment
+        // attempts model: written only by the trusted grading Cloud Function
+        // and immutable afterwards.
+        match /attempts/{attemptId} {
+          allow read: if isAdmin()
+            || classTrainer(classId)
+            || (canUseLms() && resource.data.get('studentId', '') == request.auth.uid);
+          allow create: if false;
+          allow update: if false;
+          allow delete: if isAdmin();
+        }
 
         // Student deliverable submissions. Doc id = studentId.
         match /submissions/{studentId} {
