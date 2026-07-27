@@ -33,12 +33,20 @@ service firebase.storage {
         );
     }
 
+    // Raster types only: 'image/.*' also admits image/svg+xml, which can carry
+    // script that runs if the file is opened directly on the storage origin.
+    function isRasterImage() {
+      return request.resource.contentType in [
+        'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'
+      ];
+    }
+
     match /userAvatars/{uid}/{role}/{fileName} {
       allow read: if canUseLms();
       allow write: if canUseLms()
         && request.auth.uid == uid
         && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && isRasterImage();
     }
     match /lmsFiles/{classId}/{uid}/{allPaths=**} {
       allow read: if isAdmin()
@@ -55,7 +63,7 @@ service firebase.storage {
       allow read: if true;
       allow write: if isAdmin()
         && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && isRasterImage();
     }
     match /{allPaths=**} {
       allow read, write: if false;
