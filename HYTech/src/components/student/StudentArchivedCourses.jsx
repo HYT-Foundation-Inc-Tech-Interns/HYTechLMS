@@ -149,7 +149,7 @@ const StudentArchivedCourses = () => {
 
       {/* Courses Grid */}
       {!loading && archivedCourses.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
           {archivedCourses.map((course) => {
             const preference = classPrefs[course.classId] || {};
             const effectiveName = preference.nickname || course.sharedName;
@@ -161,7 +161,7 @@ const StudentArchivedCourses = () => {
             >
             {/* Course Image */}
             <div
-              className="relative h-40 overflow-hidden rounded-t-2xl"
+              className="relative h-24 overflow-hidden rounded-t-2xl sm:h-40"
               style={course.image ? undefined : { background: getGradientStyle(effectiveColor) }}
             >
               {course.image && (
@@ -182,38 +182,39 @@ const StudentArchivedCourses = () => {
               )}
               
               {/* Completed Badge */}
-              <div className="absolute top-3 left-3 px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full flex items-center gap-1">
+              <div className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-green-500 px-2 py-1 text-[9px] font-bold text-white sm:left-3 sm:top-3 sm:px-3 sm:text-xs">
                 <CheckCircle2 className="w-3 h-3" />
                 Completed
               </div>
 
               {/* Grade Badge */}
               {course.finalGrade && (
-                <div className="absolute top-3 right-3 px-3 py-1.5 bg-white text-[#0D4291] text-sm font-bold rounded-full">
+                <div className="absolute bottom-2 right-2 rounded-full bg-white px-2 py-1 text-[10px] font-bold text-[#0D4291] sm:bottom-auto sm:right-3 sm:top-3 sm:px-3 sm:py-1.5 sm:text-sm">
                   Grade: {course.finalGrade}
                 </div>
               )}
+              <ClassCardPersonalization
+                userId={uid}
+                classId={course.classId}
+                preference={preference}
+                className={`absolute right-1 top-1 z-20 sm:right-2 sm:top-2 ${course.finalGrade ? 'sm:top-12' : ''}`}
+              />
             </div>
 
             {/* Course Details */}
-            <div className="p-4 space-y-3">
-              <div className="flex items-start justify-between gap-3">
+            <div className="space-y-2 p-2.5 sm:space-y-3 sm:p-4">
+              <div>
                 <div className="min-w-0">
-                  <h3 className="font-bold text-gray-900 text-lg">{effectiveName}</h3>
+                  <h3 className="text-sm font-bold text-gray-900 line-clamp-2 sm:text-lg">{effectiveName}</h3>
                   {preference.nickname && (
                     <p className="mt-1 truncate text-xs text-gray-400">Shared name: {course.sharedName}</p>
                   )}
                 </div>
-                <ClassCardPersonalization
-                  userId={uid}
-                  classId={course.classId}
-                  preference={preference}
-                />
               </div>
-              <p className="text-sm text-gray-500">{course.instructor}</p>
+              <p className="text-xs text-gray-500 line-clamp-1 sm:text-sm">{course.instructor}</p>
 
               {/* Completion Date */}
-              <div className="flex items-center gap-2 text-sm text-gray-500">
+              <div className="flex items-center gap-1 text-xs text-gray-500 sm:gap-2 sm:text-sm">
                 <Clock className="w-4 h-4 text-gray-400" />
                 <span>Completed: {course.completedDate}</span>
               </div>
@@ -222,10 +223,10 @@ const StudentArchivedCourses = () => {
               <div className="flex gap-2 pt-2">
                 <button 
                   onClick={() => handleView({ ...course, name: effectiveName, color: effectiveColor })}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0D4291] text-white rounded-lg font-medium hover:bg-[#0a3577] transition-colors"
+                  className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-[#0D4291] px-2 py-2.5 text-xs font-medium text-white transition-colors hover:bg-[#0a3577] sm:gap-2 sm:px-4 sm:text-base"
                 >
                   <Eye className="w-4 h-4" />
-                  View Course
+                  <span className="hidden min-[360px]:inline">View Course</span>
                 </button>
               </div>
             </div>

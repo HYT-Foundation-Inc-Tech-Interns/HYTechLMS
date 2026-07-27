@@ -55,10 +55,9 @@ const StudentTasks = () => {
 
             return Promise.all(
               published.map(async (item) => {
-                const attempted =
-                  item.kind === 'assessment'
-                    ? await hasStudentAttempted(classId, item.id, user.uid).catch(() => false)
-                    : false;
+                const attempted = item.type === 'Submission'
+                  ? false
+                  : await hasStudentAttempted(classId, item.id, user.uid, item.kind).catch(() => false);
 
                 const dueDate = item.dueDate
                   ? (item.dueDate?.toDate?.() || new Date(item.dueDate))

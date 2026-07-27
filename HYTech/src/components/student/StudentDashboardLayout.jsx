@@ -46,6 +46,10 @@ const StudentDashboardLayout = () => {
       return;
     }
 
+    // Never expose the internal Firestore document id in the app bar while
+    // the friendly class name is loading.
+    setCourseInfo(null);
+
     const fetchCourseInfo = async () => {
       try {
         const decodedClassname = decodeURIComponent(classname);
@@ -88,14 +92,12 @@ const StudentDashboardLayout = () => {
       return { title: 'Enroll', subtitle: 'Browse courses and apply to enroll.' };
     }
     if (path.includes('/student/') && classname) {
-      const decodedClassname = decodeURIComponent(classname);
-      const formattedTitle = decodedClassname;
       // The class name already carries the qualification, so show the spelled-out
       // certification (e.g., "National Certificate II") instead of repeating
       // "COURSE NAME NC II", which was redundant and doubled the "NC II".
       const subtitle = formatCertification(courseInfo?.courseTemplate?.level || '');
 
-      return { title: formattedTitle, subtitle };
+      return { title: courseInfo?.class?.name || 'Class', subtitle };
     }
     if (path === '/student/tasks') {
       return { title: 'Tasks', subtitle: 'Track your assignments, quizzes, and submissions.' };

@@ -27,6 +27,28 @@ input[type='reset'] {
   touch-action: manipulation;
 }
 
+/* Keep single-symbol controls centered inside their full touch target.
+   This is especially important for absolutely positioned input actions,
+   where the 44px minimum width is larger than the icon itself. */
+button:has(> svg:only-child),
+[role='button']:has(> svg:only-child) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+button > svg,
+[role='button'] > svg {
+  flex-shrink: 0;
+}
+
+@media (max-width: 639px) {
+  .mobile-compact-control {
+    min-height: 36px;
+  }
+}
+
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
@@ -179,6 +201,16 @@ textarea:focus-visible,
 .landing-hero-image {
   animation: landingHeroZoom 18s ease-in-out infinite alternate;
   transform-origin: center center;
+}
+
+/* The landing artwork is a wide composition whose subject sits on the right.
+   A centered cover crop removes that subject on portrait screens. */
+@media (max-width: 767px) {
+  .landing-hero-image {
+    background-position: 78% center;
+    animation: none;
+    transform: none;
+  }
 }
 
 .landing-float-card {

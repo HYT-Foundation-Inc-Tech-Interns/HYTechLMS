@@ -174,7 +174,7 @@ const StudentEnroll = () => {
             <p className="text-gray-600">No active classes available</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
             {courses.map((course) => {
               const sector = sectors.find((s) => s.id === course.sectorId);
               return (
@@ -187,7 +187,7 @@ const StudentEnroll = () => {
                   }}
                 >
                   <div
-                    className="relative h-48 overflow-hidden"
+                    className="relative h-28 overflow-hidden sm:h-48"
                     style={
                       course.bgImage
                         ? { backgroundImage: `url(${course.bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }
@@ -197,20 +197,20 @@ const StudentEnroll = () => {
                     {course.bgImage && <div className="absolute inset-0 bg-black/20" />}
                     {!course.bgImage && (
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <BookOpen className="w-16 h-16 text-white opacity-80" />
+                        <BookOpen className="h-10 w-10 text-white opacity-80 sm:h-16 sm:w-16" />
                       </div>
                     )}
-                    <div className="absolute top-4 right-4 z-10">
-                      <span className="px-3 py-1 bg-green-400 text-gray-900 text-xs font-bold rounded-full">
+                    <div className="absolute right-2 top-2 z-10 sm:right-4 sm:top-4">
+                      <span className="rounded-full bg-green-400 px-2 py-1 text-[10px] font-bold text-gray-900 sm:px-3 sm:text-xs">
                         {course.status === 'active' ? 'Active' : course.status}
                       </span>
                     </div>
                   </div>
 
-                  <div className="p-5">
-                    <h3 className="font-bold text-gray-900 text-base mb-1 line-clamp-1">{course.name}</h3>
+                  <div className="p-2.5 sm:p-5">
+                    <h3 className="mb-1 text-sm font-bold text-gray-900 line-clamp-2 sm:text-base">{course.name}</h3>
                     <p className="text-xs text-gray-500 uppercase tracking-wide mb-3">{sector?.name || 'General'}</p>
-                    <p className="text-sm text-gray-600 mb-4 min-h-5">
+                    <p className="mb-3 text-xs text-gray-600 line-clamp-2 sm:mb-4 sm:min-h-5 sm:text-sm">
                       {course.description ? course.description.substring(0, 50) + '...' : 'No description available'}
                     </p>
                     <div className="border-t border-gray-200 pt-3 grid grid-cols-2 gap-4 text-xs">

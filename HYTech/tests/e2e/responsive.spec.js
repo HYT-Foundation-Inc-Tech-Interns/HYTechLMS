@@ -28,6 +28,39 @@ for (const viewport of viewports) {
         await page.locator('body').waitFor({ state: 'visible' });
         await expectNoHorizontalOverflow(page);
         await expectInteractiveControlsInViewport(page);
+        const offCenterIcons = await page.locator(
+          'button:has(> svg:only-child), [role="button"]:has(> svg:only-child)'
+        ).evaluateAll((controls) => controls
+          .filter((control) => {
+            const style = window.getComputedStyle(control);
+            const rect = control.getBoundingClientRect();
+            return style.visibility !== 'hidden'
+              && style.display !== 'none'
+              && rect.width > 0
+              && rect.height > 0;
+          })
+          .map((control) => {
+            const controlRect = control.getBoundingClientRect();
+            const iconRect = control.querySelector(':scope > svg').getBoundingClientRect();
+            return {
+              label: control.getAttribute('aria-label') || 'icon button',
+              horizontalOffset: Math.abs(
+                (iconRect.left + iconRect.width / 2)
+                - (controlRect.left + controlRect.width / 2)
+              ),
+              verticalOffset: Math.abs(
+                (iconRect.top + iconRect.height / 2)
+                - (controlRect.top + controlRect.height / 2)
+              ),
+            };
+          })
+          .filter(({ horizontalOffset, verticalOffset }) =>
+            horizontalOffset > 1 || verticalOffset > 1));
+
+        expect(
+          offCenterIcons,
+          `Single-symbol controls are not centered: ${JSON.stringify(offCenterIcons)}`
+        ).toEqual([]);
         await expect(page.locator('body')).toBeVisible();
       });
     }

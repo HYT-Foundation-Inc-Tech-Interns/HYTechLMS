@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   Home, 
@@ -26,6 +26,7 @@ const StudentSidebar = () => {
   const [isCoursesExpanded, setIsCoursesExpanded] = useState(false);
   const [enrolledClasses, setEnrolledClasses] = useState([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
+  const navigationRef = useRef(null);
   const location = useLocation();
   const { user } = useAuth();
 
@@ -44,6 +45,11 @@ const StudentSidebar = () => {
 
   useEffect(() => {
     if (!isMobileOpen) return undefined;
+    // The drawer keeps its own scroll position while it is mounted. Expanding a
+    // long class list can therefore leave Home above the viewport the next time
+    // the drawer opens. Always present mobile navigation from the beginning.
+    navigationRef.current?.scrollTo({ top: 0 });
+
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const closeOnEscape = (event) => {
@@ -190,12 +196,12 @@ const StudentSidebar = () => {
       {/* Mobile Menu Button */}
       <button
         onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-colors"
+        className="fixed left-2 top-2.5 z-[60] rounded-lg p-2 text-white transition-colors hover:bg-white/10 lg:hidden"
         aria-label={isMobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
         aria-expanded={isMobileOpen}
         aria-controls="student-sidebar-navigation"
       >
-        {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        {isMobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </button>
 
       {/* Mobile Overlay */}
@@ -222,7 +228,10 @@ const StudentSidebar = () => {
         `}
       >
         {/* Navigation */}
-        <nav className="flex-1 p-4 pt-6 space-y-2 overflow-y-auto scrollbar-hidden">
+        <nav
+          ref={navigationRef}
+          className="flex-1 p-4 pt-6 space-y-2 overflow-y-auto scrollbar-hidden"
+        >
           {/* Home & Calendar */}
           {mainNavItems.map((item) => (
             <NavItem key={item.path} item={item} />

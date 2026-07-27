@@ -92,12 +92,18 @@ const StudentHome = () => {
             getAssignments(enr.classId).catch(() => []),
           ]);
           for (const a of assessments.filter((x) => x.status !== 'draft')) {
-            const done = await hasStudentAttempted(enr.classId, a.id, user.uid).catch(() => false);
+            const done = await hasStudentAttempted(enr.classId, a.id, user.uid, 'assessment').catch(() => false);
             if (!done) pending += 1;
           }
-          for (const a of assignments.filter((x) => x.type === 'Submission' && x.status !== 'draft')) {
-            const sub = await getMySubmission(enr.classId, a.id, user.uid).catch(() => null);
-            if (!sub) pending += 1;
+          for (const a of assignments.filter((x) => x.status !== 'draft')) {
+            if (a.type === 'Submission') {
+              const sub = await getMySubmission(enr.classId, a.id, user.uid).catch(() => null);
+              if (!sub) pending += 1;
+              continue;
+            }
+            // Form-builder quizzes are answered as attempts, not uploads.
+            const done = await hasStudentAttempted(enr.classId, a.id, user.uid, 'assignment').catch(() => false);
+            if (!done) pending += 1;
           }
         }
         if (mounted) setPendingCount(pending);
@@ -215,22 +221,22 @@ const StudentHome = () => {
 
   // Render: Stats Row
   const StatsRow = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4">
       {stats.map((stat, index) => {
         const Icon = stat.icon;
         return (
           <div
             key={index}
-            className={`${stat.bgColor} rounded-lg p-4 border border-gray-200 sm:p-6`}
+            className={`${stat.bgColor} rounded-lg p-3 border border-gray-200 sm:p-6`}
           >
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-gray-600 text-sm font-medium">{stat.label}</p>
-                <p className={`text-3xl font-bold ${stat.color} mt-2`}>
+                <p className={`text-2xl font-bold ${stat.color} mt-2 sm:text-3xl`}>
                   {stat.value}
                 </p>
               </div>
-              <Icon className={`${stat.color} w-8 h-8`} />
+              <Icon className={`${stat.color} h-6 w-6 sm:h-8 sm:w-8`} />
             </div>
           </div>
         );
@@ -288,7 +294,7 @@ const StudentHome = () => {
     }
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
         {activeEnrollments.map((enrollment) => {
           const courseTemplate = courseTemplates.find(t => t.id === enrollment.courseId);
           const preference = classPrefs[enrollment.classId] || {};
@@ -309,7 +315,7 @@ const StudentHome = () => {
             >
               {/* Shared class image with the student's effective color overlay. */}
               <div 
-                className="relative h-48 cursor-pointer overflow-hidden rounded-t-xl"
+                className="relative h-28 cursor-pointer overflow-hidden rounded-t-xl sm:h-48"
                 style={
                   effectiveImage
                     ? { 
@@ -333,17 +339,23 @@ const StudentHome = () => {
                 {/* Icon for when no image */}
                 {!effectiveImage && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <BookOpen className="w-16 h-16 text-white opacity-80" />
+                    <BookOpen className="h-10 w-10 text-white opacity-80 sm:h-16 sm:w-16" />
                   </div>
                 )}
+                <ClassCardPersonalization
+                  userId={user?.uid}
+                  classId={enrollment.classId}
+                  preference={preference}
+                  className="absolute right-1 top-1 z-20 sm:right-2 sm:top-2"
+                />
               </div>
 
               {/* Class Info */}
-              <div className="p-4 space-y-4 sm:p-6">
+              <div className="space-y-2 p-2.5 sm:space-y-4 sm:p-6">
                 {/* Title */}
-                <div className="flex items-start justify-between gap-3">
+                <div>
                   <div className="min-w-0 cursor-pointer">
-                    <h3 className="font-bold text-navy-900 text-lg line-clamp-2">{effectiveTitle}</h3>
+                    <h3 className="text-sm font-bold text-navy-900 line-clamp-2 sm:text-lg">{effectiveTitle}</h3>
                     {preference.nickname && (
                       <p className="mt-1 truncate text-xs text-gray-400">Shared name: {enrollment.className}</p>
                     )}
@@ -351,11 +363,6 @@ const StudentHome = () => {
                       <p className="text-sm text-gray-600 mt-1 line-clamp-1">{courseTemplate.name}</p>
                     )}
                   </div>
-                  <ClassCardPersonalization
-                    userId={user?.uid}
-                    classId={enrollment.classId}
-                    preference={preference}
-                  />
                 </div>
 
                 {/* Status Badge Box */}

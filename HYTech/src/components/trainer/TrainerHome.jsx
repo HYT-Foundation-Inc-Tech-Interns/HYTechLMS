@@ -662,7 +662,7 @@ const TrainerHome = () => {
               <p className="text-gray-600 text-lg">No classes yet. Create your first class to get started!</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
               {courses.map((course) => {
                 const courseEnrolls = enrollments[course.id] || [];
 
@@ -680,11 +680,11 @@ const TrainerHome = () => {
                           event.stopPropagation();
                           handleOpenEditClass(course);
                         }}
-                        className="absolute right-3 top-3 z-10 rounded-lg bg-white/95 p-2 text-gray-600 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                        className="absolute right-0 top-0 z-10 rounded-lg bg-transparent p-0 text-white drop-shadow-md transition-colors hover:text-blue-200 sm:right-3 sm:top-3 sm:bg-white/95 sm:p-2 sm:text-gray-600 sm:shadow-sm sm:drop-shadow-none sm:ring-1 sm:ring-gray-200 sm:hover:bg-blue-50 sm:hover:text-blue-700"
                         aria-label={`Edit ${course.name}`}
                         title="Edit class"
                       >
-                        <Edit2 className="h-4 w-4" />
+                        <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       </button>
                       <button
                         type="button"
@@ -693,16 +693,16 @@ const TrainerHome = () => {
                           setSelectedCourse(course);
                           setShowArchiveModal(true);
                         }}
-                        className="absolute right-14 top-3 z-10 rounded-lg bg-white/95 p-2 text-gray-600 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-red-50 hover:text-red-700"
+                        className="absolute right-10 top-0 z-10 rounded-lg bg-transparent p-0 text-white drop-shadow-md transition-colors hover:text-red-200 sm:right-14 sm:top-3 sm:bg-white/95 sm:p-2 sm:text-gray-600 sm:shadow-sm sm:drop-shadow-none sm:ring-1 sm:ring-gray-200 sm:hover:bg-red-50 sm:hover:text-red-700"
                         aria-label={`Archive ${course.name}`}
                         title="Archive class"
                       >
-                        <Archive className="h-4 w-4" />
+                        <Archive className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       </button>
                       </>
                     )}
                     <div
-                      className="relative h-36 overflow-hidden"
+                      className="relative h-24 overflow-hidden sm:h-36"
                       style={course.bgImage
                         ? {
                             backgroundImage: `url(${course.bgImage})`,
@@ -719,39 +719,39 @@ const TrainerHome = () => {
                       )}
                       {!course.bgImage && (
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <BookOpen className="h-12 w-12 text-white/80" />
+                          <BookOpen className="h-8 w-8 text-white/80 sm:h-12 sm:w-12" />
                         </div>
                       )}
                     </div>
                     {/* Class Info */}
-                    <div className="p-4 space-y-4 flex flex-col flex-1 sm:p-6">
+                    <div className="flex flex-1 flex-col space-y-2 p-2.5 sm:space-y-4 sm:p-6">
                       {/* Title */}
-                      <div className="min-h-14 pr-9">
-                        <h3 className="font-bold text-navy-900 text-lg line-clamp-2 leading-snug">{course.name}</h3>
+                      <div className="min-h-12 sm:min-h-14 sm:pr-9">
+                        <h3 className="text-sm font-bold leading-snug text-navy-900 line-clamp-2 sm:text-lg">{course.name}</h3>
                         {course.courseName && (
                           <p className="text-sm text-gray-600 mt-1 line-clamp-1">{course.courseName}</p>
                         )}
                       </div>
 
                       {/* Class Code */}
-                      <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                      <div className="rounded-lg border border-blue-200 bg-blue-50 p-2 sm:p-3">
                         <p className="text-xs text-gray-600 font-medium mb-1">Class Code</p>
-                        <p className="font-mono text-sm font-bold text-blue-700">{course.classCode || 'N/A'}</p>
+                        <p className="truncate font-mono text-xs font-bold text-blue-700 sm:text-sm">{course.classCode || 'N/A'}</p>
                       </div>
 
                       {/* Quick Stats */}
                       <div className="grid grid-cols-3 gap-2 text-center mt-auto">
-                        <div className="bg-gray-50 rounded-lg p-3">
-                          <p className="text-xs text-gray-500 font-medium">Enrolled</p>
-                          <p className="text-lg font-bold text-navy-900 mt-1">{courseEnrolls.length}</p>
+                        <div className="rounded-lg bg-gray-50 p-1 sm:p-3">
+                          <p className="text-[9px] font-medium text-gray-500 sm:text-xs">Enrolled</p>
+                          <p className="mt-1 text-sm font-bold text-navy-900 sm:text-lg">{courseEnrolls.length}</p>
                         </div>
-                        <div className="bg-gray-50 rounded-lg p-3">
-                          <p className="text-xs text-gray-500 font-medium">Level</p>
-                          <p className="text-lg font-bold text-blue-600 mt-1">{course.level || 'NC I'}</p>
+                        <div className="rounded-lg bg-gray-50 p-1 sm:p-3">
+                          <p className="text-[9px] font-medium text-gray-500 sm:text-xs">Level</p>
+                          <p className="mt-1 text-xs font-bold text-blue-600 sm:text-lg">{course.level || 'NC I'}</p>
                         </div>
-                        <div className="bg-gray-50 rounded-lg p-3">
-                          <p className="text-xs text-gray-500 font-medium">Status</p>
-                          <span className={`inline-block text-xs font-bold px-2 py-1 rounded mt-1 ${
+                        <div className="rounded-lg bg-gray-50 p-1 sm:p-3">
+                          <p className="text-[9px] font-medium text-gray-500 sm:text-xs">Status</p>
+                          <span className={`mt-1 inline-block rounded px-1 py-1 text-[9px] font-bold sm:px-2 sm:text-xs ${
                             String(course.status || '').toLowerCase() === 'draft'
                               ? 'bg-amber-100 text-amber-700'
                               : 'bg-green-100 text-green-700'
@@ -793,7 +793,7 @@ const TrainerHome = () => {
           </div>
 
           {/* Available Courses Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
             {availableCourses
               .filter((course) => selectedFilterSector === '' || String(course.sectorId) === selectedFilterSector)
               .map((course) => (
@@ -803,7 +803,7 @@ const TrainerHome = () => {
                 >
                   {/* Header with Image or Gradient */}
                   <div 
-                    className="relative h-48 overflow-hidden"
+                    className="relative h-28 overflow-hidden sm:h-48"
                     style={
                       course.bgImage 
                         ? { backgroundImage: `url(${course.bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }
@@ -817,9 +817,9 @@ const TrainerHome = () => {
                   </div>
 
                   {/* Content */}
-                  <div className="p-4 space-y-4 sm:p-6">
+                  <div className="space-y-2 p-2.5 sm:space-y-4 sm:p-6">
                     <div>
-                      <h3 className="font-bold text-lg line-clamp-1 mb-1">{course.name}</h3>
+                      <h3 className="mb-1 text-sm font-bold line-clamp-2 sm:text-lg">{course.name}</h3>
                       <p className="text-sm text-gray-500 line-clamp-1">{course.sectorName}</p>
                     </div>
                     {/* Description */}

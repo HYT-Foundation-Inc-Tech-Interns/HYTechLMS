@@ -4,7 +4,7 @@ import { setClassPref } from '../../utils/firestoreService';
 import { COLOR_PALETTE, getGradientStyle } from '../../utils/courseColors';
 import { useToast } from '../../context/ToastContext';
 
-const ClassCardPersonalization = ({ userId, classId, preference = {} }) => {
+const ClassCardPersonalization = ({ userId, classId, preference = {}, className = '' }) => {
   const { addToast } = useToast();
   const [open, setOpen] = useState(false);
   const [nickname, setNickname] = useState('');
@@ -46,16 +46,18 @@ const ClassCardPersonalization = ({ userId, classId, preference = {} }) => {
   if (!userId || !classId) return null;
 
   return (
-    <div className="relative" onClick={(event) => event.stopPropagation()}>
+    <div className={`relative ${className}`} onClick={(event) => event.stopPropagation()}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+        className="inline-flex items-center justify-center rounded-full text-gray-700"
         aria-expanded={open}
         aria-label="Personalize this class card"
+        title="Personalize class card"
       >
-        <Pencil className="h-3.5 w-3.5" />
-        Personalize
+        <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/70 bg-white/95 shadow-md transition-transform hover:scale-105 hover:bg-white">
+          <Pencil className="h-3.5 w-3.5" />
+        </span>
       </button>
 
       {open && (

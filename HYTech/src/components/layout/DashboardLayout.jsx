@@ -16,6 +16,8 @@ const DashboardLayout = () => {
   useEffect(() => {
     if (params.className) {
       const decodedClassName = decodeURIComponent(params.className);
+      setClassData(null);
+      setCourseData(null);
       getCourseByName(decodedClassName)
         .then(data => {
           setClassData(data);
@@ -60,12 +62,10 @@ const DashboardLayout = () => {
       // certification as subtitle (e.g., "National Certificate II"). The class
       // name already carries the qualification, so repeating "NC II" here was
       // both redundant and doubled up (e.g., "BARISTA NC II NC II").
-      const decodedClassName = decodeURIComponent(params.className);
-
       const level = courseData?.level || classData?.level || '';
       const courseSubtitle = formatCertification(level);
 
-      return { title: decodedClassName, subtitle: courseSubtitle };
+      return { title: classData?.name || 'Class', subtitle: courseSubtitle };
     }
     return { title: '', subtitle: '' };
   };

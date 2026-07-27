@@ -502,14 +502,14 @@ const Sectors = () => {
           <p className="text-gray-600">No sectors match your search or filter.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
           {visibleSectors.map((sector) => (
             <div
               key={sector.id}
               className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden flex flex-col h-full relative"
             >
               {/* Sector Image/Background */}
-              <div className="h-40 bg-cover bg-center"
+              <div className="h-24 bg-cover bg-center sm:h-40"
                 style={sector.bgImage 
                   ? { backgroundImage: `url(${sector.bgImage})` }
                   : (sector.color ? getGradientStyle(sector.color) : { background: getBackgroundColor(sector.name).replace('bg-gradient-to-r ', '') })
@@ -518,8 +518,8 @@ const Sectors = () => {
               </div>
 
               {/* Status Badge - Top Right */}
-              <div className="absolute top-3 right-3">
-                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+              <div className="absolute right-2 top-2 sm:right-3 sm:top-3">
+                <span className={`px-2 py-1 text-[10px] font-semibold rounded-full sm:px-3 sm:text-xs ${
                   sector.status === 'Active' 
                     ? 'bg-green-100 text-green-700'
                     : 'bg-gray-100 text-gray-700'
@@ -528,12 +528,12 @@ const Sectors = () => {
                 </span>
               </div>
 
-              <div className="p-4 space-y-3 flex-1">
+              <div className="flex-1 space-y-2 p-2.5 sm:space-y-3 sm:p-4">
                 {/* Name */}
-                <h3 className="font-bold text-gray-900 line-clamp-2">{sector.name}</h3>
+                <h3 className="text-sm font-bold text-gray-900 line-clamp-2 sm:text-base">{sector.name}</h3>
 
                 {/* Description */}
-                <p className="text-sm text-gray-600 line-clamp-2">{sector.description}</p>
+                <p className="text-xs text-gray-600 line-clamp-2 sm:text-sm">{sector.description}</p>
                 <p className="text-xs font-medium text-gray-500">
                   {sector.activeCourseCount || 0} active {(sector.activeCourseCount || 0) === 1 ? 'course' : 'courses'}
                   {' · '}
@@ -542,13 +542,13 @@ const Sectors = () => {
               </div>
 
               {/* Actions - Docked at Bottom */}
-              <div className="px-4 pb-4 flex gap-2">
+              <div className="grid grid-cols-2 gap-1 px-2.5 pb-2.5 sm:flex sm:gap-2 sm:px-4 sm:pb-4">
                 <button
                   onClick={() => handleViewCourses(sector)}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-[#0B005C] bg-[#0B005C]/10 rounded-lg hover:bg-[#0B005C]/20 transition-colors"
+                  className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-[#0B005C]/10 px-1 py-2 text-xs font-medium text-[#0B005C] transition-colors hover:bg-[#0B005C]/20 sm:gap-2 sm:px-3 sm:text-sm"
                 >
                   <Eye className="w-4 h-4" />
-                  Courses
+                  <span className="hidden min-[360px]:inline">Courses</span>
                 </button>
                 <button
                   onClick={() => openEditSectorModal(sector)}

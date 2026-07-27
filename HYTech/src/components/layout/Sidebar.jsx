@@ -127,12 +127,12 @@ const Sidebar = () => {
       {/* Mobile Menu Button */}
       <button
         onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-colors"
+        className="fixed left-2 top-2.5 z-[60] rounded-lg p-2 text-white transition-colors hover:bg-white/10 lg:hidden"
         aria-label={isMobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
         aria-expanded={isMobileOpen}
         aria-controls="trainer-sidebar-navigation"
       >
-        {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        {isMobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </button>
 
       {/* Mobile Overlay */}

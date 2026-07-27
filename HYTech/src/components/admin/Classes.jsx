@@ -766,7 +766,7 @@ const Classes = () => {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-3">
                 {filteredCourses.map((course) => (
                   <div key={course.id} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
                     <div
@@ -775,11 +775,11 @@ const Classes = () => {
                     >
                       {!course.bgImage && <BookOpen className="w-8 h-8 text-white/80" />}
                     </div>
-                    <div className="p-4">
+                    <div className="p-2.5 sm:p-4">
                       <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-semibold text-gray-900">{course.name}</h3>
+                        <h3 className="min-w-0 text-sm font-semibold text-gray-900 line-clamp-2 sm:text-base">{course.name}</h3>
                         <span
-                          className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ${
+                            className={`flex-shrink-0 px-1.5 py-1 rounded-full text-[10px] font-medium sm:px-2.5 sm:text-xs ${
                             course.available ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
                           }`}
                         >
@@ -808,20 +808,21 @@ const Classes = () => {
                       <button
                         onClick={() => handleToggleAvailability(course)}
                         disabled={togglingId === course.id}
-                        className={`mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                        className={`mobile-compact-control mt-3 flex w-full items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-50 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm ${
                           course.available
                             ? 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                             : 'bg-blue-600 text-white hover:bg-blue-700'
                         }`}
                       >
                         {togglingId === course.id ? (
-                          <Loader className="w-4 h-4 animate-spin" />
+                          <Loader className="h-3.5 w-3.5 animate-spin sm:h-4 sm:w-4" />
                         ) : course.available ? (
-                          <ToggleRight className="w-4 h-4" />
+                          <ToggleRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         ) : (
-                          <ToggleLeft className="w-4 h-4" />
+                          <ToggleLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         )}
-                        {course.available ? 'Make unavailable' : 'Make available'}
+                        <span className="sm:hidden">{course.available ? 'Disable' : 'Enable'}</span>
+                        <span className="hidden sm:inline">{course.available ? 'Make unavailable' : 'Make available'}</span>
                       </button>
                     </div>
                   </div>
@@ -842,16 +843,16 @@ const Classes = () => {
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-2 sm:space-y-4">
                 {filteredClasses.map((course) => (
                   <div key={course.id} className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                     <button
                       onClick={() => toggleExpanded(course.id)}
-                      className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                      className="flex w-full items-center justify-between px-3 py-2.5 transition-colors hover:bg-gray-50 sm:px-6 sm:py-4"
                     >
                       <div className="flex-1 text-left">
-                        <h3 className="text-lg font-semibold text-gray-900">{course.name}</h3>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-gray-500">
+                        <h3 className="text-sm font-semibold text-gray-900 sm:text-lg">{course.name}</h3>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 sm:gap-x-3 sm:text-sm">
                           <span className="inline-flex items-center gap-1">
                             <Users className="w-3.5 h-3.5" />
                             {trainerName(course.trainerId)}
@@ -861,10 +862,10 @@ const Classes = () => {
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1.5 sm:gap-4">
                         {statusBadge(course.status)}
                         <ChevronDown
-                          className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${
+                          className={`h-4 w-4 text-gray-400 transition-transform duration-200 sm:h-5 sm:w-5 ${
                             expandedClassId === course.id ? 'transform rotate-180' : ''
                           }`}
                         />
@@ -872,12 +873,12 @@ const Classes = () => {
                     </button>
 
                     {expandedClassId === course.id && (
-                      <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 space-y-4">
+                      <div className="space-y-4 border-t border-gray-200 bg-gray-50 px-3 py-3 sm:px-6 sm:py-4">
                         {!editingClassId && (
-                          <div className="flex flex-wrap justify-end gap-2">
+                          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
                             <button
                               onClick={() => navigate(`/admin/classes/${encodeURIComponent(course.id)}/preview`)}
-                              className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
+                              className="mobile-compact-control flex items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 sm:gap-2 sm:px-4 sm:py-2 sm:text-sm"
                             >
                               <Eye className="w-4 h-4" />
                               View as Trainee
@@ -890,21 +891,21 @@ const Classes = () => {
                                   ? 'Preview and promote this class as the program default'
                                   : 'This class is not linked to a program'
                               }
-                              className="flex items-center gap-2 px-4 py-2 border border-violet-200 bg-violet-50 text-violet-700 rounded-lg hover:bg-violet-100 transition-colors text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                              className="mobile-compact-control flex items-center justify-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:py-2 sm:text-sm"
                             >
                               <Copy className="w-4 h-4" />
                               Use as Default Template
                             </button>
                             <button
                               onClick={() => openManageStudents(course)}
-                              className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                              className="mobile-compact-control flex items-center justify-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:gap-2 sm:px-4 sm:py-2 sm:text-sm"
                             >
                               <Users className="w-4 h-4" />
                               Manage Trainees
                             </button>
                             <button
                               onClick={() => startEditing(course)}
-                              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                              className="mobile-compact-control flex items-center justify-center gap-1 rounded-lg bg-blue-600 px-2 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 sm:gap-2 sm:px-4 sm:py-2 sm:text-sm"
                             >
                               <Edit2 className="w-4 h-4" />
                               Edit Class

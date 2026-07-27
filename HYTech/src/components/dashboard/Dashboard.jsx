@@ -281,23 +281,23 @@ const Dashboard = () => {
       ) : (
         <>
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
           const colors = getColorClasses(stat.color);
           return (
             <div 
               key={index}
-              className={`${colors.bg} border ${colors.border} rounded-2xl p-6 shadow-sm hover:shadow-lg hover:-translate-y-2 transition-all duration-300 cursor-default group`}
+              className={`${colors.bg} border ${colors.border} rounded-2xl p-3 shadow-sm hover:shadow-lg hover:-translate-y-2 transition-all duration-300 cursor-default group sm:p-6`}
               style={{ animationDelay: `${index * 0.1}s` }}
             >
               <div className="flex items-start justify-between mb-4">
-                <div className={`${colors.icon} w-14 h-14 rounded-xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300`}>
-                  <Icon className="w-7 h-7" />
+                <div className={`${colors.icon} flex h-10 w-10 items-center justify-center rounded-xl shadow-md transition-transform duration-300 group-hover:scale-110 sm:h-14 sm:w-14`}>
+                  <Icon className="h-5 w-5 sm:h-7 sm:w-7" />
                 </div>
               </div>
-              <h3 className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</h3>
-              <p className="text-sm font-medium text-gray-600">{stat.label}</p>
+              <h3 className="mb-1 text-2xl font-bold text-gray-900 sm:text-3xl">{stat.value}</h3>
+              <p className="text-xs font-medium text-gray-600 sm:text-sm">{stat.label}</p>
             </div>
           );
         })}
