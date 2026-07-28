@@ -1,784 +1,421 @@
-# HYTech Learning Management System (LMS)
+# HYTech Learning Management System
 
-A comprehensive, production-ready Learning Management System built with React and Firebase for HYT Global Institute. The platform supports multi-role authentication (Admin, Trainer, Student, Supervisor) with full course management, assessment handling, real-time notifications, and collaborative communication features.
+A browser-based LMS for **HYT Global Institute**, built as a React single-page
+application on Firebase. It supports three roles — Administrator, Trainer, and
+Student/Trainee — covering TESDA-aligned sectors, course templates, live classes,
+learning content, assessments, submissions, grading, and notifications.
 
-## 📋 Table of Contents
+> **New developer?** Start with
+> [HYTECH_LMS_DEVELOPER_TURNOVER_GUIDE.md](HYTECH_LMS_DEVELOPER_TURNOVER_GUIDE.md).
+> It is the authoritative reference for setup, operations, security posture, and
+> the improvement roadmap. This README is the short orientation.
 
-- [Features](#features)
-- [Technology Stack](#technology-stack)
-- [Project Structure](#project-structure)
-- [Installation & Setup](#installation--setup)
-- [Quick Start](#quick-start)
-- [Authentication](#authentication)
-- [Key Features Guide](#key-features-guide)
-- [Component Architecture](#component-architecture)
-- [Database Schema](#database-schema)
-- [API Integration](#api-integration)
-- [Styling & Design](#styling--design)
-- [Performance Optimizations](#performance-optimizations)
+---
+
+## Table of contents
+
+- [Architecture](#architecture)
+- [Environments](#environments)
+- [Technology stack](#technology-stack)
+- [Repository layout](#repository-layout)
+- [Getting started](#getting-started)
+- [Available scripts](#available-scripts)
+- [Roles and routes](#roles-and-routes)
+- [Data model](#data-model)
+- [Assessments and grading](#assessments-and-grading)
+- [Security model](#security-model)
+- [Testing and QA](#testing-and-qa)
+- [Deployment](#deployment)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 
 ---
 
-## ✨ Features
+## Architecture
 
-### 🔐 Multi-Role Access Control
-- **Admin**: Full system management, user administration, sector creation, system monitoring
-- **Trainer**: Class management, content creation, assignment/assessment posting, student management
-- **Student**: Course enrollment, assignment submission, quiz participation, progress tracking
-- **Supervisor**: Course oversight, report generation, student performance monitoring
-
-### 📚 Course & Content Management
-- Course creation and enrollment
-- Module organization with sequential progression
-- Interactive lesson topics with descriptions
-- Learning materials library with file uploads
-- Real-time content updates and synchronization
-- Material versioning and archival
-
-### ✏️ Assignments & Assessments
-- Form builder for creating custom assessments
-- Multiple question types support
-- Point-based grading system
-- Automatic score calculation
-- Quiz attempt history tracking
-- Pass/fail status determination
-- Submission deadline management
-- Retry capabilities with score tracking
-
-### 📢 Communication & Collaboration
-- Real-time announcements system
-- Comment threads on announcements
-- Inline editing of announcements
-- File attachments with download support
-- User mentions and notifications
-- Inline comment deletion (author only)
-- Timestamp tracking (absolute and relative)
-
-### 📊 Analytics & Reporting
-- Student performance dashboards
-- Quiz completion rates
-- Average score calculations
-- Best score tracking
-- Activity feed with real-time updates
-- Progress visualization
-- Detailed attempt history
-
-### 🎨 User Experience
-- Responsive design (mobile, tablet, desktop)
-- Intuitive navigation with tabbed interfaces
-- Real-time loading states and spinners
-- Toast notifications for user feedback
-- Dark/Light mode support (foundation)
-- Accessibility-first design
-- Smooth animations and transitions
-
-### 🔔 Notifications
-- Real-time assignment/assessment notifications
-- Announcement updates
-- Comment notifications
-- System alerts
-- User preference controls
-
----
-
-## 🛠 Technology Stack
-
-### Frontend
-- **React 18+** - UI framework
-- **React Router v6** - Client-side routing
-- **Tailwind CSS** - Utility-first styling
-- **Lucide React** - Icon library
-- **Vite** - Build tool and dev server
-
-### Backend & Database
-- **Firebase/Firestore** - Real-time database
-- **Firebase Auth** - Authentication & authorization
-- **Firebase Storage** - File storage
-- **Firebase Rules** - Security rules
-
-### Development Tools
-- **PostCSS** - CSS processing
-- **ESLint** - Code linting
-- **Git** - Version control
-
----
-
-## 📁 Project Structure
-
-```
-HYTech/
-├── public/
-│   ├── 404.html
-│   └── index.html
-├── src/
-│   ├── components/
-│   │   ├── auth/                 # Authentication routes
-│   │   │   ├── AuthenticatedRoute.jsx
-│   │   │   ├── PublicOnlyRoute.jsx
-│   │   │   ├── RoleProtectedRoute.jsx
-│   │   │   ├── SignIn.jsx
-│   │   │   └── SignUp.jsx
-│   │   ├── dashboard/            # Dashboard components
-│   │   │   └── Dashboard.jsx
-│   │   ├── layout/               # Layout components
-│   │   │   ├── AdminDashboardLayout.jsx
-│   │   │   ├── DashboardLayout.jsx
-│   │   │   ├── SupervisorDashboardLayout.jsx
-│   │   │   ├── Navbar.jsx
-│   │   │   ├── AdminNavbar.jsx
-│   │   │   ├── SupervisorNavbar.jsx
-│   │   │   ├── Sidebar.jsx
-│   │   │   ├── AdminSidebar.jsx
-│   │   │   └── SupervisorSidebar.jsx
-│   │   ├── student/              # Student-specific components
-│   │   │   ├── StudentHome.jsx
-│   │   │   ├── StudentCourse.jsx
-│   │   │   ├── StudentDashboardLayout.jsx
-│   │   │   ├── StudentNavbar.jsx
-│   │   │   ├── StudentSidebar.jsx
-│   │   │   ├── StudentCalendar.jsx
-│   │   │   ├── StudentTasks.jsx
-│   │   │   ├── StudentCertificates.jsx
-│   │   │   ├── StudentSettings.jsx
-│   │   │   └── StudentArchivedCourses.jsx
-│   │   ├── trainer/              # Trainer-specific components
-│   │   │   ├── TrainerHome.jsx
-│   │   │   ├── ClassDetail.jsx
-│   │   │   ├── TrainerSectors.jsx
-│   │   │   ├── SectorDetail.jsx
-│   │   │   ├── Course.jsx
-│   │   │   ├── ArchivedCourses.jsx
-│   │   │   ├── Tasks.jsx
-│   │   │   └── TrainerSettings.jsx
-│   │   ├── supervisor/           # Supervisor-specific components
-│   │   │   ├── SupervisorHome.jsx
-│   │   │   ├── SupervisorStudents.jsx
-│   │   │   ├── SupervisorTrainers.jsx
-│   │   │   ├── SupervisorCourses.jsx
-│   │   │   ├── SupervisorReports.jsx
-│   │   │   └── SupervisorSettings.jsx
-│   │   ├── users/                # User management
-│   │   │   └── UserManagement.jsx
-│   │   ├── logs/                 # System logs
-│   │   │   └── SystemLogs.jsx
-│   │   ├── sectors/              # Sector management
-│   │   │   └── Sectors.jsx
-│   │   ├── settings/             # Settings
-│   │   │   └── Settings.jsx
-│   │   ├── shared/               # Shared components
-│   │   │   ├── FlappyBirdGame.jsx
-│   │   │   ├── NotificationDropdown.jsx
-│   │   │   └── NotificationsPage.jsx
-│   │   ├── landing/              # Landing page
-│   │   │   └── LandingPage.jsx
-│   │   └── hytbot/               # AI Assistant
-│   │       └── HytBot.jsx
-│   ├── context/
-│   │   ├── AuthContext.jsx       # Authentication state
-│   │   ├── ToastContext.jsx      # Toast notifications
-│   │   ├── useProfileAvatar.js   # Avatar management hook
-│   │   ├── useRoleNotifications.js # Notifications hook
-│   │   └── useUserSettings.js    # User settings hook
-│   ├── utils/
-│   │   ├── authRole.js           # Role-based access utilities
-│   │   ├── avatarStorage.js      # Avatar handling
-│   │   └── firestoreService.js   # Firebase/Firestore operations
-│   ├── App.jsx                   # Main app component
-│   ├── firebase.js               # Firebase config
-│   ├── index.js                  # App entry point
-│   ├── main.jsx                  # Vite entry point
-│   └── index.css                 # Global styles
-├── build/                        # Production build output
-├── firebase.json                 # Firebase config
-├── firestore.rules               # Firestore security rules
-├── firestore.indexes.json        # Firestore indexes
-├── package.json
-├── tailwind.config.js
-├── postcss.config.js
-├── vite.config.js
-└── README.md
+```text
+Browser
+  |
+  +-- React + React Router + Tailwind (Vite build)
+  |
+  +-- Firebase Authentication      identity
+  +-- Cloud Firestore              application data + real-time listeners
+  +-- Cloud Storage                materials, avatars, submissions
+  +-- Cloud Functions              privileged writes, secure grading, triggers
+  |
+Firebase Hosting serves the production build
 ```
 
----
+There is no Redux or central store. State lives in component state,
+`AuthContext`, `ToastContext`, custom hooks, and Firestore `onSnapshot`
+listeners. `src/utils/firestoreService.js` is the browser-side data-access layer.
 
-## 🚀 Installation & Setup
+Two components carry a large share of product behavior and are the top
+maintainability priority: `StudentCourse.jsx` (student class experience, quiz
+runner, submissions) and `ClassDetail.jsx` (trainer class management, builders,
+grading, gradebook).
+
+## Environments
+
+| Environment | Firebase project | Purpose |
+| --- | --- | --- |
+| Production | `hyt-global-institute-lms` | Live application and real data |
+| Staging | `hytech-lms-staging` | QA and safe integration testing |
+
+Both deploy to region `asia-southeast1`. **Never use production learner data or
+production credentials for local testing.** Prefer staging for development.
+
+## Technology stack
+
+| Layer | Technology |
+| --- | --- |
+| UI | React 18, React Router 7, Tailwind CSS 3, Lucide React |
+| Build | Vite 8 (output: `dist/`) |
+| Client SDK | Firebase Web SDK 12 (Auth, Firestore, Storage, Functions, App Check) |
+| Backend | Cloud Functions, Node.js 22, `firebase-functions` + `firebase-admin` |
+| Testing | Playwright, `@axe-core/playwright` |
+| CI/CD | GitHub Actions |
+
+## Repository layout
+
+The deployable application lives in `HYTech/`. Run all npm and Firebase commands
+from there.
+
+```text
+HYTechLMS/
+|-- .github/workflows/
+|   |-- qa.yml                  # Build + Playwright QA (push, pull_request)
+|   `-- deploy.yml              # Firebase production deploy (push to main)
+|-- docs/                       # Architecture, QA playbook, roadmap, audits
+|-- HYTech/                     # Application root
+|   |-- functions/src/index.js  # All Cloud Functions
+|   |-- scripts/                # QA seeding, provisioning, validation, cleanup
+|   |-- src/
+|   |   |-- components/         # admin, auth, dashboard, hytbot, landing,
+|   |   |                       # layout, logs, sectors, settings, shared,
+|   |   |                       # student, trainer, users
+|   |   |-- context/            # AuthContext, ToastContext, hooks
+|   |   |-- data/               # Local TESDA catalog
+|   |   |-- hooks/
+|   |   |-- utils/              # firestoreService.js, authRole, avatarStorage
+|   |   |-- App.jsx             # Route table
+|   |   `-- firebase.js         # Firebase client initialization
+|   |-- tests/e2e/              # public, roles, responsive, accessibility, release
+|   |-- firebase.json           # Hosting, headers, rules wiring
+|   |-- firestore.rules
+|   |-- storage.rules
+|   |-- playwright.config.js
+|   `-- vite.config.js
+`-- HYTECH_LMS_DEVELOPER_TURNOVER_GUIDE.md
+```
+
+## Getting started
 
 ### Prerequisites
-- Node.js 16+ and npm/yarn
-- Firebase project setup
-- Git for version control
 
-### Step 1: Clone & Install Dependencies
+- **Node.js 22 LTS** (matches the Cloud Functions runtime)
+- Git
+- Firebase CLI
+- Access to the staging Firebase project
 
-```bash
-# Clone the repository
-git clone <repository-url>
-cd HYTech
+### Install
 
-# Install dependencies
-npm install
+```powershell
+git clone <authorized-repository-url>
+Set-Location HYTechLMS/HYTech
+
+npm ci
+npm ci --prefix functions
+npx playwright install chromium
 ```
 
-### Step 2: Configure Firebase
+Use `npm ci`, not `npm install`, for reproducible installs. Dependency upgrades
+belong in isolated, reviewed commits.
 
-1. Create a Firebase project at [firebase.google.com](https://firebase.google.com)
-2. Create a `.env.local` file in the project root:
+### Configure environment
 
-```env
-VITE_FIREBASE_API_KEY=your_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
+Vite exposes `VITE_`-prefixed variables to browser code. Firebase web config
+values identify a project but are **not** authorization secrets — security rests
+on Auth, Security Rules, App Check, and backend validation.
+
+```powershell
+Copy-Item .env.staging.example .env.staging.local
 ```
 
-3. Update `src/firebase.js` with your Firebase configuration
+| Variable | Notes |
+| --- | --- |
+| `VITE_FIREBASE_API_KEY` | Public identifier; restrict in Google Cloud |
+| `VITE_FIREBASE_AUTH_DOMAIN` | |
+| `VITE_FIREBASE_PROJECT_ID` | Must match the intended environment |
+| `VITE_FIREBASE_STORAGE_BUCKET` | |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | |
+| `VITE_FIREBASE_APP_ID` | |
+| `VITE_RECAPTCHA_SITE_KEY` | App Check site key |
 
-### Step 3: Initialize Firestore
+`npm run dev` reads `.env.local` — **verify that file does not silently point at
+production.**
 
-```bash
-# Deploy Firestore rules and indexes
-firebase deploy --only firestore:rules,firestore:indexes
+Never commit `.env.local`, `.env.staging.local`, `.env.e2e.local`,
+service-account JSON, Firebase CI tokens, or real passwords.
+
+### Run
+
+```powershell
+npm run dev            # uses .env.local
+npm run dev:staging    # uses .env.staging.local
 ```
 
-### Step 4: Start Development Server
+Vite prefers port `3000` and will pick another if it is taken — use the URL
+printed in the terminal.
 
-```bash
-npm run dev
+### Test accounts
+
+There are no shared built-in credentials. Provision dedicated **staging**
+identities with the guarded seeding scripts, covering active admin, active
+trainer, enrolled student, unenrolled student, pending student, and disabled
+student:
+
+```powershell
+npm run qa:seed:identities
+npm run qa:seed:data
+npm run qa:verify-seed
 ```
 
-The application will be available at `http://localhost:5174`
+Read each script and confirm its target project before running it.
 
----
+## Available scripts
 
-## ⚡ Quick Start
+Run from `HYTech/`.
 
-### Test Credentials
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` / `dev:staging` | Development server |
+| `npm run build` / `build:staging` | Production bundle to `dist/` |
+| `npm run preview` | Serve the built bundle locally |
+| `npm run test:e2e` | Playwright, Chromium only |
+| `npm run test:e2e:public` | Public pages + accessibility |
+| `npm run test:e2e:responsive` | Responsive/layout checks |
+| `npm run test:e2e:roles` | Authenticated role journeys |
+| `npm run test:qa:full` | Validate QA env, then all four browsers |
+| `npm run test:e2e:ui` / `:report` | Playwright UI mode / HTML report |
+| `npm run qa:seed:*`, `qa:verify-seed`, `qa:cleanup` | Staging fixture management |
+| `npm run deploy:staging` / `deploy:production` | Hosting-only deploy |
 
-Use these credentials to test different roles:
+## Roles and routes
 
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@hyt.com | admin123 |
-| Trainer | trainer@hyt.com | trainer123 |
-| Student | student@hyt.com | student123 |
-| Supervisor | supervisor@hyt.com | supervisor123 |
+Three active roles. Route protection combines Firebase Auth state, the Firestore
+user profile, account status, email verification, and the stored role.
 
-### First Steps
+```text
+/                      Public landing page
+/signin                Sign in
+/signup                Student self-registration
+/verify-email          Email verification
 
-1. **Sign In**: Use test credentials above
-2. **Navigate Dashboard**: Based on your role
-3. **Create Content**: (Trainer/Admin) Create courses, assignments, assessments
-4. **Enroll Students**: (Admin/Trainer) Add students to courses
-5. **Submit Assignments**: (Student) Complete and submit assignments
-6. **View Analytics**: Track progress and scores
-
----
-
-## 🔐 Authentication
-
-### Authentication Flow
-
-1. **Sign Up**: New users register with email/password
-2. **Email Verification**: Optional verification step
-3. **Profile Setup**: Complete user profile
-4. **Role Assignment**: Assign user role by admin
-5. **Dashboard Access**: Role-based dashboard routing
-
-### Protected Routes
-
-- `/admin/*` - Admin only
-- `/trainer/*` - Trainer only
-- `/student/*` - Student only
-- `/supervisor/*` - Supervisor only
-- `/auth/*` - Public routes (Sign In, Sign Up)
-
-### Session Management
-
-- Firebase Auth handles sessions automatically
-- Session persists across browser restarts
-- Logout clears session and redirects to login
-
----
-
-## 📖 Key Features Guide
-
-### For Students
-
-#### 1. **Course Dashboard**
-- View enrolled courses
-- Track progress per course
-- Access course materials
-- See assignments and deadlines
-
-#### 2. **Assessments Tab**
-```
-- Total Assessments: Count of all available quizzes
-- Completed: Number of finished assessments
-- Pending: Assessments not yet started
-- Average Score: Mean score across all assessments
-- Take Quiz: Start or retake assessments
-- View Scores: See attempt history
+/admin/*               users, sectors, classes, logs, id-requests,
+                       incident-forms, settings, notifications
+/trainer/*             classes, :className, tasks, sectors/:sectorId,
+                       archived, settings, notifications
+/student/*             enroll, :classname, tasks, calendar, request-id,
+                       incident-form, archived, settings, notifications
+/class/:className      Shared/legacy class entry
 ```
 
-#### 3. **Materials Tab**
-- Download course materials
-- Access learning resources
-- File type filtering
-- Upload date tracking
+Unknown routes redirect to `/`. Self-registration always produces a student;
+trainer and admin accounts must be created or promoted by an administrator.
 
-#### 4. **Activity Feed**
-- Real-time announcements
-- Assignment updates
-- Assessment releases
-- Comment notifications
+## Data model
 
-### For Trainers
+Key top-level collections: `users`, `sectors`, `courses`, `classes`,
+`classDirectory`, `enrollments`, `notifications`, `activityLogs`, `idRequests`,
+`incidentForms`, `config/appSettings`, `students/{uid}/progress/{classId}`.
 
-#### 1. **Class Dashboard**
-- Overview of all classes
-- Student enrollment status
-- Recent activity
-- Performance metrics
-
-#### 2. **Content Creation**
-- Create modules and topics
-- Upload learning materials
-- Post announcements
-- Create assignments and assessments
-
-#### 3. **Assessment Form Builder**
-- Add multiple question types
-- Set point values
-- Define correct answers
-- Configure time limits
-- Set passing criteria
-
-#### 4. **Student Management**
-- View enrolled students
-- Remove students
-- Monitor progress
-- Track attempt history
-
-### For Admins
-
-#### 1. **User Management**
-- Create/edit/delete users
-- Assign roles
-- Reset passwords
-- Manage user profiles
-
-#### 2. **Sector Management**
-- Create educational sectors
-- Organize courses by sector
-- Manage sector-level settings
-
-#### 3. **System Monitoring**
-- View system logs
-- Track user activity
-- Monitor performance
-- Generate reports
-
----
-
-## 🏗 Component Architecture
-
-### State Management
-
-**Context API**
-- `AuthContext`: User authentication and role data
-- `ToastContext`: Global notifications
-- Custom hooks for avatar, settings, notifications
-
-### Data Flow
-
-```
-Firebase Firestore
-    ↓
-Firestore Service (utils)
-    ↓
-React Components (Context + State)
-    ↓
-UI Components (Tailwind + Lucide)
+```text
+classes/{classId}/
+|-- members/{studentId}
+|-- activity/{eventId}
+|-- topics/{topicId}
+|-- modules/{moduleId}/materials/{materialId}
+|-- materials/{materialId}
+|-- announcements/{announcementId}/comments/{commentId}
+|-- assessments/{assessmentId}
+|   |-- private/answerKey
+|   `-- attempts/{attemptId}
+`-- assignments/{assignmentId}
+    |-- private/answerKey
+    |-- attempts/{attemptId}
+    `-- submissions/{studentId}
 ```
 
-### Key Components
+## Assessments and grading
 
-#### StudentCourse.jsx (Large Component)
-```
-- Tabs: Overview, Materials, Modules, Assessments, Activity
-- Features:
-  * Real-time announcements with comments
-  * Quiz attempt tracking
-  * Material downloads
-  * Progress analytics
-  * Activity feed
-```
+**Two authoring paths produce quiz-like items:** the assessment builder writes to
+`classes/{id}/assessments`, and the form builder writes to
+`classes/{id}/assignments`. Anything resolving a graded item must check **both**
+collections, and attempts must be read from the same parent that authored the
+item. Submission-type assignments collect uploaded work instead and are graded by
+a trainer.
 
-#### ClassDetail.jsx (Large Component - Trainer)
-```
-- Tabs: Overview, Modules, Assessments, Responses, Students
-- Features:
-  * Content management
-  * Assessment form builder
-  * Student response review
-  * Google Meet integration
-  * Real-time updates
-```
+**Correct answers live in the private `answerKey` document**, never in the
+trainee-readable assessment/assignment document.
 
----
+**Grading is server-side.** `submitAssessmentAttempt` validates the caller,
+enrollment, publication state, availability window, and time limit, then grades
+and writes an immutable attempt. Browser clients cannot create or alter attempts.
+Paragraph answers land in `pending_review`; trainers finalize them through
+`gradeAssessmentAttempt`.
 
-## 🗄 Database Schema
+**Deadlines carry a time of day.** Availability and due dates are authored with
+`datetime-local` pickers and stored as absolute ISO instants. Legacy records hold
+a bare `YYYY-MM-DD`, which resolves to the end of that day for a deadline and the
+start of it for an open date — client and Cloud Function apply this identically.
+Once a deadline passes, an unattempted assessment is closed and scored 0; that
+zero is derived from "no attempt + deadline passed" rather than stored. Submission
+tasks flagged `allowLateSubmissions` are exempt.
 
-### Collections
+## Security model
 
-#### `users`
-```javascript
-{
-  uid: string,
-  email: string,
-  displayName: string,
-  role: 'admin' | 'trainer' | 'student' | 'supervisor',
-  avatar: string (base64),
-  enrolledCourses: string[],
-  createdAt: timestamp,
-  updatedAt: timestamp
-}
-```
+Authentication and authorization are deliberately separate. Firebase Auth proves
+identity; `users/{uid}` holds the application role and status; route guards
+control navigation; Firestore and Storage rules independently enforce access; and
+Cloud Functions recheck auth, role, status, ownership, and input.
 
-#### `courses`
-```javascript
-{
-  id: string,
-  name: string,
-  description: string,
-  sector: string,
-  trainer: string,
-  students: string[],
-  materials: Reference[],
-  assignments: Reference[],
-  assessments: Reference[],
-  createdAt: timestamp,
-  status: 'active' | 'archived'
-}
-```
+**Route guards are not security.** A hostile client can call Firebase APIs
+directly. Every sensitive operation must be enforced in rules or in a validated
+Cloud Function.
 
-#### `assessments`
-```javascript
-{
-  id: string,
-  title: string,
-  description: string,
-  courseId: string,
-  questions: Question[],
-  totalPoints: number,
-  duration: number,
-  passingScore: number,
-  createdAt: timestamp,
-  attempts: AttemptRecord[]
-}
-```
+Currently in place: role- and status-aware guards, Firestore/Storage rules,
+secure callable submission, private answer keys, server-authorized grading,
+raster-only avatar MIME types, and hosting headers (HSTS, `X-Frame-Options`,
+`X-Content-Type-Options`, Referrer-Policy, Permissions-Policy, COOP, and a
+**report-only** CSP).
 
-#### `announcements`
-```javascript
-{
-  id: string,
-  courseId: string,
-  author: string,
-  authorId: string,
-  message: string,
-  attachments: File[],
-  comments: Comment[],
-  createdAt: timestamp,
-  updatedAt: timestamp
-}
-```
+Known gaps are tracked in [section 11 of the turnover
+guide](HYTECH_LMS_DEVELOPER_TURNOVER_GUIDE.md) — including student-writable
+progress, unvalidated external URL protocols, unenforced App Check, QA not
+gating deployment, and the long-lived `FIREBASE_TOKEN`. Read it before making
+security-adjacent changes.
 
----
+## Testing and QA
 
-## 🔌 API Integration
+Before committing:
 
-### Firestore Operations
-
-#### Assessment Management
-```javascript
-// Get assessments
-const assessments = await getAssessments(courseId);
-
-// Subscribe to real-time updates
-subscribeToAssessments(courseId, (data) => {
-  setAssessments(data);
-});
-
-// Submit quiz attempt
-await submitQuizAttempt(courseId, quizId, {
-  userId: user.uid,
-  answers: answers,
-  score: calculatedScore,
-  passed: isPassed
-});
-
-// Check if student attempted quiz
-const hasAttempted = await hasStudentAttempted(courseId, quizId, userId);
-```
-
-#### Comment Management
-```javascript
-// Add comment
-await addCommentToAnnouncement(courseId, announcementId, {
-  author: userName,
-  authorId: userId,
-  message: text
-});
-
-// Get comments
-const comments = await getAnnouncementComments(courseId, announcementId);
-
-// Subscribe to comments
-subscribeToComments(courseId, announcementId, (comments) => {
-  setComments(comments);
-});
-```
-
-#### File Operations
-```javascript
-// Store announcement attachment
-const fileUrl = await storeAnnouncementAttachment(
-  courseId,
-  announcementId,
-  file
-);
-
-// Compress and store file
-const compressedFile = await compressAndStoreFile(file, maxSize);
-```
-
----
-
-## 🎨 Styling & Design
-
-### Tailwind CSS
-
-**Key Classes Used**
-- Layout: `flex`, `grid`, `gap-*`, `p-*`, `m-*`
-- Colors: `bg-blue-*`, `text-gray-*`, `border-*`
-- Typography: `text-sm`, `font-semibold`, `line-clamp-*`
-- Responsive: `md:`, `lg:`, `xl:` prefixes
-- States: `hover:`, `focus:`, `disabled:`, `group-*:`
-
-### Custom Styling
-
-- Global styles in `src/index.css`
-- Tailwind configuration in `tailwind.config.js`
-- PostCSS processing in `postcss.config.js`
-
-### Icon Library
-
-- **Lucide React** for consistent icons
-- Over 300+ icons available
-- Size variants: `w-3 h-3`, `w-4 h-4`, `w-5 h-5`, etc.
-
----
-
-## ⚡ Performance Optimizations
-
-### Code Splitting
-- Route-based code splitting with React Router
-- Lazy loading components where appropriate
-- Dynamic imports for large components
-
-### Real-Time Sync
-- Firestore subscriptions for live updates
-- Efficient query filtering
-- Indexed fields for faster queries
-
-### State Management
-- Context API for global state
-- Local state for component-specific data
-- Memoization of expensive computations
-
-### Bundle Optimization
-- Tree-shaking of unused code
-- Minification in production builds
-- Asset compression and lazy loading
-
----
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-#### 1. **Firebase Connection Error**
-```
-Error: Firebase is not initialized
-
-Solution:
-- Check VITE_FIREBASE_* environment variables
-- Verify Firebase project exists
-- Confirm .env.local file in root directory
-```
-
-#### 2. **Authorization Denied**
-```
-Error: Missing or insufficient permissions
-
-Solution:
-- Check Firestore security rules
-- Verify user role in database
-- Ensure user is authenticated
-- Deploy updated firestore.rules
-```
-
-#### 3. **Quiz Scores Not Saving**
-```
-Error: Score submission fails
-
-Solution:
-- Verify submitQuizAttempt function
-- Check Firestore assessments collection
-- Ensure user has write permissions
-- Check network connectivity
-```
-
-#### 4. **Comments Not Loading**
-```
-Error: Comments section empty
-
-Solution:
-- Verify subscribeToComments subscription
-- Check announcement exists in database
-- Verify collection structure
-- Check user permissions
-```
-
-#### 5. **Vite Build Errors**
-```
-Error: Module not found
-
-Solution:
-npm install
+```powershell
 npm run build
-# Check for TypeScript errors
-npm run lint
+node --check functions/src/index.js
+npm run test:e2e:public
+npm run test:e2e:responsive
 ```
 
----
+For authenticated tests, copy `.env.e2e.example` to `.env.e2e.local` and fill in
+**staging-only** accounts. The Playwright config refuses arbitrary remote
+targets: it allows `hytech-lms-staging.web.app`, or localhost with
+`E2E_ALLOW_LOCAL=true`.
 
-## 👥 Contributing
+CI runs [`.github/workflows/qa.yml`](.github/workflows/qa.yml) on every push and
+pull request — seeding staging fixtures, building, then running Chromium, Edge,
+Firefox, and WebKit. A failure fails the check. On failure the run uploads a
+`playwright-evidence-<run>` artifact containing the HTML report plus traces,
+screenshots, and video (retained 14 days); open a trace with
+`npx playwright show-trace <path>`. Passing runs upload nothing. CI retries a
+failing test twice, so flakiness can hide behind a green check.
 
-### Code Standards
+For assessment or class changes, also run the manual smoke flow in
+[docs/FULL_WEBSITE_QA_PLAYBOOK.md](docs/FULL_WEBSITE_QA_PLAYBOOK.md).
 
-1. **File Naming**: PascalCase for components, camelCase for utilities
-2. **Component Structure**: Hooks → State → Effects → Render
-3. **Imports**: Group imports (React, Libraries, Local)
-4. **Comments**: Add comments for complex logic
-5. **Error Handling**: Try-catch blocks for async operations
+## Deployment
 
-### Git Workflow
+Verify the target project before every deploy — a local build can point at a
+different project than the CLI deploy target:
 
-```bash
-# Create feature branch
-git checkout -b feature/feature-name
-
-# Make changes and commit
-git add .
-git commit -m "feat: add feature description"
-
-# Push and create PR
-git push origin feature/feature-name
+```powershell
+firebase use
+firebase projects:list
 ```
 
-### Testing Checklist
+**Pushing to `main` deploys production automatically.**
+[`deploy.yml`](.github/workflows/deploy.yml) runs a bare `firebase deploy` with
+no `--only`, shipping Hosting, Firestore rules and indexes, Storage rules, **and**
+Cloud Functions together.
 
-- [ ] Test with all user roles
-- [ ] Verify responsive design
-- [ ] Check error handling
-- [ ] Test real-time updates
-- [ ] Validate form inputs
-- [ ] Test file uploads
-- [ ] Check performance metrics
+> ⚠️ **QA does not gate deployment.** The QA and deploy workflows react to the
+> same push independently, and deploy usually finishes first. A failing QA run
+> can coexist with a successful production deploy. Making deploy depend on QA is
+> a Phase 0 roadmap item.
 
----
+Manual staging release:
 
-## 🚀 Deployment
-
-### Build for Production
-
-```bash
-npm run build
+```powershell
+npm run build:staging
+npm run test:qa:full
+firebase deploy --project staging --dry-run
+firebase deploy --project staging
 ```
 
-### Firebase Hosting Deployment
+Deploy rules, indexes, and functions **before** Hosting when the frontend depends
+on new backend behavior. Rollback: use Hosting release history, redeploy the last
+known-good functions or rules. There is no automatic rollback for destructive
+Firestore mutations — use exports and tested migrations.
 
-```bash
-# Install Firebase CLI
-npm install -g firebase-tools
+## Troubleshooting
 
-# Login to Firebase
-firebase login
+**"Firebase configuration is missing"** — check the right `.env.*.local` exists in
+`HYTech/`, all `VITE_FIREBASE_*` values are populated, and the dev server was
+restarted after the change.
 
-# Deploy
-firebase deploy
-```
+**"Missing or insufficient permissions"** — verify the user is signed in,
+`users/{uid}` exists with the expected role and status, email verification state
+is correct, and the latest rules were deployed to the *same* project the frontend
+targets. Do not weaken rules globally to make the error go away.
 
-### Environment Setup for Production
+**Callable function not found** — confirm the client uses region
+`asia-southeast1`, the function is exported from `functions/src/index.js`, and
+functions were deployed after the code change.
 
-```env
-VITE_FIREBASE_API_KEY=prod_api_key
-VITE_FIREBASE_AUTH_DOMAIN=prod_auth_domain
-VITE_FIREBASE_PROJECT_ID=prod_project_id
-# ... other production credentials
-```
+**Quiz submission fails** — check the assessment is published and accepting
+responses; the availability window and deadline are valid; the student has an
+active enrollment; the item may live under `assessments` *or* `assignments`; and
+functions and rules were deployed together. The exact `HttpsError` code appears
+in the function logs.
 
----
+**Production UI did not change** — confirm the build ran, Hosting deployed
+`dist/`, the correct project was targeted, and backend-dependent changes also had
+functions and rules deployed.
 
-## 📞 Support & Contact
+More detail in [section 13 of the turnover
+guide](HYTECH_LMS_DEVELOPER_TURNOVER_GUIDE.md).
 
-For issues or questions:
-1. Check this README and troubleshooting section
-2. Review Firebase documentation
-3. Check component JSDoc comments
-4. Contact development team
+## Contributing
 
----
+Keep changes scoped and reversible. Never mix an unrelated dependency upgrade
+into a feature fix. Avoid browser-side writes for authoritative security or
+grading data. Use transactions or batches for multi-document consistency.
 
-## 📝 Version History
+**Pull-request checklist:**
 
-### v1.0.0 (Current)
-- Multi-role authentication system
-- Course and content management
-- Assessment form builder
-- Real-time announcements with comments
-- Student progress tracking
-- Activity feeds
-- File uploads and downloads
-- Responsive design
-- Real-time synchronization
+- [ ] Requirement and acceptance criteria stated
+- [ ] Security impact reviewed
+- [ ] Verified against staging, not production
+- [ ] Production build passes
+- [ ] Relevant Playwright tests pass
+- [ ] Mobile, tablet, and desktop checked
+- [ ] Keyboard access and labels checked for UI changes
+- [ ] Functions, rules, and indexes included when the frontend depends on them
+- [ ] Migration and rollback documented
+- [ ] No credentials, personal data, or internal audit files added
 
----
-
-## 📄 License
-
-This project is proprietary to HYT Global Institute.
-Unauthorized copying or distribution is prohibited.
-
----
-
-## 🎓 About HYTech LMS
-
-The HYTech Learning Management System is built with modern technologies to provide an intuitive, scalable, and feature-rich platform for educational institutions. It emphasizes user experience, real-time collaboration, and comprehensive learning analytics.
-
-**Key Principles:**
-- User-centric design
-- Real-time data synchronization
-- Security and privacy
-- Scalability and performance
-- Accessibility compliance
+A change is done when rules and functions support the behavior, failure states
+are understandable, tests cover the risky path, staging verification passes, and
+rollback is possible — not when it merely works locally.
 
 ---
 
-*Last Updated: April 22, 2026*
-*Version: 1.0.0*
+## License
+
+Proprietary to HYT Global Institute. Unauthorized copying or distribution is
+prohibited.
+
+---
+
+*Last updated: July 27, 2026 · See the turnover guide for the authoritative
+technical reference.*

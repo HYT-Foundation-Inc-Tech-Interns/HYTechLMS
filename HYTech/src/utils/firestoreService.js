@@ -3942,6 +3942,29 @@ export const createAssessment = async (classId, {
 export const updateAssessment = async (classId, assessmentId, updates) => {
   try {
     const assessmentRef = doc(db, 'classes', classId, 'assessments', assessmentId);
+
+    // Publishing must never put an empty assessment in front of trainees.
+    // createAssessment blocks it and updateAssignment blocks it; without the
+    // same guard here, a questionless draft could be published straight from
+    // the assessments table or the module row's Publish button.
+    if (updates?.status !== undefined && String(updates.status) !== 'draft') {
+      // Only read the stored questions when the caller did not supply them
+      // (the Publish button sends nothing but a status).
+      let effectiveQuestions = Array.isArray(updates.questions) ? updates.questions : null;
+      if (!effectiveQuestions) {
+        const existingSnapshot = await getDoc(assessmentRef);
+        if (!existingSnapshot.exists()) throw new Error('Assessment not found.');
+        const existing = existingSnapshot.data() || {};
+        effectiveQuestions = Array.isArray(existing.questions) ? existing.questions : [];
+      }
+      const hasPublishableQuestion = effectiveQuestions.some(
+        (question) => String(question?.question || question?.text || '').trim().length > 0
+      );
+      if (!hasPublishableQuestion) {
+        throw new Error('Assessment must have at least one non-empty question before publishing');
+      }
+    }
+
     const nextUpdates = { ...updates };
     const batch = writeBatch(db);
 
@@ -4677,6 +4700,18 @@ const attemptsCollectionFor = (kind) =>
   String(kind) === 'assignment' ? 'assignments' : 'assessments';
 
 /**
+ * How many attempts a trainee may submit for an assessment. 0 = unlimited.
+ * `oneResponsePerUser` is the original hard limit of 1 and still wins, so
+ * assessments created before `maxAttempts` existed behave exactly as before.
+ * Mirrored server-side in functions/src/index.js — keep the two in step.
+ */
+export const attemptLimitFor = (assessment) => {
+  if (assessment?.settings?.oneResponsePerUser) return 1;
+  const configured = Number(assessment?.settings?.maxAttempts);
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 0;
+};
+
+/**
  * Get a student's quiz attempts
  */
 export const getStudentQuizAttempts = async (classId, assessmentId, studentId, kind = 'assessment') => {
@@ -4725,44 +4760,40 @@ export const getAssessmentAttempts = async (classId, assessmentId, kind = 'asses
     const attemptsRef = collection(db, 'classes', classId, attemptsCollectionFor(kind), assessmentId, 'attempts');
     const q = query(attemptsRef, orderBy('submittedAt', 'desc'));
     const snapshot = await getDocs(q);
-    
-    // Fetch attempts and enrich with student names
-    const attempts = await Promise.all(snapshot.docs.map(async (doc) => {
-      const data = doc.data();
-      let studentName = null;
-      
-      
-      // Try to fetch student profile
-      if (data.studentId) {
-        try {
-          const profile = await getUserProfile(data.studentId);
-          
-          if (profile) {
-            // Try multiple possible name field locations
-            const firstName = profile.firstName || profile.profileForm?.firstName || '';
-            const lastName = profile.lastName || profile.profileForm?.lastName || '';
-            const displayName = profile.displayName || profile.profileForm?.displayName;
-            
-            if (displayName) {
-              studentName = displayName;
-            } else if (firstName || lastName) {
-              studentName = `${firstName} ${lastName}`.trim();
-            }
-          }
-        } catch (error) {
-          console.error(`❌ Could not fetch profile for student ${data.studentId}:`, error);
-        }
+
+    // Resolve each trainee's name once. This used to read the profile per
+    // attempt, so a trainee with three attempts cost three identical reads.
+    const studentIds = [...new Set(
+      snapshot.docs.map((attemptDoc) => attemptDoc.data()?.studentId).filter(Boolean)
+    )];
+    const nameEntries = await Promise.all(studentIds.map(async (studentId) => {
+      try {
+        const profile = await getUserProfile(studentId);
+        if (!profile) return [studentId, null];
+        // Names live in a few different places depending on how the account
+        // was created (self sign-up, admin-created, imported).
+        const firstName = profile.firstName || profile.profileForm?.firstName || '';
+        const lastName = profile.lastName || profile.profileForm?.lastName || '';
+        const displayName = profile.displayName || profile.profileForm?.displayName;
+        if (displayName) return [studentId, displayName];
+        if (firstName || lastName) return [studentId, `${firstName} ${lastName}`.trim()];
+        return [studentId, null];
+      } catch (error) {
+        console.error(`❌ Could not fetch profile for student ${studentId}:`, error);
+        return [studentId, null];
       }
-      
+    }));
+    const namesById = new Map(nameEntries);
+
+    return snapshot.docs.map((attemptDoc) => {
+      const data = attemptDoc.data();
       return {
-        id: doc.id,
+        id: attemptDoc.id,
         ...data,
-        studentName: studentName || null,
+        studentName: namesById.get(data.studentId) || null,
         submittedAt: data.submittedAt?.toDate?.() || new Date(data.submittedAt),
       };
-    }));
-    
-    return attempts;
+    });
   } catch (error) {
     console.error('Error fetching assessment attempts:', error);
     throw error;
@@ -5133,7 +5164,8 @@ export default {
   migrateClassDirectory,
   submitQuizAttempt,
   getStudentQuizAttempts,
-  
+  attemptLimitFor,
+
   // Progress Tracking
   updateStudentProgress,
   getStudentProgress,

@@ -83,7 +83,9 @@ const StudentNavbar = ({ title, subtitle }) => {
 
   return (
     <>
-    <header className="text-white h-16 pl-16 pr-3 sm:pr-4 lg:px-6 flex items-center justify-between shadow-lg relative z-50 flex-shrink-0" style={{ backgroundColor: '#0B005C' }}>
+    {/* pl-16 reserves room for the sidebar's fixed hamburger; from md up the
+        sidebar is docked and the hamburger is gone, so the padding goes too. */}
+    <header className="text-white h-16 pl-16 pr-3 sm:pr-4 md:px-6 flex items-center justify-between shadow-lg relative z-50 flex-shrink-0" style={{ backgroundColor: '#0B005C' }}>
       {/* Left Side - Breadcrumb */}
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 pr-2">
         <img

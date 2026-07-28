@@ -44,6 +44,54 @@ const formatAction = (action) =>
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 
+// `entityType` is stored as the Firestore collection name. Show the singular
+// human word instead of the raw collection.
+const ENTITY_LABELS = {
+  users: 'User',
+  classes: 'Class',
+  courses: 'Course',
+  sectors: 'Sector',
+  enrollments: 'Enrollment',
+  assessments: 'Assessment',
+  assignments: 'Assignment',
+  announcements: 'Announcement',
+  materials: 'Material',
+  notifications: 'Notification',
+  idRequests: 'ID Request',
+  incidentForms: 'Incident Form',
+};
+
+// Most log writers already store a readable name alongside the id. Prefer it,
+// so the reference column reads "Class · Baking NC II" rather than a raw
+// document id that means nothing without a database lookup.
+const METADATA_NAME_KEYS = [
+  'className',
+  'courseName',
+  'sectorName',
+  'assessmentTitle',
+  'title',
+  'name',
+  'email',
+];
+
+const describeEntity = (entityType, entityId, metadata) => {
+  if (!entityType && !entityId) return null;
+  const typeLabel = ENTITY_LABELS[entityType]
+    || (entityType
+      ? entityType.charAt(0).toUpperCase() + entityType.slice(1)
+      : 'Record');
+  const readableName = METADATA_NAME_KEYS
+    .map((key) => metadata?.[key])
+    .find((value) => typeof value === 'string' && value.trim() !== '');
+  return {
+    typeLabel,
+    // Fall back to a short id fragment only when nothing readable was logged.
+    detail: readableName?.trim()
+      || (entityId ? `${String(entityId).slice(0, 8)}…` : ''),
+    hasName: Boolean(readableName?.trim()),
+  };
+};
+
 const formatTimestamp = (value) => {
   const date = toDate(value);
   if (!date) return '—';
@@ -154,6 +202,7 @@ const SystemLogs = () => {
         logId: log.id,
         entityType: log.entityType || '',
         linkedId: log.entityId || '',
+        entity: describeEntity(log.entityType, log.entityId, log.metadata),
         type: ACTION_DISPLAY[log.action]?.type || 'info',
         action: formatAction(log.action),
         name: userInfo.name,
@@ -177,7 +226,11 @@ const SystemLogs = () => {
         log.email.toLowerCase().includes(q) ||
         log.logId.toLowerCase().includes(q) ||
         String(log.linkedId).toLowerCase().includes(q) ||
-        log.entityType.toLowerCase().includes(q);
+        log.entityType.toLowerCase().includes(q) ||
+        // Match what the Reference column actually shows, so searching
+        // "Baking NC II" or "Class" finds the row a reader is looking at.
+        String(log.entity?.typeLabel || '').toLowerCase().includes(q) ||
+        String(log.entity?.detail || '').toLowerCase().includes(q);
       const matchesType = typeFilter === 'all' || log.type === typeFilter;
       return matchesSearch && matchesType;
     });
@@ -429,7 +482,7 @@ const SystemLogs = () => {
                   </button>
                 </th>
                 <th className="table-header">ROLE</th>
-                <th className="table-header">LINKED ID</th>
+                <th className="table-header">REFERENCE</th>
                 <th className="table-header">
                   <button
                     onClick={() => handleSort('timestamp')}
@@ -463,10 +516,20 @@ const SystemLogs = () => {
                   </td>
                   <td className="table-cell text-gray-600 capitalize">{log.role || '—'}</td>
                   <td className="table-cell">
-                    {log.linkedId ? (
-                      <span className="font-mono text-xs text-gray-500" title={`${log.entityType}: ${log.linkedId}`}>
-                        {log.entityType ? `${log.entityType}/` : ''}
-                        {String(log.linkedId).slice(0, 8)}…
+                    {log.entity ? (
+                      <span
+                        className="text-sm text-gray-700"
+                        title={log.linkedId ? `${log.entityType}/${log.linkedId}` : log.entityType}
+                      >
+                        <span className="text-gray-500">{log.entity.typeLabel}</span>
+                        {log.entity.detail && (
+                          <>
+                            <span className="text-gray-300"> · </span>
+                            <span className={log.entity.hasName ? '' : 'font-mono text-xs text-gray-500'}>
+                              {log.entity.detail}
+                            </span>
+                          </>
+                        )}
                       </span>
                     ) : (
                       <span className="text-gray-300">—</span>

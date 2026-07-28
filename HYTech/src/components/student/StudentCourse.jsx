@@ -30,136 +30,10 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, downloadAttachment, submitQuizAttempt, hasStudentAttempted, getStudentQuizAttempts, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments, submitAssignment, getMySubmission, logClassActivity, updateEnrollmentProgress, updateStudentProgress, updateComment, deleteComment } from '../../utils/firestoreService';
-
-// ---- Quiz question helpers (support every trainer-builder question type) ----
-// Types: multiple-choice | true-false | dropdown (single index),
-// checkbox/checkboxes (index array), short-answer (string), paragraph (free
-// text, not auto-graded), linear-scale (number), multiple-grid (row->column
-// map), checkbox-grid (row->column-index-array map).
-const isBlankAnswer = (v) =>
-  v === undefined ||
-  v === null ||
-  (typeof v === 'string' && v.trim() === '') ||
-  (Array.isArray(v) && v.length === 0) ||
-  (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
-
-const normalizeText = (v) => String(v ?? '').trim().toLowerCase();
-
-const isRequiredAnswerMissing = (question, answer) => {
-  if (!question?.required) return false;
-  if (question.type === 'checkbox-grid') {
-    const rowCount = Array.isArray(question.rows) ? question.rows.length : 0;
-    return rowCount === 0 || Array.from({ length: rowCount }, (_, index) => (
-      !Array.isArray(answer?.[index]) || answer[index].length === 0
-    )).some(Boolean);
-  }
-  if (question.type === 'multiple-grid') {
-    const rowCount = Array.isArray(question.rows) ? question.rows.length : 0;
-    return rowCount === 0 || Array.from({ length: rowCount }, (_, index) => (
-      answer?.[index] === undefined || answer?.[index] === null
-    )).some(Boolean);
-  }
-  return isBlankAnswer(answer);
-};
-
-// Grade one question. Paragraph has no objective answer, so it is left for the
-// trainer to review (autoGraded: false) rather than auto-marked wrong.
-const gradeQuestion = (q, answer) => {
-  const type = q?.type || 'multiple-choice';
-  if (type === 'paragraph') return { isCorrect: false, autoGraded: false };
-  if (type === 'checkbox' || type === 'checkboxes') {
-    const correct = Array.isArray(q.correctAnswer) ? q.correctAnswer : [];
-    const given = Array.isArray(answer) ? answer : [];
-    const a = [...correct].map(String).sort().join(',');
-    const b = [...given].map(String).sort().join(',');
-    return { isCorrect: correct.length > 0 && a === b, autoGraded: true };
-  }
-  if (type === 'short-answer') {
-    return {
-      isCorrect: !isBlankAnswer(answer) && normalizeText(answer) === normalizeText(q.correctAnswer),
-      autoGraded: true,
-    };
-  }
-  if (type === 'linear-scale') {
-    return { isCorrect: !isBlankAnswer(answer) && Number(answer) === Number(q.correctAnswer), autoGraded: true };
-  }
-  if (type === 'multiple-grid') {
-    const rows = Array.isArray(q.rows) ? q.rows : [];
-    const key = q.correctAnswer && typeof q.correctAnswer === 'object' ? q.correctAnswer : {};
-    const given = answer && typeof answer === 'object' ? answer : {};
-    const hasKey = Object.keys(key).length > 0;
-    const allMatch = rows.length > 0 && rows.every((_, rIdx) => String(given[rIdx]) === String(key[rIdx]));
-    return { isCorrect: hasKey && allMatch, autoGraded: true };
-  }
-  if (type === 'checkbox-grid') {
-    const rows = Array.isArray(q.rows) ? q.rows : [];
-    const key = q.correctAnswer && typeof q.correctAnswer === 'object' ? q.correctAnswer : {};
-    const given = answer && typeof answer === 'object' ? answer : {};
-    const allMatch = rows.length > 0 && rows.every((_, rIdx) => {
-      const expected = Array.isArray(key[rIdx]) ? key[rIdx] : [];
-      const actual = Array.isArray(given[rIdx]) ? given[rIdx] : [];
-      return expected.length > 0
-        && [...expected].map(String).sort().join(',') === [...actual].map(String).sort().join(',');
-    });
-    return { isCorrect: allMatch, autoGraded: true };
-  }
-  // single-choice: multiple-choice, true-false, dropdown
-  return { isCorrect: !isBlankAnswer(answer) && answer === q.correctAnswer, autoGraded: true };
-};
-
-// Human-readable rendering of a student's answer (results review).
-const describeAnswer = (q, answer) => {
-  const type = q?.type || 'multiple-choice';
-  const opts = Array.isArray(q?.options) ? q.options : [];
-  if (isBlankAnswer(answer)) return 'Not answered';
-  if (type === 'checkbox' || type === 'checkboxes') {
-    return (Array.isArray(answer) ? answer : []).map((i) => opts[i]).filter(Boolean).join(', ') || 'Not answered';
-  }
-  if (type === 'short-answer' || type === 'paragraph' || type === 'linear-scale') return String(answer);
-  if (type === 'multiple-grid') {
-    const rows = Array.isArray(q.rows) ? q.rows : [];
-    const cols = Array.isArray(q.columns) ? q.columns : [];
-    const given = answer && typeof answer === 'object' ? answer : {};
-    return rows.map((row, rIdx) => `${row}: ${cols[given[rIdx]] ?? '—'}`).join('; ');
-  }
-  if (type === 'checkbox-grid') {
-    const rows = Array.isArray(q.rows) ? q.rows : [];
-    const cols = Array.isArray(q.columns) ? q.columns : [];
-    const given = answer && typeof answer === 'object' ? answer : {};
-    return rows.map((row, rIdx) => {
-      const selected = (Array.isArray(given[rIdx]) ? given[rIdx] : []).map((i) => cols[i]).filter(Boolean);
-      return `${row}: ${selected.join(', ') || '—'}`;
-    }).join('; ');
-  }
-  return opts[answer] ?? 'Not answered';
-};
-
-// Human-readable correct answer (results review).
-const describeCorrect = (q) => {
-  const type = q?.type || 'multiple-choice';
-  const opts = Array.isArray(q?.options) ? q.options : [];
-  if (type === 'checkbox' || type === 'checkboxes') {
-    return (Array.isArray(q.correctAnswer) ? q.correctAnswer : []).map((i) => opts[i]).filter(Boolean).join(', ');
-  }
-  if (type === 'short-answer' || type === 'linear-scale') return String(q.correctAnswer ?? '');
-  if (type === 'multiple-grid') {
-    const rows = Array.isArray(q.rows) ? q.rows : [];
-    const cols = Array.isArray(q.columns) ? q.columns : [];
-    const key = q.correctAnswer && typeof q.correctAnswer === 'object' ? q.correctAnswer : {};
-    return rows.map((row, rIdx) => `${row}: ${cols[key[rIdx]] ?? '—'}`).join('; ');
-  }
-  if (type === 'checkbox-grid') {
-    const rows = Array.isArray(q.rows) ? q.rows : [];
-    const cols = Array.isArray(q.columns) ? q.columns : [];
-    const key = q.correctAnswer && typeof q.correctAnswer === 'object' ? q.correctAnswer : {};
-    return rows.map((row, rIdx) => {
-      const selected = (Array.isArray(key[rIdx]) ? key[rIdx] : []).map((i) => cols[i]).filter(Boolean);
-      return `${row}: ${selected.join(', ') || '—'}`;
-    }).join('; ');
-  }
-  return opts[q.correctAnswer] ?? '';
-};
+import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, downloadAttachment, submitQuizAttempt, getStudentQuizAttempts, attemptLimitFor, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments, submitAssignment, getMySubmission, logClassActivity, updateEnrollmentProgress, updateStudentProgress, updateComment, deleteComment } from '../../utils/firestoreService';
+// Quiz answer helpers, shared with the trainer response viewer so both sides
+// render every question type the builders can produce.
+import { isRequiredAnswerMissing, describeAnswer, describeCorrect } from '../../utils/answerFormat';
 
 const StudentCourse = ({ previewMode = false }) => {
   const { classname } = useParams();
@@ -1022,8 +896,6 @@ const StudentCourse = ({ previewMode = false }) => {
 
   const displayCourseData = {
     name: courseData?.name || 'Course',
-    progress: studentProgress?.progressPercentage || 0,
-    weeksLeft: 9,
     level: courseData?.level || 'N/A'
   };
 
@@ -1287,13 +1159,21 @@ const StudentCourse = ({ previewMode = false }) => {
       addToast(`The deadline passed on ${quiz.dueDate}. This assessment is scored 0.`, 'error');
       return;
     }
-    // Check if student has already attempted this assessment
+    // Attempt limit. `oneResponsePerUser` is a hard 1; `maxAttempts` is the
+    // trainer's number (0 = unlimited). Only query when a limit actually
+    // applies. The server enforces the same rule — this is the friendly stop.
     try {
-      if (!previewMode && courseId && user?.uid) {
-        const hasAttempted = await hasStudentAttempted(courseId, quiz.id, user.uid, quiz.kind);
-        if (hasAttempted && quiz?.settings?.oneResponsePerUser) {
+      const attemptLimit = previewMode ? 0 : attemptLimitFor(quiz);
+      if (attemptLimit > 0 && courseId && user?.uid) {
+        const priorAttempts = await getStudentQuizAttempts(courseId, quiz.id, user.uid, quiz.kind);
+        if ((priorAttempts?.length || 0) >= attemptLimit) {
           setStudentHasAttempted(true);
-          addToast('You have already answered this assessment and cannot retake it', 'warning');
+          addToast(
+            attemptLimit === 1
+              ? 'You have already answered this assessment and cannot retake it'
+              : `You have used all ${attemptLimit} attempts for this assessment.`,
+            'warning'
+          );
           return;
         }
       }
@@ -1705,6 +1585,39 @@ const StudentCourse = ({ previewMode = false }) => {
     return <p className="text-sm text-gray-400 italic">This question type isn’t supported yet.</p>;
   };
 
+  // Re-read this quiz's attempt history. Runs after the graded result is
+  // already on screen, so it must never hold the submit spinner open.
+  const refreshQuizAttemptHistory = async (quiz, kind) => {
+    if (!quiz?.id || !courseId || !user?.uid) return;
+    const refreshedAttempts = await getStudentQuizAttempts(courseId, quiz.id, user.uid, kind);
+    const normalizedRefreshed = (refreshedAttempts || []).map((attempt) => {
+      const submittedDate = attempt.submittedAt?.toDate
+        ? attempt.submittedAt.toDate()
+        : attempt.submittedAt instanceof Date
+        ? attempt.submittedAt
+        : new Date(attempt.submittedAt);
+      return {
+        id: attempt.id,
+        quizId: quiz.id,
+        score: Number(attempt.score || 0),
+        passed: Boolean(attempt.passed),
+        passingScore: Number(attempt.passingScore || quiz.passingScore || 60),
+        submittedAt: submittedDate,
+        submittedAtLabel: !isNaN(submittedDate?.getTime?.())
+          ? submittedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          : 'Unknown',
+      };
+    });
+    setQuizAttemptHistory((prev) => {
+      const withoutCurrentQuiz = prev.filter((a) => String(a.quizId) !== String(quiz.id));
+      return [...normalizedRefreshed, ...withoutCurrentQuiz].sort((a, b) => {
+        const dateA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+        const dateB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+        return dateB - dateA;
+      });
+    });
+  };
+
   const handleSubmitQuiz = async ({ allowIncomplete = false } = {}) => {
     if (previewMode) {
       addToast('Trainee preview is read-only. No attempt was submitted.', 'info');
@@ -1752,38 +1665,10 @@ const StudentCourse = ({ previewMode = false }) => {
       setAttemptedAssessmentIds((prev) => new Set([...prev, String(selectedQuiz.id)]));
       setQuizSubmitted(true);
 
-      const refreshedAttempts = await getStudentQuizAttempts(
-        courseId,
-        selectedQuiz.id,
-        user.uid,
-        gradedAttempt.kind || selectedQuiz.kind
-      );
-      const normalizedRefreshed = (refreshedAttempts || []).map((attempt) => {
-        const submittedDate = attempt.submittedAt?.toDate
-          ? attempt.submittedAt.toDate()
-          : attempt.submittedAt instanceof Date
-          ? attempt.submittedAt
-          : new Date(attempt.submittedAt);
-        return {
-          id: attempt.id,
-          quizId: selectedQuiz.id,
-          score: Number(attempt.score || 0),
-          passed: Boolean(attempt.passed),
-          passingScore: Number(attempt.passingScore || selectedQuiz.passingScore || 60),
-          submittedAt: submittedDate,
-          submittedAtLabel: !isNaN(submittedDate?.getTime?.())
-            ? submittedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-            : 'Unknown',
-        };
-      });
-      setQuizAttemptHistory((prev) => {
-        const withoutCurrentQuiz = prev.filter((a) => String(a.quizId) !== String(selectedQuiz.id));
-        return [...normalizedRefreshed, ...withoutCurrentQuiz].sort((a, b) => {
-          const dateA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
-          const dateB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
-          return dateB - dateA;
-        });
-      });
+      // Fire-and-forget: the score is already rendered, so refreshing history
+      // must not keep the trainee staring at a spinner for a second round trip.
+      refreshQuizAttemptHistory(selectedQuiz, gradedAttempt.kind || selectedQuiz.kind)
+        .catch((error) => console.error('Error refreshing attempt history:', error));
     } catch (error) {
       console.error('Error saving quiz attempt:', error);
       addToast(error?.message || 'Failed to submit assessment', 'error');
@@ -1960,8 +1845,6 @@ const StudentCourse = ({ previewMode = false }) => {
   };
 
   // Calculate stats from Firestore data
-  const attemptedQuizCount = new Set(quizAttemptHistory.map((attempt) => attempt.quizId)).size;
-  const passedAttemptCount = quizAttemptHistory.filter((attempt) => attempt.passed).length;
   // A missed deadline is a real 0, not a blank: it counts against the average
   // the same way a failed attempt does. Nothing is written to Firestore for it —
   // the zero is derived from "no attempt + deadline passed" wherever it's shown.
@@ -1975,10 +1858,6 @@ const StudentCourse = ({ previewMode = false }) => {
         / scoredAssessmentCount
       )
     : 0;
-  const bestQuizScore = quizAttemptHistory.length
-    ? Math.max(...quizAttemptHistory.map((attempt) => attempt.score))
-    : 0;
-  const quizCompletionRate = firestoreAssessments.length ? Math.round((attemptedQuizCount / firestoreAssessments.length) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 md:px-6 lg:px-8">
@@ -2092,34 +1971,7 @@ const StudentCourse = ({ previewMode = false }) => {
                     <BookOpen className="w-4 h-4" />
                     Curriculum
                   </button>
-                  <div className="flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-lg text-white/80 text-sm">
-                    <Clock className="w-4 h-4" />
-                    <span>{displayCourseData.progress}% complete · Est. {displayCourseData.weeksLeft} weeks left</span>
-                  </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="relative z-10 mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
-                <p className="text-xs text-white/70 uppercase tracking-wider">Quiz Completion</p>
-                <p className="text-2xl font-bold mt-1">{quizCompletionRate}%</p>
-                <p className="text-xs text-white/70 mt-1">{attemptedQuizCount}/{assessmentItems.length} quizzes attempted</p>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
-                <p className="text-xs text-white/70 uppercase tracking-wider">Average Score</p>
-                <p className="text-2xl font-bold mt-1">{averageQuizScore}%</p>
-                <p className="text-xs text-white/70 mt-1">Across {quizAttemptHistory.length} assessment attempts</p>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
-                <p className="text-xs text-white/70 uppercase tracking-wider">Best Score</p>
-                <p className="text-2xl font-bold mt-1">{bestQuizScore}%</p>
-                <p className="text-xs text-white/70 mt-1">Highest recorded performance</p>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
-                <p className="text-xs text-white/70 uppercase tracking-wider">Passed Attempts</p>
-                <p className="text-2xl font-bold mt-1">{passedAttemptCount}</p>
-                <p className="text-xs text-white/70 mt-1">Passing mark is set per assessment</p>
               </div>
             </div>
           </div>
@@ -2732,23 +2584,24 @@ const StudentCourse = ({ previewMode = false }) => {
         {/* Assessments Tab */}
         {activeTab === 'assessments' && (
           <div className="space-y-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-xl border border-gray-100 p-4">
-                <p className="text-gray-600 text-sm font-medium">Total Assessments</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{assessmentItems.length}</p>
+            {/* Stats Cards — 2x2 on phones so the row costs one screenful
+                instead of four, widening to a single 4-across row from md. */}
+            <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-4">
+              <div className="bg-white rounded-xl border border-gray-100 p-3 md:p-4">
+                <p className="text-gray-600 text-xs font-medium leading-tight md:text-sm">Total Assessments</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1 md:mt-2 md:text-3xl">{assessmentItems.length}</p>
               </div>
-              <div className="bg-white rounded-xl border border-gray-100 p-4">
-                <p className="text-gray-600 text-sm font-medium">Completed</p>
-                <p className="text-3xl font-bold text-green-600 mt-2">{attemptedAssessmentIds.size}</p>
+              <div className="bg-white rounded-xl border border-gray-100 p-3 md:p-4">
+                <p className="text-gray-600 text-xs font-medium leading-tight md:text-sm">Completed</p>
+                <p className="text-2xl font-bold text-green-600 mt-1 md:mt-2 md:text-3xl">{attemptedAssessmentIds.size}</p>
               </div>
-              <div className="bg-white rounded-xl border border-gray-100 p-4">
-                <p className="text-gray-600 text-sm font-medium">Pending</p>
-                <p className="text-3xl font-bold text-orange-600 mt-2">{assessmentItems.length - attemptedAssessmentIds.size}</p>
+              <div className="bg-white rounded-xl border border-gray-100 p-3 md:p-4">
+                <p className="text-gray-600 text-xs font-medium leading-tight md:text-sm">Pending</p>
+                <p className="text-2xl font-bold text-orange-600 mt-1 md:mt-2 md:text-3xl">{assessmentItems.length - attemptedAssessmentIds.size}</p>
               </div>
-              <div className="bg-white rounded-xl border border-gray-100 p-4">
-                <p className="text-gray-600 text-sm font-medium">Average Score</p>
-                <p className="text-3xl font-bold text-blue-600 mt-2">{averageQuizScore}%</p>
+              <div className="bg-white rounded-xl border border-gray-100 p-3 md:p-4">
+                <p className="text-gray-600 text-xs font-medium leading-tight md:text-sm">Average Score</p>
+                <p className="text-2xl font-bold text-blue-600 mt-1 md:mt-2 md:text-3xl">{averageQuizScore}%</p>
               </div>
             </div>
 

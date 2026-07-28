@@ -30,6 +30,7 @@ import {
   getSectors,
   updateCourse,
   getTrainers,
+  transferClassOwnership,
   getStudents,
   getClassEnrollments,
   adminAddStudentToClass,
@@ -391,6 +392,9 @@ const Classes = () => {
       color: course.color || '',
       bgImage: course.bgImage || '',
       bgImagePath: course.bgImagePath || '',
+      // Kept out of the updateCourse payload — reassigning the lead goes
+      // through transferClassOwnership so co-trainers stay consistent.
+      trainerId: course.trainerId || '',
     });
     setEditClassImageFile(null);
   };
@@ -424,15 +428,46 @@ const Classes = () => {
   const saveClassData = async (classId) => {
     try {
       setSavingClassId(classId);
-      const updates = { ...editFormData };
+      const { trainerId: nextTrainerId, ...updates } = editFormData;
       if (editClassImageFile) {
         const uploadedImage = await compressAndStoreFile(editClassImageFile, classId);
         updates.bgImage = uploadedImage.url;
         updates.bgImagePath = uploadedImage.storagePath;
       }
       await updateCourse(classId, updates);
-      setClasses((prev) => prev.map((cls) => (cls.id === classId ? { ...cls, ...updates } : cls)));
-      addToast('Class updated successfully', 'success');
+
+      // The lead trainer is not a plain field: handing the class to someone
+      // else demotes the previous lead to co-trainer and notifies the new one,
+      // so it goes through the same path a trainer-initiated transfer uses.
+      const currentTrainerId = classes.find((cls) => cls.id === classId)?.trainerId || '';
+      const trainerChanged = Boolean(nextTrainerId) && nextTrainerId !== currentTrainerId;
+      if (trainerChanged) {
+        await transferClassOwnership(classId, nextTrainerId);
+      }
+
+      setClasses((prev) => prev.map((cls) => (cls.id === classId
+        ? {
+          ...cls,
+          ...updates,
+          ...(trainerChanged
+            ? {
+              trainerId: nextTrainerId,
+              coTrainerIds: [
+                ...(cls.coTrainerIds || []).filter((id) => id && id !== nextTrainerId),
+                ...(currentTrainerId && !(cls.coTrainerIds || []).includes(currentTrainerId)
+                  ? [currentTrainerId]
+                  : []),
+              ],
+            }
+            : {}),
+        }
+        : cls)));
+      addToast(
+        trainerChanged
+          ? 'Class updated. The new lead trainer has been notified.'
+          : 'Class updated successfully',
+        'success'
+      );
       setEditingClassId(null);
       setEditFormData({});
       setEditClassImageFile(null);
@@ -965,6 +1000,42 @@ const Classes = () => {
                                   <option value="Archived">Archived</option>
                                   <option value="Draft">Draft</option>
                                 </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Lead Trainor</label>
+                                <select
+                                  value={editFormData.trainerId || ''}
+                                  onChange={(e) => handleEditInputChange('trainerId', e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                  <option value="">Unassigned</option>
+                                  {/* getTrainers() lists active trainers only.
+                                      Keep a deactivated current lead visible so
+                                      the field does not silently read blank. */}
+                                  {course.trainerId
+                                    && !trainers.some((t) => t.id === course.trainerId) && (
+                                    <option value={course.trainerId}>
+                                      {trainerName(course.trainerId)} (inactive)
+                                    </option>
+                                  )}
+                                  {trainers.map((trainer) => (
+                                    <option key={trainer.id} value={trainer.id}>
+                                      {trainer.name
+                                        || trainer.displayName
+                                        || trainer.email
+                                        || trainer.id}
+                                    </option>
+                                  ))}
+                                </select>
+                                {editFormData.trainerId
+                                  && editFormData.trainerId !== course.trainerId && (
+                                  <p className="mt-1 text-xs text-amber-700">
+                                    On save, {trainerName(editFormData.trainerId)} becomes the lead
+                                    {course.trainerId
+                                      ? ` and ${trainerName(course.trainerId)} stays on as a co-trainer.`
+                                      : '.'}
+                                  </p>
+                                )}
                               </div>
                               <div className="border-t border-gray-100 pt-4">
                                 <ClassAppearanceEditor

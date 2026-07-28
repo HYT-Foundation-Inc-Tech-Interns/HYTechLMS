@@ -18,6 +18,16 @@ const boundedFunctions = functions
 const templateCopyFunctions = functions
   .region(FUNCTION_REGION)
   .runWith({ maxInstances: 2, timeoutSeconds: 540, memory: '1GB' });
+// Assessment submission is the one call an entire class fires at the same
+// moment (the end of a timed quiz). First-generation functions serve a single
+// request per instance, so the shared ceiling of 5 made the 6th trainee queue
+// behind a full execution. Give the submit path its own, wider ceiling.
+// Raising SUBMIT_MIN_INSTANCES to 1 also removes cold starts, at the cost of
+// one always-warm instance billed around the clock — left off by default.
+const SUBMIT_MIN_INSTANCES = 0;
+const submissionFunctions = functions
+  .region(FUNCTION_REGION)
+  .runWith({ maxInstances: 40, minInstances: SUBMIT_MIN_INSTANCES });
 const CONTENT_COLLECTIONS = ['topics', 'materials', 'assessments', 'assignments'];
 
 const requireActiveAdmin = async (context) => {
@@ -457,9 +467,37 @@ const resolveBoundary = (value, edge) => {
   return Number.isFinite(time) ? time : 0;
 };
 
+// True when the trainer actually supplied an answer key for this question.
+// Grid questions default to an empty {} and neither builder offers a UI to fill
+// it, so without this check a grid was auto-marked wrong for everyone — and
+// because "wrong" still counted as auto-graded, the attempt never reached the
+// trainer's review queue and the points vanished silently. Option index 0 is a
+// real answer, not a blank.
+const hasUsableKey = (type, correctAnswer) => {
+  if (type === 'paragraph' || type === 'file-upload') return false;
+  if (type === 'checkbox' || type === 'checkboxes') {
+    return Array.isArray(correctAnswer) && correctAnswer.length > 0;
+  }
+  if (type === 'multiple-grid' || type === 'checkbox-grid') {
+    return Boolean(correctAnswer)
+      && typeof correctAnswer === 'object'
+      && !Array.isArray(correctAnswer)
+      && Object.keys(correctAnswer).length > 0;
+  }
+  if (type === 'short-answer') return String(correctAnswer ?? '').trim() !== '';
+  return correctAnswer !== undefined && correctAnswer !== null && correctAnswer !== '';
+};
+
 const gradeAnswer = (question, answer, correctAnswer) => {
   const type = String(question?.type || 'multiple-choice');
   if (type === 'paragraph') return { autoGraded: false, isCorrect: false };
+  if (!hasUsableKey(type, correctAnswer)) {
+    // A question worth points that nobody can answer correctly goes to the
+    // trainer instead of being scored 0 behind their back. A 0-point question
+    // cannot move the score, so it stays auto-graded and out of the queue.
+    const points = Math.max(0, Number(question?.points) || 0);
+    return { autoGraded: points === 0, isCorrect: false };
+  }
   if (type === 'checkbox' || type === 'checkboxes') {
     return { autoGraded: true, isCorrect: sameIndexSet(answer, correctAnswer) };
   }
@@ -504,7 +542,19 @@ const gradeAnswer = (question, answer, correctAnswer) => {
   };
 };
 
-exports.submitAssessmentAttempt = boundedFunctions.https.onCall(async (data, context) => {
+/**
+ * How many attempts a trainee may submit. 0 = unlimited. `oneResponsePerUser`
+ * is the original hard limit of 1 and still wins, so assessments created before
+ * `maxAttempts` existed behave exactly as they did. Mirrored client-side in
+ * src/utils/firestoreService.js — keep the two in step.
+ */
+const attemptLimitFor = (assessment) => {
+  if (assessment?.settings?.oneResponsePerUser) return 1;
+  const configured = Number(assessment?.settings?.maxAttempts);
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 0;
+};
+
+exports.submitAssessmentAttempt = submissionFunctions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'Sign in before submitting.');
   }
@@ -539,7 +589,15 @@ exports.submitAssessmentAttempt = boundedFunctions.https.onCall(async (data, con
   const assessmentRef = classRef.collection('assessments').doc(assessmentId);
   const assignmentRef = classRef.collection('assignments').doc(assessmentId);
 
-  const [userSnap, classSnap, assessmentSnap, assignmentSnap, enrollmentSnap] = await Promise.all([
+  const [
+    userSnap,
+    classSnap,
+    assessmentSnap,
+    assignmentSnap,
+    enrollmentSnap,
+    assessmentKeySnap,
+    assignmentKeySnap,
+  ] = await Promise.all([
     userRef.get(),
     classRef.get(),
     assessmentRef.get(),
@@ -548,6 +606,12 @@ exports.submitAssessmentAttempt = boundedFunctions.https.onCall(async (data, con
       .where('studentId', '==', studentId)
       .where('classId', '==', classId)
       .get(),
+    // Both candidate answer keys are fetched here rather than after the item is
+    // resolved. Which one applies depends on whether this id is an assessment
+    // or an assignment, and waiting to find out added a second sequential
+    // round trip to every submission. The unused read is one extra document.
+    assessmentRef.collection('private').doc('answerKey').get(),
+    assignmentRef.collection('private').doc('answerKey').get(),
   ]);
 
   const userData = userSnap.data() || {};
@@ -608,7 +672,7 @@ exports.submitAssessmentAttempt = boundedFunctions.https.onCall(async (data, con
 
   const attemptsRef = itemRef.collection('attempts');
 
-  const keySnap = await itemRef.collection('private').doc('answerKey').get();
+  const keySnap = assessmentSnap.exists ? assessmentKeySnap : assignmentKeySnap;
   const answerKey = keySnap.exists ? keySnap.data()?.answers || {} : {};
   const questions = Array.isArray(assessment.questions) ? assessment.questions : [];
   const unansweredRequired = !timedOut && questions.find((question) => {
@@ -688,16 +752,28 @@ exports.submitAssessmentAttempt = boundedFunctions.https.onCall(async (data, con
     status: requiresManualGrading ? 'pending_review' : 'submitted',
     timedOut,
   };
+  const attemptLimit = attemptLimitFor(assessment);
   const attemptRef = assessment.settings?.oneResponsePerUser
     ? attemptsRef.doc(studentId)
     : attemptsRef.doc();
   await db.runTransaction(async (transaction) => {
     if (assessment.settings?.oneResponsePerUser) {
+      // The attempt id is the trainee's uid, so existence is the whole check.
       const existing = await transaction.get(attemptRef);
       if (existing.exists) {
         throw new functions.https.HttpsError(
           'already-exists',
           'Only one response is allowed for this assessment.'
+        );
+      }
+    } else if (attemptLimit > 0) {
+      // Counted inside the transaction so two tabs cannot both slip past the
+      // last allowed attempt.
+      const prior = await transaction.get(attemptsRef.where('studentId', '==', studentId));
+      if (prior.size >= attemptLimit) {
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          `You have used all ${attemptLimit} attempts for this assessment.`
         );
       }
     }

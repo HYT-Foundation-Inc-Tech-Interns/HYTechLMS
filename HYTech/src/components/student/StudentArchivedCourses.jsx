@@ -187,9 +187,10 @@ const StudentArchivedCourses = () => {
                 Completed
               </div>
 
-              {/* Grade Badge */}
+              {/* Grade Badge — stays bottom-right at every width so the top-right
+                  corner belongs to the personalize button alone. */}
               {course.finalGrade && (
-                <div className="absolute bottom-2 right-2 rounded-full bg-white px-2 py-1 text-[10px] font-bold text-[#0D4291] sm:bottom-auto sm:right-3 sm:top-3 sm:px-3 sm:py-1.5 sm:text-sm">
+                <div className="absolute bottom-2 right-2 rounded-full bg-white px-2 py-1 text-[10px] font-bold text-[#0D4291] sm:bottom-3 sm:right-3 sm:px-3 sm:py-1.5 sm:text-sm">
                   Grade: {course.finalGrade}
                 </div>
               )}
@@ -197,7 +198,7 @@ const StudentArchivedCourses = () => {
                 userId={uid}
                 classId={course.classId}
                 preference={preference}
-                className={`absolute right-1 top-1 z-20 sm:right-2 sm:top-2 ${course.finalGrade ? 'sm:top-12' : ''}`}
+                className="absolute right-2 top-2 z-20 sm:right-3 sm:top-3"
               />
             </div>
 

@@ -127,7 +127,7 @@ const Sidebar = () => {
       {/* Mobile Menu Button */}
       <button
         onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="fixed left-2 top-2.5 z-[60] rounded-lg p-2 text-white transition-colors hover:bg-white/10 lg:hidden"
+        className="fixed left-2 top-2.5 z-[60] rounded-lg p-2 text-white transition-colors hover:bg-white/10 md:hidden"
         aria-label={isMobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
         aria-expanded={isMobileOpen}
         aria-controls="trainer-sidebar-navigation"
@@ -140,7 +140,7 @@ const Sidebar = () => {
         <button
           type="button"
           aria-label="Close navigation menu"
-          className="fixed inset-x-0 bottom-0 top-16 z-30 bg-black/50 backdrop-blur-sm lg:hidden"
+          className="fixed inset-x-0 bottom-0 top-16 z-30 bg-black/50 backdrop-blur-sm md:hidden"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
@@ -150,12 +150,12 @@ const Sidebar = () => {
         id="trainer-sidebar-navigation"
         aria-label="Trainer navigation"
         className={`
-          fixed bottom-0 left-0 top-16 z-40 lg:relative lg:inset-y-0
-          w-[min(88vw,18rem)] ${isCollapsed ? 'lg:w-20' : 'lg:w-72'}
-          ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-          bg-white border-r border-gray-100 shadow-xl lg:shadow-none
+          fixed bottom-0 left-0 top-16 z-40 md:relative md:inset-y-0
+          w-[min(88vw,18rem)] ${isCollapsed ? 'md:w-20' : 'md:w-72'}
+          ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          bg-white border-r border-gray-100 shadow-xl md:shadow-none
           transition-all duration-300 ease-in-out
-          flex h-[calc(100dvh-4rem)] flex-col flex-shrink-0 lg:h-full
+          flex h-[calc(100dvh-4rem)] flex-col flex-shrink-0 md:h-full
         `}
       >
         {/* Navigation */}
@@ -229,7 +229,7 @@ const Sidebar = () => {
         </nav>
 
         {/* Collapse Button (Desktop Only) */}
-        <div className="hidden lg:block p-4 border-t border-gray-100">
+        <div className="hidden md:block p-4 border-t border-gray-100">
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="w-full flex items-center justify-end gap-2 px-4 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-all duration-200"

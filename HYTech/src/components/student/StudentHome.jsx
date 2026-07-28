@@ -346,7 +346,7 @@ const StudentHome = () => {
                   userId={user?.uid}
                   classId={enrollment.classId}
                   preference={preference}
-                  className="absolute right-1 top-1 z-20 sm:right-2 sm:top-2"
+                  className="absolute right-2 top-2 z-20 sm:right-3 sm:top-3"
                 />
               </div>
 

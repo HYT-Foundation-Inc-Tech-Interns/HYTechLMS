@@ -5,6 +5,9 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { getCourseByName, getCourseTemplateById, getCourseEnrollmentsWithAvatars, getSectorById, getAnnouncements, subscribeToAnnouncements, createAnnouncement, getModules, createModule, getAssessments, createAssessment, updateAnnouncement, deleteAnnouncement, updateAssessment, deleteAssessment, getClassActivityFeed, storeAnnouncementAttachment, uploadMaterial, compressAndStoreFile, addCommentToAnnouncement, getAnnouncementComments, deleteComment, subscribeToComments, downloadAttachment, createAssignment, updateAssignment, getAssignments, removeEnrollment, approveEnrollment, getUserProfile, subscribeToEnrollments, getAssessmentAttempts, createMaterial, getClassMaterials, publishMaterial, unpublishMaterial, updateMaterial, deleteMaterial, createTopic, getClassTopics, subscribeToClassTopics, updateTopic, deleteTopic, publishTopic, unpublishTopic, updateEnrollmentStatus, getAssignmentSubmissions, gradeSubmission, gradeAssessmentAttempt, getClassGradebook, getStudents, adminAddStudentToClass, getTrainers, addCoTrainer, removeCoTrainer, transferClassOwnership, getClassActivity, toDate, reorderTopics, setModuleItemTopic, deleteAssignment } from '../../utils/firestoreService';
+// Answer helpers shared with the trainee results view, so a grid or a scale
+// reads the same way in both places instead of as a raw index map here.
+import { evaluateAnswer, hasAnswerKey, describeAnswer, describeCorrect } from '../../utils/answerFormat';
 import { useToast } from '../../context/ToastContext';
 
 const FORM_QUESTION_TYPES = [
@@ -232,6 +235,8 @@ const ClassDetail = () => {
     randomizeQuestionOrder: false,
     requiredQuestionsOnly: false,
     oneResponsePerUser: false,
+    // 0 = unlimited attempts. Ignored while "Limit to 1 Response/User" is on.
+    maxAttempts: 0,
     customColor: '#3b82f6'
   });
   
@@ -2175,6 +2180,7 @@ const ClassDetail = () => {
         randomizeQuestionOrder: false,
         requiredQuestionsOnly: false,
         oneResponsePerUser: false,
+        maxAttempts: 0,
         customColor: '#3b82f6'
       });
     } else if (type === 'material') {
@@ -2635,8 +2641,10 @@ const ClassDetail = () => {
         setAssignments((prev) => prev.map((a) => (a.id === item.id ? { ...a, status: publishNow ? 'active' : 'draft' } : a)));
       }
       addToast(publishNow ? 'Published — visible to trainees.' : 'Unpublished — hidden from trainees.', 'success');
-    } catch {
-      addToast('Could not update visibility.', 'error');
+    } catch (error) {
+      // Surface the real reason (e.g. "needs at least one non-empty question")
+      // instead of a generic failure the trainer cannot act on.
+      addToast(error?.message || 'Could not update visibility.', 'error');
     }
   };
 
@@ -6014,14 +6022,12 @@ const ClassDetail = () => {
                 (selectedAssessmentForResponses?.questions || []).map((q, idx) => {
                   const answers = selectedResponseDetail.answers || {};
                   const studentAnswer = answers[q.id];
-                  const options = q.options || [];
-                  const hasCorrectAnswer = q.correctAnswer !== undefined && q.correctAnswer !== null;
-                  const isCorrect = hasCorrectAnswer && (
-                    Array.isArray(studentAnswer) && Array.isArray(q.correctAnswer)
-                      ? [...studentAnswer].sort().join(',') === [...q.correctAnswer].sort().join(',')
-                      : studentAnswer === q.correctAnswer
-                  );
-                  const needsManualReview = q.type === 'paragraph' || !hasCorrectAnswer;
+                  const options = Array.isArray(q.options) ? q.options : [];
+                  // Same evaluator the server grades with, so the card's verdict
+                  // matches the score the trainee was actually given.
+                  const { isCorrect, autoGraded } = evaluateAnswer(q, studentAnswer);
+                  const hasCorrectAnswer = hasAnswerKey(q);
+                  const needsManualReview = !autoGraded;
                   return (
                     <div
                       key={q.id || idx}
@@ -6039,7 +6045,11 @@ const ClassDetail = () => {
                           const chosen = Array.isArray(studentAnswer)
                             ? studentAnswer.includes(optIdx)
                             : studentAnswer === optIdx;
-                          const correct = q.correctAnswer === optIdx;
+                          // Multi-select keys are arrays, so a plain equality
+                          // check never highlighted the right options.
+                          const correct = Array.isArray(q.correctAnswer)
+                            ? q.correctAnswer.includes(optIdx)
+                            : q.correctAnswer === optIdx;
                           return (
                             <div
                               key={optIdx}
@@ -6049,20 +6059,35 @@ const ClassDetail = () => {
                             >
                               <span>{opt}</span>
                               <span className="text-xs font-medium">
-                                {correct ? 'Correct answer' : chosen ? 'Their answer' : ''}
+                                {correct && chosen ? 'Correct answer · theirs' : correct ? 'Correct answer' : chosen ? 'Their answer' : ''}
                               </span>
                             </div>
                           );
                         })}
-                        {options.length === 0 && studentAnswer !== undefined && (
+                        {/* Grids, scales, dates and free text carry no option
+                            list — render them through the shared formatter
+                            instead of dumping the raw index map. */}
+                        {options.length === 0 && (
                           <div className="whitespace-pre-wrap break-words rounded-lg bg-white/70 px-3 py-2 text-gray-800">
-                            {typeof studentAnswer === 'object'
-                              ? JSON.stringify(studentAnswer)
-                              : String(studentAnswer)}
+                            <span className="text-gray-500">Their answer: </span>
+                            {describeAnswer(q, studentAnswer)}
                           </div>
                         )}
-                        {studentAnswer === undefined && (
+                        {options.length === 0 && hasCorrectAnswer && (
+                          <div className="whitespace-pre-wrap break-words rounded-lg bg-white/70 px-3 py-2 text-gray-800">
+                            <span className="text-gray-500">Correct answer: </span>
+                            {describeCorrect(q)}
+                          </div>
+                        )}
+                        {options.length > 0 && studentAnswer === undefined && (
                           <p className="text-xs text-gray-500 italic">No answer submitted.</p>
+                        )}
+                        {needsManualReview && (
+                          <p className="text-xs text-amber-700 italic pt-1">
+                            {q.type === 'paragraph'
+                              ? 'Free-text answer — grade this manually.'
+                              : 'No answer key was set for this question, so it needs manual grading.'}
+                          </p>
                         )}
                       </div>
                     </div>
@@ -6989,6 +7014,36 @@ const ClassDetail = () => {
                     />
                     <span className="text-sm font-medium text-gray-700">Limit to 1 Response/User</span>
                   </label>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Attempts allowed
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        min="0"
+                        max="20"
+                        step="1"
+                        value={assessmentSettings.oneResponsePerUser ? 1 : (assessmentSettings.maxAttempts || 0)}
+                        disabled={assessmentSettings.oneResponsePerUser}
+                        onChange={(e) => {
+                          const parsed = Math.floor(Number(e.target.value));
+                          updateAssessmentSetting(
+                            'maxAttempts',
+                            Number.isFinite(parsed) ? Math.min(20, Math.max(0, parsed)) : 0
+                          );
+                        }}
+                        className="w-24 px-3 py-2 border border-gray-200 rounded-lg disabled:bg-gray-100 disabled:text-gray-400"
+                      />
+                      <span className="text-sm text-gray-600">
+                        {assessmentSettings.oneResponsePerUser
+                          ? 'Fixed at 1 by "Limit to 1 Response/User".'
+                          : (assessmentSettings.maxAttempts || 0) === 0
+                            ? '0 = unlimited retakes.'
+                            : `Trainees may take this ${assessmentSettings.maxAttempts} time${assessmentSettings.maxAttempts > 1 ? 's' : ''}.`}
+                      </span>
+                    </div>
+                  </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Accent Color</label>
                     <div className="flex items-center gap-3">

@@ -45,8 +45,19 @@ const ClassCardPersonalization = ({ userId, classId, preference = {}, className 
 
   if (!userId || !classId) return null;
 
+  // Callers place this control themselves (e.g. "absolute right-3 top-3").
+  // Tailwind emits .relative *after* .absolute, so hardcoding `relative` here
+  // won the specificity tie and silently dropped the button back into normal
+  // flow at the card's top-left. Only fall back to `relative` — which the
+  // dropdown below needs as its positioning context — when the caller has not
+  // positioned us. An absolute wrapper is just as valid a containing block.
+  const isPositioned = /(?:^|\s)(?:absolute|fixed|sticky)(?:\s|$)/.test(className);
+
   return (
-    <div className={`relative ${className}`} onClick={(event) => event.stopPropagation()}>
+    <div
+      className={`${isPositioned ? '' : 'relative'} ${className}`.trim()}
+      onClick={(event) => event.stopPropagation()}
+    >
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
