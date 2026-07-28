@@ -22,12 +22,18 @@ const templateCopyFunctions = functions
 // moment (the end of a timed quiz). First-generation functions serve a single
 // request per instance, so the shared ceiling of 5 made the 6th trainee queue
 // behind a full execution. Give the submit path its own, wider ceiling.
-// Raising SUBMIT_MIN_INSTANCES to 1 also removes cold starts, at the cost of
-// one always-warm instance billed around the clock — left off by default.
-const SUBMIT_MIN_INSTANCES = 0;
+//
+// Do NOT add `minInstances` here, not even `minInstances: 0`. The CLI has no
+// gen-1 pricing tier for asia-southeast1, so any defined value makes
+// canCalculateMinInstanceCost() fail, which the deploy reads as "this raises
+// the minimum bill" and rejects with:
+//   Error: Pass the --force option to deploy functions that increase the minimum bill
+// Omitting the field takes an early return and skips the region lookup.
+// Warming instances to kill cold starts therefore needs `--force` in CI plus a
+// real always-on cost, so it stays a deliberate, separate decision.
 const submissionFunctions = functions
   .region(FUNCTION_REGION)
-  .runWith({ maxInstances: 40, minInstances: SUBMIT_MIN_INSTANCES });
+  .runWith({ maxInstances: 40 });
 const CONTENT_COLLECTIONS = ['topics', 'materials', 'assessments', 'assignments'];
 
 const requireActiveAdmin = async (context) => {
