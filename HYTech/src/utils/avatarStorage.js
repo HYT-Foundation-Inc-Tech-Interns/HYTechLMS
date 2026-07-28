@@ -1,3 +1,6 @@
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { auth, storage } from '../firebase';
+
 const MAX_DIMENSION = 512;
 const IMAGE_QUALITY = 0.78;
 
@@ -34,7 +37,12 @@ const toBlob = (canvas, type, quality) =>
     );
   });
 
-export const compressAvatarImageToBase64 = async (file) => {
+/**
+ * Downscale an image and upload it under userAvatars/{uid}/{folder}/{name}.
+ * That path shape is what storage.rules already allows the owner to write, so
+ * new folders need no rules change.
+ */
+const compressAndUpload = async (file, { folder, baseName }) => {
   const image = await loadImageFromFile(file);
   const longestSide = Math.max(image.width, image.height);
   const scale = longestSide > MAX_DIMENSION ? MAX_DIMENSION / longestSide : 1;
@@ -58,14 +66,14 @@ export const compressAvatarImageToBase64 = async (file) => {
   const preserveAlpha = inputType.includes('png') || inputType.includes('gif') || inputType.includes('webp');
   const mimeType = preserveAlpha ? 'image/png' : 'image/jpeg';
   if (!storage || !auth?.currentUser?.uid) {
-    throw new Error('You must be signed in to upload a profile photo.');
+    throw new Error('You must be signed in to upload a photo.');
   }
   const blob = await toBlob(canvas, mimeType, mimeType === 'image/jpeg' ? IMAGE_QUALITY : undefined);
   const extension = mimeType === 'image/png' ? 'png' : 'jpg';
-  const path = `userAvatars/${auth.currentUser.uid}/profile/avatar.${extension}`;
-  const avatarRef = ref(storage, path);
-  await uploadBytes(avatarRef, blob, { contentType: mimeType });
-  const url = await getDownloadURL(avatarRef);
+  const path = `userAvatars/${auth.currentUser.uid}/${folder}/${baseName}.${extension}`;
+  const fileRef = ref(storage, path);
+  await uploadBytes(fileRef, blob, { contentType: mimeType });
+  const url = await getDownloadURL(fileRef);
   return {
     // Kept for call-site compatibility; this is now a compact Storage URL,
     // not an embedded Base64 payload.
@@ -76,5 +84,14 @@ export const compressAvatarImageToBase64 = async (file) => {
     originalSize: file.size,
   };
 };
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { auth, storage } from '../firebase';
+
+export const compressAvatarImageToBase64 = async (file) =>
+  compressAndUpload(file, { folder: 'profile', baseName: 'avatar' });
+
+/**
+ * ID photos are uploaded under a unique name rather than overwriting a single
+ * file: an already-approved request must keep the photo it was approved with,
+ * even after the trainee submits a later request with a different one.
+ */
+export const uploadIdPhoto = async (file) =>
+  compressAndUpload(file, { folder: 'idPhoto', baseName: `id-${Date.now()}` });

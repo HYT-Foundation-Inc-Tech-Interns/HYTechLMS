@@ -1493,13 +1493,48 @@ const sortByField = (items, field) =>
 /**
  * Trainee creates an ID request (blocked if one is already pending/approved).
  */
+/**
+ * Fields the admin needs in order to actually produce a card. They are stored
+ * as a snapshot on the request rather than read live from the trainee's
+ * profile: the card is printed from what was reviewed and approved, and the
+ * trainee may edit their profile (or their photo) afterwards.
+ */
+const REQUIRED_ID_DETAILS = [
+  ['photoUrl', 'a photo'],
+  ['fullName', 'your full name'],
+  ['address', 'your address'],
+  ['phone', 'your contact number'],
+  ['emergencyName', "your emergency contact's name"],
+  ['emergencyRelation', 'your relation to the emergency contact'],
+  ['emergencyPhone', "your emergency contact's number"],
+];
+
 export const createIdRequest = async (
   studentId,
-  { studentName = '', studentEmail = '', classId = '', className = '', trainerId = '', type = 'New', notes = '' }
+  {
+    studentName = '',
+    studentEmail = '',
+    classId = '',
+    className = '',
+    trainerId = '',
+    type = 'New',
+    notes = '',
+    details = {},
+  }
 ) => {
   try {
     if (!studentId) throw new Error('Missing student id');
     if (!trainerId) throw new Error('You must be in a class before requesting an ID.');
+
+    const trimmedDetails = Object.fromEntries(
+      Object.entries(details || {}).map(([key, value]) => [key, String(value ?? '').trim()])
+    );
+    const missing = REQUIRED_ID_DETAILS
+      .filter(([key]) => !trimmedDetails[key])
+      .map(([, label]) => label);
+    if (missing.length) {
+      throw new Error(`Please provide ${missing.join(', ')}.`);
+    }
 
     // Prevent duplicate open requests.
     const existing = await getDocs(
@@ -1522,6 +1557,18 @@ export const createIdRequest = async (
       trainerId,
       type,
       notes,
+      // Rules restrict reads on idRequests to the owner and admins, so this
+      // PII snapshot is no more exposed than the private profile it came from.
+      details: {
+        photoUrl: trimmedDetails.photoUrl,
+        fullName: trimmedDetails.fullName,
+        birthDate: trimmedDetails.birthDate || '',
+        address: trimmedDetails.address,
+        phone: trimmedDetails.phone,
+        emergencyName: trimmedDetails.emergencyName,
+        emergencyRelation: trimmedDetails.emergencyRelation,
+        emergencyPhone: trimmedDetails.emergencyPhone,
+      },
       status: 'pending',
       requestedAt: serverTimestamp(),
     });
