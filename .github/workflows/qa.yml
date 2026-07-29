@@ -45,8 +45,13 @@ jobs:
         run: npm run test:unit
       - name: Run Firestore and Storage authorization tests
         run: npm run test:rules
-      - name: Validate Functions syntax
-        run: node --check functions/src/index.js
+      # A syntax check alone passes on code that cannot load: a firebase-admin
+      # major bump removed the namespaced API and `node --check` still succeeded.
+      # Requiring the module is what catches that before a deploy does.
+      - name: Validate Functions syntax and runtime load
+        run: |
+          node --check functions/src/index.js
+          node -e "require('./functions/src/index.js')"
       - name: Build production bundle
         env:
           VITE_FIREBASE_API_KEY: test-api-key
