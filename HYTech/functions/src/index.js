@@ -14,10 +14,10 @@ const FUNCTION_REGION = 'asia-southeast1';
 // an unbounded number of first-generation function instances.
 const boundedFunctions = functions
   .region(FUNCTION_REGION)
-  .runWith({ maxInstances: 5 });
+  .runWith({ maxInstances: 5, enforceAppCheck: true });
 const templateCopyFunctions = functions
   .region(FUNCTION_REGION)
-  .runWith({ maxInstances: 2, timeoutSeconds: 540, memory: '1GB' });
+  .runWith({ maxInstances: 2, timeoutSeconds: 540, memory: '1GB', enforceAppCheck: true });
 // Assessment submission is the one call an entire class fires at the same
 // moment (the end of a timed quiz). First-generation functions serve a single
 // request per instance, so the shared ceiling of 5 made the 6th trainee queue
@@ -33,7 +33,7 @@ const templateCopyFunctions = functions
 // real always-on cost, so it stays a deliberate, separate decision.
 const submissionFunctions = functions
   .region(FUNCTION_REGION)
-  .runWith({ maxInstances: 40 });
+  .runWith({ maxInstances: 40, enforceAppCheck: true });
 const CONTENT_COLLECTIONS = ['topics', 'materials', 'assessments', 'assignments'];
 
 const requireActiveAdmin = async (context) => {
@@ -61,6 +61,54 @@ const writeActivityLog = async (userId, action, entityType, entityId, metadata =
     metadata,
     timestamp: admin.firestore.FieldValue.serverTimestamp(),
   });
+};
+
+const writeSecurityLog = async (
+  actorUid,
+  actorRole,
+  action,
+  targetType,
+  targetId,
+  metadata = {}
+) => {
+  await db.collection('securityLogs').add({
+    actorUid,
+    actorRole,
+    action,
+    targetType,
+    targetId,
+    metadata,
+    sourceFunction: process.env.K_SERVICE || 'firebase-functions',
+    serverTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+  });
+};
+
+const requireActiveClassStaff = async (context, classId) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
+  }
+  const [caller, classDoc] = await Promise.all([
+    db.collection('users').doc(context.auth.uid).get(),
+    db.collection('classes').doc(classId).get(),
+  ]);
+  const user = caller.data() || {};
+  const classData = classDoc.data() || {};
+  const isAdmin = user.role === 'admin';
+  const isClassTrainer = user.role === 'trainer' && (
+    classData.trainerId === context.auth.uid
+    || (Array.isArray(classData.coTrainerIds) && classData.coTrainerIds.includes(context.auth.uid))
+  );
+  if (
+    !caller.exists
+    || String(user.status || '').toLowerCase() !== 'active'
+    || (!isAdmin && !isClassTrainer)
+  ) {
+    throw new functions.https.HttpsError('permission-denied', 'Class staff access is required.');
+  }
+  if (!classDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'Class not found.');
+  }
+  return { user, classData, isAdmin };
 };
 
 const notificationTypeEnabled = async (type) => {
@@ -409,7 +457,7 @@ exports.migrateClassDirectory = boundedFunctions.https.onCall(async (_data, cont
 });
 
 exports.adminUpdateUserAccount = boundedFunctions.https.onCall(async (data, context) => {
-  await requireActiveAdmin(context);
+  const caller = await requireActiveAdmin(context);
   const userId = String(data?.userId || '').trim();
   const email = String(data?.email || '').trim().toLowerCase();
   const displayName = String(data?.displayName || '').trim().replace(/\s+/g, ' ');
@@ -441,6 +489,14 @@ exports.adminUpdateUserAccount = boundedFunctions.https.onCall(async (data, cont
     role,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
+  await writeSecurityLog(
+    context.auth.uid,
+    caller.role,
+    'user_account_updated',
+    'users',
+    userId,
+    { role, emailChanged: true, displayNameChanged: true }
+  );
   return { updated: true };
 });
 
@@ -707,10 +763,17 @@ exports.submitAssessmentAttempt = submissionFunctions.https.onCall(async (data, 
       'The assessment time limit has expired.'
     );
   }
-  const showCorrectAnswers =
+  const configuredToShowCorrectAnswers =
     assessment.settings?.showCorrectAnswers
     ?? assessment.showCorrectAnswers
     ?? false;
+  const attemptLimit = attemptLimitFor(assessment);
+  // Never disclose a live key while another attempt remains. One-response and
+  // one-attempt assessments cannot use the result to improve a later attempt.
+  const showCorrectAnswers = Boolean(configuredToShowCorrectAnswers) && (
+    assessment.settings?.oneResponsePerUser === true
+    || attemptLimit === 1
+  );
   let correctCount = 0;
   let earnedPoints = 0;
   let totalPoints = 0;
@@ -758,7 +821,6 @@ exports.submitAssessmentAttempt = submissionFunctions.https.onCall(async (data, 
     status: requiresManualGrading ? 'pending_review' : 'submitted',
     timedOut,
   };
-  const attemptLimit = attemptLimitFor(assessment);
   const attemptRef = assessment.settings?.oneResponsePerUser
     ? attemptsRef.doc(studentId)
     : attemptsRef.doc();
@@ -795,6 +857,307 @@ exports.submitAssessmentAttempt = submissionFunctions.https.onCall(async (data, 
     submittedAt: new Date().toISOString(),
     questionResults,
     showCorrectAnswers: Boolean(showCorrectAnswers),
+  };
+});
+
+// ==================== AUTHORITATIVE PROGRESS & CERTIFICATES ====================
+
+const calculateProgress = async (classId, studentId) => {
+  const classRef = db.collection('classes').doc(classId);
+  const [assessments, assignments] = await Promise.all([
+    classRef.collection('assessments').get(),
+    classRef.collection('assignments').get(),
+  ]);
+  const requiredAssessments = assessments.docs.filter((entry) => {
+    const item = entry.data() || {};
+    return String(item.status || 'active').toLowerCase() !== 'draft'
+      && item.required !== false;
+  });
+  const requiredAssignments = assignments.docs.filter((entry) => {
+    const item = entry.data() || {};
+    return String(item.status || 'active').toLowerCase() !== 'draft'
+      && item.required !== false;
+  });
+
+  const assessmentEvidence = await Promise.all(requiredAssessments.map(async (item) => {
+    const attempts = await item.ref.collection('attempts')
+      .where('studentId', '==', studentId)
+      .get();
+    return attempts.docs.some((attempt) => attempt.data()?.passed === true);
+  }));
+  const assignmentEvidence = await Promise.all(requiredAssignments.map(async (item) => {
+    const itemData = item.data() || {};
+    if (String(itemData.type || '') !== 'Submission') {
+      const attempts = await item.ref.collection('attempts')
+        .where('studentId', '==', studentId)
+        .get();
+      return attempts.docs.some((attempt) => attempt.data()?.passed === true);
+    }
+    const submission = await item.ref.collection('submissions').doc(studentId).get();
+    if (!submission.exists) return false;
+    const data = submission.data() || {};
+    return data.status === 'accepted'
+      || data.passed === true
+      || Number.isFinite(Number(data.grade));
+  }));
+
+  const totalItems = requiredAssessments.length + requiredAssignments.length;
+  const completedItems = [...assessmentEvidence, ...assignmentEvidence].filter(Boolean).length;
+  const overallProgress = totalItems > 0
+    ? Math.round((completedItems / totalItems) * 100)
+    : 0;
+  return {
+    completedItems,
+    totalItems,
+    overallProgress,
+    requirementsSatisfied: totalItems > 0 && completedItems === totalItems,
+  };
+};
+
+const persistAuthoritativeProgress = async (classId, studentId, enrollmentRef) => {
+  const progress = await calculateProgress(classId, studentId);
+  const batch = db.batch();
+  batch.set(
+    db.collection('students').doc(studentId).collection('progress').doc(classId),
+    {
+      classId,
+      ...progress,
+      source: 'authoritative-recalculation',
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+  if (enrollmentRef) {
+    batch.update(enrollmentRef, {
+      progress,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+  await batch.commit();
+  return progress;
+};
+
+exports.recalculateMyProgress = boundedFunctions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in first.');
+  }
+  const classId = String(data?.classId || '').trim();
+  if (!classId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Class ID is required.');
+  }
+  const studentId = context.auth.uid;
+  const [userDoc, enrollmentQuery] = await Promise.all([
+    db.collection('users').doc(studentId).get(),
+    db.collection('enrollments')
+      .where('classId', '==', classId)
+      .where('studentId', '==', studentId)
+      .limit(1)
+      .get(),
+  ]);
+  const user = userDoc.data() || {};
+  const enrollmentDoc = enrollmentQuery.docs[0];
+  if (
+    !userDoc.exists
+    || String(user.status || '').toLowerCase() !== 'active'
+    || !enrollmentDoc
+    || !['active', 'ongoing', 'completed'].includes(
+      String(enrollmentDoc.data()?.status || '').toLowerCase()
+    )
+  ) {
+    throw new functions.https.HttpsError('permission-denied', 'Active enrollment is required.');
+  }
+  if (
+    context.auth.token.email_verified !== true
+    && user.createdBy !== 'admin'
+  ) {
+    throw new functions.https.HttpsError('permission-denied', 'Verify your email first.');
+  }
+  return persistAuthoritativeProgress(classId, studentId, enrollmentDoc.ref);
+});
+
+exports.changeEnrollmentStatus = boundedFunctions.https.onCall(async (data, context) => {
+  const enrollmentId = String(data?.enrollmentId || '').trim();
+  const status = String(data?.status || '').trim().toLowerCase();
+  const reason = String(data?.reason || '').trim();
+  if (!enrollmentId || !['active', 'ongoing', 'terminated'].includes(status)) {
+    throw new functions.https.HttpsError('invalid-argument', 'A supported enrollment status is required.');
+  }
+  if (status === 'terminated' && (reason.length < 3 || reason.length > 1000)) {
+    throw new functions.https.HttpsError('invalid-argument', 'A termination reason is required.');
+  }
+  const enrollmentRef = db.collection('enrollments').doc(enrollmentId);
+  const enrollmentDoc = await enrollmentRef.get();
+  if (!enrollmentDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'Enrollment not found.');
+  }
+  const enrollment = enrollmentDoc.data() || {};
+  const classId = String(enrollment.classId || '').trim();
+  const studentId = String(enrollment.studentId || '').trim();
+  const { user } = await requireActiveClassStaff(context, classId);
+  const memberRef = db.collection('classes').doc(classId).collection('members').doc(studentId);
+  const batch = db.batch();
+  batch.update(enrollmentRef, {
+    status,
+    ...(status === 'active' ? {
+      approvedAt: admin.firestore.FieldValue.serverTimestamp(),
+      approvedBy: context.auth.uid,
+    } : {}),
+    ...(status === 'terminated' ? {
+      terminatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      terminationReason: reason,
+    } : {}),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  if (status === 'terminated') {
+    batch.delete(memberRef);
+  } else {
+    batch.set(memberRef, {
+      studentId,
+      enrollmentId,
+      status,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+  await batch.commit();
+  await writeSecurityLog(
+    context.auth.uid,
+    user.role,
+    'enrollment_status_changed',
+    'enrollments',
+    enrollmentId,
+    { classId, studentId, status, reason: status === 'terminated' ? reason : '' }
+  );
+  return { updated: true, status, studentId, classId };
+});
+
+exports.graduateEnrollment = boundedFunctions.https.onCall(async (data, context) => {
+  const enrollmentId = String(data?.enrollmentId || '').trim();
+  if (!enrollmentId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Enrollment ID is required.');
+  }
+  const enrollmentRef = db.collection('enrollments').doc(enrollmentId);
+  const enrollmentDoc = await enrollmentRef.get();
+  if (!enrollmentDoc.exists) {
+    throw new functions.https.HttpsError('not-found', 'Enrollment not found.');
+  }
+  const enrollment = enrollmentDoc.data() || {};
+  const classId = String(enrollment.classId || '').trim();
+  const studentId = String(enrollment.studentId || '').trim();
+  const { user, classData } = await requireActiveClassStaff(context, classId);
+  if (!studentId || !['active', 'ongoing'].includes(String(enrollment.status || '').toLowerCase())) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'Only an active enrollment can be graduated.'
+    );
+  }
+
+  const progress = await persistAuthoritativeProgress(classId, studentId, enrollmentRef);
+  if (!progress.requirementsSatisfied) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      `The trainee completed ${progress.completedItems} of ${progress.totalItems} required items.`
+    );
+  }
+
+  const certificateId = randomUUID();
+  const verificationToken = randomUUID().replace(/-/g, '');
+  const certificateRef = db.collection('certificates').doc(certificateId);
+  const studentDoc = await db.collection('users').doc(studentId).get();
+  const student = studentDoc.data() || {};
+  await db.runTransaction(async (transaction) => {
+    const current = await transaction.get(enrollmentRef);
+    if (!current.exists || !['active', 'ongoing'].includes(
+      String(current.data()?.status || '').toLowerCase()
+    )) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'The enrollment is no longer eligible for graduation.'
+      );
+    }
+    transaction.create(certificateRef, {
+      certificateNumber: `HYT-${new Date().getUTCFullYear()}-${certificateId.slice(0, 8).toUpperCase()}`,
+      verificationToken,
+      studentId,
+      studentName: student.name || student.displayName || '',
+      classId,
+      className: classData.name || enrollment.className || '',
+      courseId: classData.courseId || enrollment.courseId || '',
+      qualificationSnapshot: progress,
+      issuedAt: admin.firestore.FieldValue.serverTimestamp(),
+      issuedBy: context.auth.uid,
+      status: 'valid',
+    });
+    transaction.update(enrollmentRef, {
+      status: 'completed',
+      certificateId,
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+  await writeSecurityLog(
+    context.auth.uid,
+    user.role,
+    'certificate_issued',
+    'certificates',
+    certificateId,
+    { enrollmentId, classId, studentId }
+  );
+  return { graduated: true, certificateId, verificationToken, progress };
+});
+
+exports.revokeCertificate = boundedFunctions.https.onCall(async (data, context) => {
+  const certificateId = String(data?.certificateId || '').trim();
+  const reason = String(data?.reason || '').trim();
+  if (!certificateId || reason.length < 5 || reason.length > 1000) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'Certificate ID and a revocation reason are required.'
+    );
+  }
+  const certRef = db.collection('certificates').doc(certificateId);
+  const cert = await certRef.get();
+  if (!cert.exists) throw new functions.https.HttpsError('not-found', 'Certificate not found.');
+  const certData = cert.data() || {};
+  const { user } = await requireActiveClassStaff(context, certData.classId);
+  await certRef.update({
+    status: 'revoked',
+    revokedAt: admin.firestore.FieldValue.serverTimestamp(),
+    revokedBy: context.auth.uid,
+    revocationReason: reason,
+  });
+  await writeSecurityLog(
+    context.auth.uid,
+    user.role,
+    'certificate_revoked',
+    'certificates',
+    certificateId,
+    { classId: certData.classId, studentId: certData.studentId, reason }
+  );
+  return { revoked: true };
+});
+
+exports.verifyCertificate = boundedFunctions.https.onCall(async (data) => {
+  const token = String(data?.verificationToken || '').trim();
+  if (!/^[a-f0-9]{32}$/i.test(token)) {
+    throw new functions.https.HttpsError('invalid-argument', 'A valid verification token is required.');
+  }
+  const result = await db.collection('certificates')
+    .where('verificationToken', '==', token)
+    .limit(1)
+    .get();
+  if (result.empty) {
+    return { found: false, valid: false };
+  }
+  const certificate = result.docs[0].data() || {};
+  return {
+    found: true,
+    valid: certificate.status === 'valid',
+    certificateNumber: certificate.certificateNumber || '',
+    studentName: certificate.studentName || '',
+    className: certificate.className || '',
+    courseId: certificate.courseId || '',
+    issuedAt: certificate.issuedAt?.toDate?.()?.toISOString?.() || null,
+    status: certificate.status || 'unknown',
   };
 });
 
@@ -871,6 +1234,14 @@ exports.gradeAssessmentAttempt = boundedFunctions.https.onCall(async (data, cont
     gradedBy: context.auth.uid,
     gradedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+  await writeSecurityLog(
+    context.auth.uid,
+    userData.role,
+    'assessment_attempt_graded',
+    collectionName,
+    attemptId,
+    { classId, assessmentId, earnedPoints: finalPoints, totalPoints }
+  );
   return { id: attemptId, earnedPoints: finalPoints, totalPoints, score, passed, feedback };
 });
 

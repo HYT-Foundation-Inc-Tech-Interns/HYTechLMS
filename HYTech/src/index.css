@@ -30,8 +30,8 @@ input[type='reset'] {
 /* Keep single-symbol controls centered inside their full touch target.
    This is especially important for absolutely positioned input actions,
    where the 44px minimum width is larger than the icon itself. */
-button:has(> svg:only-child),
-[role='button']:has(> svg:only-child) {
+button:has(> svg:only-child):not([class*='hidden']),
+[role='button']:has(> svg:only-child):not([class*='hidden']) {
   display: inline-flex;
   align-items: center;
   justify-content: center;

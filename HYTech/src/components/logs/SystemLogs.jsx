@@ -20,6 +20,7 @@ import {
   getActivityLogsByDateRange,
 } from '../../utils/firestoreService';
 import { useToast } from '../../context/ToastContext';
+import { toCsvDocument } from '../../utils/csv';
 
 // Map raw activity actions to a display label and severity badge
 const ACTION_DISPLAY = {
@@ -106,7 +107,6 @@ const formatTimestamp = (value) => {
 };
 
 const CSV_HEADERS = ['Log ID', 'Type', 'Action', 'Name', 'Email', 'Role', 'Entity Type', 'Linked ID', 'Timestamp'];
-const csvEscape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 
 // Trigger a browser download for a CSV string.
 const downloadCsv = (csv, filename) => {
@@ -282,10 +282,8 @@ const SystemLogs = () => {
     }
     const rows = filteredLogs.map((l) =>
       [l.logId, l.type, l.action, l.name, l.email, l.role, l.entityType, l.linkedId, l.timestamp]
-        .map(csvEscape)
-        .join(',')
     );
-    const csv = [CSV_HEADERS.map(csvEscape).join(','), ...rows].join('\n');
+    const csv = toCsvDocument([CSV_HEADERS, ...rows]);
     downloadCsv(csv, `system-logs-${new Date().toISOString().slice(0, 10)}.csv`);
     addToast(`Exported ${filteredLogs.length} log(s).`, 'success');
   };
@@ -348,11 +346,9 @@ const SystemLogs = () => {
         log.entityType || '',
         log.entityId || '',
         formatTimestamp(log.timestamp),
-      ]
-        .map(csvEscape)
-        .join(',');
+      ];
     });
-    return [CSV_HEADERS.map(csvEscape).join(','), ...rows].join('\n');
+    return toCsvDocument([CSV_HEADERS, ...rows]);
   };
 
   // Combined flow: export the selected date range to CSV, then permanently purge it.

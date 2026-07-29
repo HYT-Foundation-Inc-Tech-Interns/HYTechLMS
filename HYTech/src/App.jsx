@@ -9,6 +9,7 @@ const LandingPage = lazy(() => import('./components/landing/LandingPage'));
 const SignUp = lazy(() => import('./components/auth/SignUp'));
 const SignIn = lazy(() => import('./components/auth/SignIn'));
 const VerifyEmail = lazy(() => import('./components/auth/VerifyEmail'));
+const VerifyCertificate = lazy(() => import('./components/public/VerifyCertificate'));
 const AdminDashboardLayout = lazy(() => import('./components/layout/AdminDashboardLayout'));
 const Dashboard = lazy(() => import('./components/dashboard/Dashboard'));
 const UserManagement = lazy(() => import('./components/users/UserManagement'));
@@ -72,6 +73,7 @@ function App() {
             so it must NOT be wrapped by PublicOnlyRoute (which would redirect
             them into a dashboard the verification gate immediately bounces). */}
         <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/verify/:token" element={<VerifyCertificate />} />
 
         {/* Admin Dashboard Routes */}
         <Route

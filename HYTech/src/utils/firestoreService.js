@@ -2198,31 +2198,9 @@ export const ensureClassMembership = async (enrollment = {}) => {
 
 export const approveEnrollment = async (enrollmentId, { studentId, classId, className } = {}) => {
   try {
-    const enrollmentRef = doc(db, 'enrollments', enrollmentId);
-    const enrollmentSnapshot = await getDoc(enrollmentRef);
-    const enrollmentData = enrollmentSnapshot.exists() ? enrollmentSnapshot.data() : {};
-    const resolvedStudentId = studentId || enrollmentData.studentId;
-    const resolvedClassId = classId || enrollmentData.classId;
-    const batch = writeBatch(db);
-    batch.update(enrollmentRef, {
-      status: 'active',
-      joinedAt: new Date().toISOString(),
-      approvedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    if (resolvedStudentId && resolvedClassId) {
-      batch.set(
-        doc(db, 'classes', resolvedClassId, 'members', resolvedStudentId),
-        {
-          studentId: resolvedStudentId,
-          enrollmentId,
-          status: 'active',
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-    }
-    await batch.commit();
+    const changeStatus = httpsCallable(functions, 'changeEnrollmentStatus');
+    const result = await changeStatus({ enrollmentId, status: 'active' });
+    const resolvedStudentId = studentId || result.data?.studentId;
 
     if (resolvedStudentId) {
       try {
@@ -2328,65 +2306,14 @@ export const createEnrollment = async (enrollmentData) => {
  */
 export const updateEnrollmentStatus = async (enrollmentId, newStatus, reason = '') => {
   try {
-    const enrollmentRef = doc(db, 'enrollments', enrollmentId);
-    const enrollmentSnapshot = await getDoc(enrollmentRef);
-    const enrollment = enrollmentSnapshot.exists() ? enrollmentSnapshot.data() : {};
-    const updates = {
-      status: newStatus,
-      updatedAt: serverTimestamp(),
-    };
-    
     if (newStatus === 'completed') {
-      updates.completedAt = serverTimestamp();
-      // Freeze the summary graduates see. Archived Classes must not read its
-      // name/description/modules from a template that trainers can later edit.
-      if (enrollment.classId) {
-        const classSnapshot = await getDoc(doc(db, 'classes', enrollment.classId));
-        const classData = classSnapshot.exists() ? classSnapshot.data() || {} : {};
-        let templateData = {};
-        if (classData.courseId || enrollment.courseId) {
-          const templateSnapshot = await getDoc(
-            doc(db, 'courses', classData.courseId || enrollment.courseId)
-          ).catch(() => null);
-          templateData = templateSnapshot?.exists() ? templateSnapshot.data() || {} : {};
-        }
-        updates.className = classData.name || enrollment.className || 'Completed Class';
-        updates.courseName = templateData.name || enrollment.courseName || '';
-        updates.trainerName = classData.trainerName || enrollment.trainerName || '';
-        updates.description = classData.description || templateData.description || enrollment.description || '';
-        updates.subjects = Array.isArray(classData.subjects)
-          ? classData.subjects
-          : (Array.isArray(templateData.subjects) ? templateData.subjects : []);
-        updates.bgImage = classData.bgImage || enrollment.bgImage || templateData.bgImage || '';
-        updates.color = classData.color || enrollment.color || '';
-      }
-    } else if (newStatus === 'terminated') {
-      updates.terminatedAt = serverTimestamp();
-      updates.terminationReason = reason;
+      const graduate = httpsCallable(functions, 'graduateEnrollment');
+      const result = await graduate({ enrollmentId });
+      return result.data || true;
     }
-    
-    const batch = writeBatch(db);
-    batch.update(enrollmentRef, updates);
-    if (enrollment.classId && enrollment.studentId) {
-      const memberRef = doc(db, 'classes', enrollment.classId, 'members', enrollment.studentId);
-      if (newStatus === 'terminated') {
-        batch.delete(memberRef);
-      } else {
-        batch.set(
-          memberRef,
-          {
-            studentId: enrollment.studentId,
-            enrollmentId,
-            status: newStatus,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
-      }
-    }
-    await batch.commit();
-    
-    return true;
+    const changeStatus = httpsCallable(functions, 'changeEnrollmentStatus');
+    const result = await changeStatus({ enrollmentId, status: newStatus, reason });
+    return result.data || true;
   } catch (error) {
     console.error('Error updating enrollment status:', error);
     throw error;
@@ -2399,15 +2326,13 @@ export const updateEnrollmentStatus = async (enrollmentId, newStatus, reason = '
 export const updateEnrollmentProgress = async (enrollmentId, progressData) => {
   try {
     const enrollmentRef = doc(db, 'enrollments', enrollmentId);
-    
-    await updateDoc(enrollmentRef, {
-      progress: {
-        ...progressData,
-      },
-      updatedAt: serverTimestamp(),
-    });
-    
-    return true;
+    const snapshot = await getDoc(enrollmentRef);
+    if (!snapshot.exists()) throw new Error('Enrollment not found.');
+    const classId = snapshot.data()?.classId;
+    if (!classId) throw new Error('Enrollment has no class.');
+    const recalculate = httpsCallable(functions, 'recalculateMyProgress');
+    const result = await recalculate({ classId });
+    return result.data || progressData;
   } catch (error) {
     console.error('Error updating enrollment progress:', error);
     throw error;
@@ -4989,16 +4914,12 @@ export const getClassGradebook = async (classId) => {
  */
 export const updateStudentProgress = async (studentId, classId, { modulesCompleted, progressPercentage }) => {
   try {
-    const progressRef = doc(db, 'students', studentId, 'progress', classId);
-    
-    await setDoc(progressRef, {
-      classId,
-      modulesCompleted,
-      progressPercentage,
-      lastUpdated: serverTimestamp(),
-    }, { merge: true });
-    
-    return true;
+    if (auth?.currentUser?.uid !== studentId) {
+      throw new Error('Progress can only be recalculated by the signed-in trainee.');
+    }
+    const recalculate = httpsCallable(functions, 'recalculateMyProgress');
+    const result = await recalculate({ classId });
+    return result.data || { modulesCompleted, progressPercentage };
   } catch (error) {
     console.error('Error updating student progress:', error);
     throw error;

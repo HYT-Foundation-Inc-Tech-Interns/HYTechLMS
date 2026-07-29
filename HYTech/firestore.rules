@@ -56,6 +56,12 @@ service cloud.firestore {
           .data.get('status', '') in ['Active', 'active'];
     }
 
+    function classLeadTrainerId(classId) {
+      return classExists(classId)
+        ? get(/databases/$(database)/documents/classes/$(classId)).data.get('trainerId', '')
+        : '';
+    }
+
     // Global access policy (config/appSettings → access map). Falls back to an
     // empty map when the config doc is absent so defaults apply.
     function appAccess() {
@@ -131,7 +137,21 @@ service cloud.firestore {
 
       // Owner edits profile but NEVER role, status, or the verification waiver.
       allow update: if isAdmin()
-        || (isSelf(uid) && !changedKeys().hasAny(['role', 'status', 'createdBy']));
+        || (isSelf(uid)
+            && changedKeys().hasOnly([
+              'displayName',
+              'name',
+              'firstName',
+              'middleName',
+              'lastName',
+              'nameExtension',
+              'profile',
+              'bio',
+              'photoURL',
+              'avatarUrl',
+              'avatarBase64',
+              'updatedAt'
+            ]));
 
       allow delete: if isAdmin();
 
@@ -431,25 +451,19 @@ service cloud.firestore {
         || (canUseLms()
             && enrollmentId == request.resource.data.get('classId', '') + '_' + request.auth.uid
             && request.resource.data.get('studentId', '') == request.auth.uid
+            && request.resource.data.get('trainerId', '') ==
+              classLeadTrainerId(request.resource.data.get('classId', 'none'))
             && selfEnrollStatusAllowed(request.resource.data.get('status', ''))
             && classAcceptsSelfEnrollment(request.resource.data.get('classId', 'none')))
-        || (isTrainer() && request.resource.data.get('trainerId', '') == request.auth.uid)
-        // A co-trainer adds a trainee: the enrollment's trainerId is the LEAD,
-        // so authorize by class membership instead of the trainerId field.
-        || (isTrainer() && classTrainer(request.resource.data.get('classId', 'none')));
+        || classTrainer(request.resource.data.get('classId', 'none'));
 
       // Trainer of record / class trainer / admin change status+progress.
       // Student may change ONLY their own progress field.
       allow update: if isAdmin()
-        || (canUseLms() && resource.data.get('trainerId', '') == request.auth.uid)
-        || (isTrainer() && classTrainer(resource.data.get('classId', 'none')))
-        || (canUseLms()
-            && resource.data.get('studentId', '') == request.auth.uid
-            && changedKeys().hasOnly(['progress', 'updatedAt']));
+        || classTrainer(resource.data.get('classId', 'none'));
 
       allow delete: if isAdmin()
-        || (canUseLms() && resource.data.get('trainerId', '') == request.auth.uid)
-        || (isTrainer() && classTrainer(resource.data.get('classId', 'none')));
+        || classTrainer(resource.data.get('classId', 'none'));
     }
 
     // ==================== ID CARD REQUESTS ====================
@@ -516,10 +530,21 @@ service cloud.firestore {
     // Append-only audit trail. Admin bypass on create covers legacy
     // logActivity('admin', ...) calls.
     match /activityLogs/{logId} {
-      allow create: if isAdmin()
-        || (canUseLms() && request.resource.data.get('userId', '') == request.auth.uid)
-        || (isSelf(request.resource.data.get('userId', ''))
-            && request.resource.data.get('action', '') == 'user_signup');
+      // Product activity is deliberately non-authoritative. Keep the permitted
+      // client events narrow; privileged/security records are written to
+      // securityLogs by trusted Functions.
+      allow create: if isSignedIn()
+        && request.resource.data.get('userId', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'userId', 'action', 'entityType', 'entityId', 'metadata', 'timestamp'
+        ])
+        && request.resource.data.get('action', '') in [
+          'user_signup',
+          'user_login',
+          'join_class',
+          'id_request',
+          'incident_filed'
+        ];
       allow read: if isAdmin()
         || (canUseLms() && resource.data.get('userId', '') == request.auth.uid);
       // Logs are immutable; admins may purge them for maintenance/history reset.
@@ -530,7 +555,23 @@ service cloud.firestore {
     // ==================== STUDENT PROGRESS ====================
     match /students/{studentId}/progress/{classId} {
       allow read: if isAdmin() || isTrainer() || isSelf(studentId);
-      allow write: if isAdmin() || isSelf(studentId) || classTrainer(classId);
+      // Academic progress is calculated by trusted Functions only.
+      allow write: if false;
+    }
+
+    // Authoritative certificates are issued/revoked only by trusted Functions.
+    match /certificates/{certificateId} {
+      allow read: if isAdmin()
+        || (canUseLms() && resource.data.get('studentId', '') == request.auth.uid)
+        || classTrainer(resource.data.get('classId', 'none'));
+      allow create, update, delete: if false;
+    }
+
+    // Tamper-resistant application audit records. Firebase/GCP retention and
+    // export controls provide the independent operational retention layer.
+    match /securityLogs/{logId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     // Unmatched paths are denied by default.
