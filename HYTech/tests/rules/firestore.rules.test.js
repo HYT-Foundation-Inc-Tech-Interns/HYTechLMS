@@ -6,7 +6,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, deleteDoc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes } from 'firebase/storage';
 
 const projectId = 'demo-hytech-lms';
@@ -76,6 +76,13 @@ beforeEach(async () => {
     await setDoc(doc(db, 'classes', 'class-a', 'assessments', 'quiz', 'private', 'answerKey'), {
       answers: { q1: 0 },
     });
+    // A published Submission task, as createAssignment writes it (status
+    // defaults to 'active'; acceptResponses is never written).
+    await setDoc(doc(db, 'classes', 'class-a', 'assignments', 'task-1'), {
+      title: 'Deliverable',
+      type: 'Submission',
+      status: 'active',
+    });
     await setDoc(doc(db, 'certificates', 'cert-1'), {
       studentId: 'student',
       classId: 'class-a',
@@ -114,6 +121,91 @@ describe('storage isolation', () => {
       ref(unverifiedStorage, 'lmsFiles/class-a/student/work.txt'),
       new Uint8Array([1]),
       { contentType: 'text/plain' }
+    ));
+  });
+});
+
+describe('trainee assignment submission', () => {
+  // Exactly the payload submitAssignment() writes (firestoreService.js:4233).
+  const submissionPayload = () => ({
+    studentId: 'student',
+    studentName: 'Trainee',
+    text: 'my work',
+    link: '',
+    attachments: [],
+    filesBase64: [],
+    status: 'submitted',
+    submittedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  it('lets an enrolled trainee read the task, submit, and re-submit', async () => {
+    const db = dbFor('student');
+    const submission = doc(db, 'classes/class-a/assignments/task-1/submissions/student');
+    await assertSucceeds(getDoc(doc(db, 'classes/class-a/assignments/task-1')));
+    await assertSucceeds(setDoc(submission, { ...submissionPayload(), createdAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(submission, submissionPayload()));
+  });
+
+  it('lets an enrolled trainee attach a PDF under their own prefix', async () => {
+    const storage = env.authenticatedContext('student', claims).storage();
+    await assertSucceeds(uploadBytes(
+      ref(storage, 'lmsFiles/class-a/student/proof.pdf'),
+      new Uint8Array([1]),
+      { contentType: 'application/pdf' }
+    ));
+  });
+
+  it('never lets a trainee write their own grade', async () => {
+    const db = dbFor('student');
+    const submission = doc(db, 'classes/class-a/assignments/task-1/submissions/student');
+    await assertFails(setDoc(submission, { ...submissionPayload(), grade: 100 }));
+    await assertSucceeds(setDoc(submission, submissionPayload()));
+    await assertFails(updateDoc(submission, { grade: 100 }));
+  });
+
+  it('blocks submitting and uploading while the enrollment is still pending', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'enrollments', 'class-a_student'), {
+        classId: 'class-a', studentId: 'student', trainerId: 'lead', status: 'pending',
+      });
+      await deleteDoc(doc(db, 'classes', 'class-a', 'members', 'student'));
+    });
+    // Not a class member, so the task itself is unreadable and the attachment
+    // upload is refused — this is the storage/unauthorized a pending trainee hits.
+    await assertFails(getDoc(doc(dbFor('student'), 'classes/class-a/assignments/task-1')));
+    const storage = env.authenticatedContext('student', claims).storage();
+    await assertFails(uploadBytes(
+      ref(storage, 'lmsFiles/class-a/student/proof.pdf'),
+      new Uint8Array([1]),
+      { contentType: 'application/pdf' }
+    ));
+  });
+
+  it.each([
+    ['an iPhone photo', 'photo.heic', 'image/heic'],
+    ['an iPhone video', 'clip.mov', 'video/quicktime'],
+    ['a zipped deliverable', 'work.zip', 'application/zip'],
+  ])('accepts %s', async (_label, fileName, contentType) => {
+    const storage = env.authenticatedContext('student', claims).storage();
+    await assertSucceeds(uploadBytes(
+      ref(storage, `lmsFiles/class-a/student/${fileName}`),
+      new Uint8Array([1]),
+      { contentType }
+    ));
+  });
+
+  // application/octet-stream stays blocked on purpose: it is what a browser
+  // sends for a file it cannot identify, so allowing it would readmit every
+  // type the list excludes. compressAndStoreFile now rejects these client-side
+  // with a message naming the file, rather than letting Storage answer.
+  it('still refuses a file the browser could not type', async () => {
+    const storage = env.authenticatedContext('student', claims).storage();
+    await assertFails(uploadBytes(
+      ref(storage, 'lmsFiles/class-a/student/work.dwg'),
+      new Uint8Array([1]),
+      { contentType: 'application/octet-stream' }
     ));
   });
 });

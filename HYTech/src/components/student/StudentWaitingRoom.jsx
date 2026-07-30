@@ -140,9 +140,9 @@ const StudentWaitingRoom = ({ pendingEnrollments = [] }) => {
                   type="text"
                   value={classCode}
                   onChange={(e) => setClassCode(e.target.value.toUpperCase())}
-                  placeholder="e.g. ABC123"
+                  placeholder="e.g. CLASS-ABCDEFGHIJ"
                   className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B005C] focus:border-transparent font-mono tracking-widest"
-                  maxLength={12}
+                  maxLength={16}
                 />
                 <button
                   type="submit"

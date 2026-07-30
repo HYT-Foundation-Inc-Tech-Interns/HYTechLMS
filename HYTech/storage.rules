@@ -46,6 +46,9 @@ service firebase.storage {
       ];
     }
 
+    // Keep in sync with ALLOWED_LMS_UPLOAD_TYPES in src/utils/firestoreService.js.
+    // application/octet-stream is deliberately absent: it is the browser's
+    // "unknown" fallback and would readmit every blocked type.
     function isAllowedLmsFile() {
       return request.resource.contentType in [
         'application/pdf',
@@ -55,15 +58,20 @@ service firebase.storage {
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'application/vnd.ms-powerpoint',
         'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'application/zip',
         'text/plain',
         'text/csv',
         'image/png',
         'image/jpeg',
+        'image/jpg',
         'image/webp',
         'image/gif',
+        'image/heic',
+        'image/heif',
         'audio/mpeg',
         'audio/mp4',
-        'video/mp4'
+        'video/mp4',
+        'video/quicktime'
       ];
     }
 

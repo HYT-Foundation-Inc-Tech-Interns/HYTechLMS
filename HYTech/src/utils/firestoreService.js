@@ -24,7 +24,35 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
-import { db, auth, functions, storage } from '../firebase';
+import { db, auth, functions, storage, appCheckError } from '../firebase';
+
+// Upload types accepted for class files and trainee submissions. This MUST stay
+// in sync with isAllowedLmsFile() in storage.rules — the rules are the real
+// gate; this copy exists so the UI can refuse a file with a useful message
+// instead of letting Storage answer with a bare permission error.
+export const ALLOWED_LMS_UPLOAD_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/zip',
+  'text/plain',
+  'text/csv',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'image/gif',
+  'image/heic',
+  'image/heif',
+  'audio/mpeg',
+  'audio/mp4',
+  'video/mp4',
+  'video/quicktime',
+];
 import { TESDA_CATALOG, parseLevel } from '../data/tesdaCatalog';
 import { COLOR_PALETTE } from './courseColors';
 
@@ -3083,16 +3111,41 @@ export const compressAndStoreFile = async (file, classId) => {
         `File is too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Maximum size: 25MB`
       );
     }
+    // storage.rules enforces this same list. Checking it here turns a bare
+    // storage/unauthorized — which reads to a trainee as "you may not submit" —
+    // into a message that names the actual problem.
+    const contentType = file.type || '';
+    if (!ALLOWED_LMS_UPLOAD_TYPES.includes(contentType)) {
+      throw new Error(
+        contentType
+          ? `"${file.name}" is a ${contentType} file, which is not an accepted upload type.`
+          : `The browser could not identify the type of "${file.name}". Re-save it as a PDF, image, or document and try again.`
+      );
+    }
+
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_');
     const randomPart =
       globalThis.crypto?.randomUUID?.()
       || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const path = `lmsFiles/${classId}/${auth.currentUser.uid}/${randomPart}-${safeName}`;
     const fileRef = storageRef(storage, path);
-    await uploadBytes(fileRef, file, {
-      contentType: file.type || 'application/octet-stream',
-      customMetadata: { originalName: file.name },
-    });
+    try {
+      await uploadBytes(fileRef, file, {
+        contentType,
+        customMetadata: { originalName: file.name },
+      });
+    } catch (uploadErr) {
+      // Storage returns the same code for "rules said no" and "App Check did
+      // not attest this request", so name both rather than blaming the user.
+      if (uploadErr?.code === 'storage/unauthorized') {
+        throw new Error(
+          appCheckError
+            ? `Upload blocked: this app failed its App Check verification (${appCheckError}). Report this to your administrator.`
+            : 'Upload was refused. Confirm your enrollment in this class is approved; if it is, this is an App Check or Storage rules problem — report it to your administrator.'
+        );
+      }
+      throw uploadErr;
+    }
     const url = await getDownloadURL(fileRef);
     return {
       name: file.name,

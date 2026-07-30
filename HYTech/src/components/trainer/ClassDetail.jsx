@@ -419,7 +419,18 @@ const ClassDetail = () => {
               })
             );
             
-            setEnrollments(enrollmentsWithStudentInfo || []);
+            // One trainee should occupy one roster row. Deterministic enrollment
+            // IDs prevent new duplicates, while this also shields the People tab
+            // from legacy duplicate documents.
+            const uniqueEnrollments = Array.from(
+              new Map(
+                (enrollmentsWithStudentInfo || []).map((enrollment) => [
+                  enrollment.studentId || enrollment.id,
+                  enrollment,
+                ])
+              ).values()
+            );
+            setEnrollments(uniqueEnrollments);
           } catch (error) {
             console.error('Error processing enrollments:', error);
             addToast('Error loading participants', 'error');
@@ -1695,7 +1706,8 @@ const ClassDetail = () => {
           level: classData.level,
         }
       );
-      setEnrollments((prev) => [...prev, enrollment]);
+      // The live enrollment subscription is the source of truth and will add
+      // the new row. Appending here as well briefly rendered the trainee twice.
       addToast(`${enrollment.studentName || 'Trainee'} added to the class.`, 'success');
     } catch (err) {
       addToast(err.message || 'Unable to add trainee.', 'error');
@@ -2971,19 +2983,13 @@ const ClassDetail = () => {
                     <h2 className="font-bold text-gray-900 text-lg">Recent Activity</h2>
                     <span className="text-sm text-gray-500">{activityFeed.length} {activityFeed.length === 1 ? 'update' : 'updates'}</span>
                   </div>
-                  {/* Class and Course Info Badge */}
-                  {courseData && (
+                  {/* Sector badge */}
+                  {courseData && sectorName && sectorName !== 'N/A' && (
                     <div className="flex items-center gap-2 flex-wrap">
-                      <div className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium flex items-center gap-2">
-                        <span>📚</span>
-                        <span>{decodedClassName}</span>
+                      <div className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-full text-xs font-medium flex items-center gap-2">
+                        <span>🏢</span>
+                        <span>{sectorName}</span>
                       </div>
-                      {sectorName && sectorName !== 'N/A' && (
-                        <div className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-full text-xs font-medium flex items-center gap-2">
-                          <span>🏢</span>
-                          <span>{sectorName}</span>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>

@@ -199,9 +199,10 @@ const StudentHome = () => {
             <form onSubmit={handleJoinByCode} className="space-y-3">
               <input
                 type="text"
-                placeholder="Enter class code (e.g. ABC123)"
+                placeholder="Enter class code (e.g. CLASS-ABCDEFGHIJ)"
                 value={classCode}
                 onChange={(e) => setClassCode(e.target.value.toUpperCase())}
+                maxLength={16}
                 disabled={joiningClass}
                 className="w-full px-4 py-3 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50"
               />

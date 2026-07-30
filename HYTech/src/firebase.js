@@ -31,6 +31,11 @@ let storage = null;
 let functions = null;
 
 export let firebaseInitError = '';
+// Set when App Check was configured but failed to start. Storage and Firestore
+// reject with a plain permission error once enforcement is on, so this is the
+// only signal that separates "not allowed" from "not attested".
+export let appCheckError = '';
+let appCheck = null;
 
 if (hasValidFirebaseConfig) {
   app = initializeApp(firebaseConfig);
@@ -45,12 +50,16 @@ if (hasValidFirebaseConfig) {
         // eslint-disable-next-line no-undef
         self.FIREBASE_APPCHECK_DEBUG_TOKEN = import.meta.env.VITE_APPCHECK_DEBUG_TOKEN;
       }
-      initializeAppCheck(app, {
+      appCheck = initializeAppCheck(app, {
         provider: new ReCaptchaV3Provider(appCheckSiteKey),
         isTokenAutoRefreshEnabled: true,
       });
     } catch (appCheckErr) {
-      console.warn('App Check init failed:', appCheckErr?.message);
+      // A swallowed failure here is indistinguishable downstream from a rules
+      // denial: every Storage/Firestore call returns a bare "permission denied"
+      // once enforcement is on. Record it so callers can say so plainly.
+      appCheckError = appCheckErr?.message || 'App Check could not start.';
+      console.warn('App Check init failed:', appCheckError);
     }
   }
 
@@ -64,4 +73,4 @@ if (hasValidFirebaseConfig) {
   console.error(firebaseInitError);
 }
 
-export { app, auth, db, storage, functions, firebaseConfig, hasValidFirebaseConfig };
+export { app, appCheck, auth, db, storage, functions, firebaseConfig, hasValidFirebaseConfig };
