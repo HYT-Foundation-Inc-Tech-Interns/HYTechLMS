@@ -440,6 +440,17 @@ UI Components (Tailwind + Lucide)
 
 ## 🗄 Database Schema
 
+> ⚠️ **The shapes below are out of date.** They still show a `supervisor` role
+> (there are only three roles — admin, trainer, student) and an
+> `enrolledCourses` array that the current `users` document does not have.
+>
+> For the **accurate, verified** schema use the diagrams instead:
+> - [As-built schema](../docs/diagrams/as-built/database-schema.md) — the real
+>   collection tree, legacy fields, and a ranked list of gotchas
+> - [Design-level schema](../docs/diagrams/mermaid/database-schema.md) — the
+>   normalised target model
+> - [Diagram index](../docs/diagrams/README.md)
+
 ### Collections
 
 #### `users`

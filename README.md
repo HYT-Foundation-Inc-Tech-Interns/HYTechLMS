@@ -5,16 +5,21 @@ application on Firebase. It supports three roles — Administrator, Trainer, and
 Student/Trainee — covering TESDA-aligned sectors, course templates, live classes,
 learning content, assessments, submissions, grading, and notifications.
 
-> **New developer?** Start with
-> [HYTECH_LMS_DEVELOPER_TURNOVER_GUIDE.md](HYTECH_LMS_DEVELOPER_TURNOVER_GUIDE.md).
-> It is the authoritative reference for setup, operations, security posture, and
-> the improvement roadmap. This README is the short orientation.
+> **New developer?** Start with the
+> [Developer Turnover Brief](HYTECH_LMS_DEVELOPER_TURNOVER_BRIEF.md)
+> ([PDF](HYTECH_LMS_DEVELOPER_TURNOVER_BRIEF.pdf)) — everything you need to take
+> ownership, in reading order, in about 13 pages.
+>
+> The [full turnover guide](HYTECH_LMS_DEVELOPER_TURNOVER_GUIDE.md) remains the
+> exhaustive reference — go there for one-time procedures such as standing up a
+> new Firebase environment. This README is the short orientation.
 
 ---
 
 ## Table of contents
 
 - [Architecture](#architecture)
+- [Diagrams](#diagrams)
 - [Environments](#environments)
 - [Technology stack](#technology-stack)
 - [Repository layout](#repository-layout)
@@ -55,6 +60,32 @@ maintainability priority: `StudentCourse.jsx` (student class experience, quiz
 runner, submissions) and `ClassDetail.jsx` (trainer class management, builders,
 grading, gradebook).
 
+## Diagrams
+
+UML class, use case, and database schema diagrams live in
+[docs/diagrams/](docs/diagrams/) — see its
+[README](docs/diagrams/README.md) for the index. They come at **two levels of
+fidelity**, and the distinction matters:
+
+| Level | Use it for | Location |
+| --- | --- | --- |
+| **Design-level** | Documentation, submissions, onboarding, deciding where the system *should* go | [plantuml/](docs/diagrams/plantuml/) (`.puml`) · [mermaid/](docs/diagrams/mermaid/) (`.md`) |
+| **As-built** | Writing a query, a rule, or a migration — anywhere being wrong is expensive | [as-built/](docs/diagrams/as-built/) |
+
+Design-level is the idealised model: roles as subclasses, one abstract graded
+item, a normalised schema. As-built is what is actually in the repository and in
+Firestore today, legacy fields and all. Both formats carry equivalent content —
+PlantUML gives proper UML notation and prints well, Mermaid renders inline on
+GitHub with no toolchain. Pre-rendered SVGs are in
+[docs/diagrams/rendered/](docs/diagrams/rendered/).
+
+**Before changing the data model or the rules, read
+[the as-built divergence list](docs/diagrams/as-built/database-schema.md#4-known-divergences-ranked-by-how-much-they-will-bite-you).**
+It ranks fifteen ways the code differs from the tidy model — including that
+`courses` holds course *templates* while `getCourses()` reads `classes`, that
+graded items live in **two** parallel collections, and that `status` casing is
+split between `'Active'` and `'active'`.
+
 ## Environments
 
 | Environment | Firebase project | Purpose |
@@ -87,6 +118,11 @@ HYTechLMS/
 |   |-- qa.yml                  # Build + Playwright QA (push, pull_request)
 |   `-- deploy.yml              # Firebase production deploy (push to main)
 |-- docs/                       # Architecture, QA playbook, roadmap, audits
+|   `-- diagrams/               # UML, use case, and schema diagrams
+|       |-- plantuml/           # Design-level, .puml (proper UML notation)
+|       |-- mermaid/            # Design-level, .md (renders on GitHub)
+|       |-- as-built/           # What the code actually does today
+|       `-- rendered/           # Pre-rendered SVGs
 |-- HYTech/                     # Application root
 |   |-- functions/src/index.js  # All Cloud Functions
 |   |-- scripts/                # QA seeding, provisioning, validation, cleanup
@@ -226,16 +262,24 @@ trainer and admin accounts must be created or promoted by an administrator.
 
 ## Data model
 
-Key top-level collections: `users`, `sectors`, `courses`, `classes`,
-`classDirectory`, `enrollments`, `notifications`, `activityLogs`, `idRequests`,
-`incidentForms`, `config/appSettings`, `students/{uid}/progress/{classId}`.
+Key top-level collections: `users`, `userSettings`, `sectors`, `courses`,
+`classes`, `classDirectory`, `enrollments`, `certificates`, `notifications`,
+`activityLogs`, `securityLogs`, `idRequests`, `incidentForms`,
+`config/appSettings`, `students/{uid}/progress/{classId}`.
+
+> **`courses` holds course *templates*, not classes.** `classes` holds the real
+> running classes — and `getCourses()` / `getCourseById()` read **`classes`**.
+> This naming trap is the most common source of wrong queries in the codebase.
+
+Field-level detail, key constraints, and which paths are server-write-only are in
+the [schema diagrams](docs/diagrams/README.md).
 
 ```text
 classes/{classId}/
-|-- members/{studentId}
+|-- members/{studentId}                 # duplicates enrollments
 |-- activity/{eventId}
-|-- topics/{topicId}
-|-- modules/{moduleId}/materials/{materialId}
+|-- topics/{topicId}                    # what the UI actually renders
+|-- modules/{moduleId}/materials/{materialId}   # effectively dead
 |-- materials/{materialId}
 |-- announcements/{announcementId}/comments/{commentId}
 |-- assessments/{assessmentId}
@@ -251,7 +295,9 @@ classes/{classId}/
 
 **Two authoring paths produce quiz-like items:** the assessment builder writes to
 `classes/{id}/assessments`, and the form builder writes to
-`classes/{id}/assignments`. Anything resolving a graded item must check **both**
+`classes/{id}/assignments` — see
+[the dual-path diagram](docs/diagrams/as-built/class-diagram.md#4-the-dual-assessment-path-as-built).
+Anything resolving a graded item must check **both**
 collections, and attempts must be read from the same parent that authored the
 item. Submission-type assignments collect uploaded work instead and are graded by
 a trainer.
@@ -287,14 +333,16 @@ Cloud Function.
 Currently in place: role- and status-aware guards, Firestore/Storage rules,
 secure callable submission, private answer keys, server-authorized grading,
 raster-only avatar MIME types, and hosting headers (HSTS, `X-Frame-Options`,
-`X-Content-Type-Options`, Referrer-Policy, Permissions-Policy, COOP, and a
-**report-only** CSP).
+`X-Content-Type-Options`, Referrer-Policy, Permissions-Policy, COOP, and an
+**enforcing** CSP — `firebase.json` sets `Content-Security-Policy`, not
+`Content-Security-Policy-Report-Only`, so a violation now blocks the resource
+rather than merely reporting it).
 
-Known gaps are tracked in [section 11 of the turnover
-guide](HYTECH_LMS_DEVELOPER_TURNOVER_GUIDE.md) — including student-writable
-progress, unvalidated external URL protocols, unenforced App Check, QA not
-gating deployment, and the long-lived `FIREBASE_TOKEN`. Read it before making
-security-adjacent changes.
+Known gaps are tracked in [section 16 of the turnover
+guide](HYTECH_LMS_DEVELOPER_TURNOVER_GUIDE.md) and in
+`HYTech/docs/TURNOVER_RISK_REGISTER.md` — including App Check enforcement state,
+unexercised restore procedures, and the long-lived `FIREBASE_TOKEN` used by CI
+instead of workload identity. Read them before making security-adjacent changes.
 
 ## Testing and QA
 
@@ -333,15 +381,20 @@ firebase use
 firebase projects:list
 ```
 
-**Pushing to `main` deploys production automatically.**
-[`deploy.yml`](.github/workflows/deploy.yml) runs a bare `firebase deploy` with
-no `--only`, shipping Hosting, Firestore rules and indexes, Storage rules, **and**
-Cloud Functions together.
+**QA now gates deployment.** [`deploy.yml`](.github/workflows/deploy.yml) is
+triggered by `workflow_run` on the **QA** workflow and runs only when QA
+concluded `success` on `main`. `workflow_dispatch` is the rollback escape hatch
+and skips QA, but is restricted to `main`. Both paths additionally require the
+GitHub `production` environment approval.
 
-> ⚠️ **QA does not gate deployment.** The QA and deploy workflows react to the
-> same push independently, and deploy usually finishes first. A failing QA run
-> can coexist with a successful production deploy. Making deploy depend on QA is
-> a Phase 0 roadmap item.
+Before deploying, the job fails closed if `VITE_RECAPTCHA_SITE_KEY` is unset,
+then runs `firebase deploy --dry-run` as validation. The real deploy is a bare
+`firebase deploy` with no `--only`, shipping Hosting, Firestore rules and
+indexes, Storage rules, **and** Cloud Functions together.
+
+> ⚠️ CI still authenticates with a long-lived `FIREBASE_TOKEN` secret rather
+> than workload identity federation. Migrating to WIF/OIDC is an open risk with
+> a named owner in `HYTech/docs/TURNOVER_RISK_REGISTER.md`.
 
 Manual staging release:
 
@@ -417,5 +470,5 @@ prohibited.
 
 ---
 
-*Last updated: July 27, 2026 · See the turnover guide for the authoritative
+*Last updated: July 30, 2026 · See the turnover guide for the authoritative
 technical reference.*

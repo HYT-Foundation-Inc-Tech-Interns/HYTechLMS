@@ -1,0 +1,594 @@
+@startuml HYTech_LMS_Class_Diagram
+' ============================================================================
+'  HYTech LMS - UML Class Diagram (design-level domain model)
+'  HYT Global Institute
+'
+'  This is an idealised design view, not a literal map of the Firestore
+'  documents. Roles are modelled as subclasses (the implementation stores a
+'  `role` discriminator on one `users` document), and denormalised display
+'  copies (className, trainerName, ...) are omitted for clarity.
+'  For the storage-level view see database-schema.puml.
+' ============================================================================
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam shadowing false
+skinparam nodesep 55
+skinparam ranksep 65
+skinparam class {
+  BackgroundColor #FDFDFD
+  BorderColor #4A5568
+  ArrowColor #2D3748
+}
+hide empty members
+
+' ============================================================================
+'  IDENTITY & ACCESS
+' ============================================================================
+package "Identity & Access" <<Frame>> {
+
+  abstract class User {
+    - uid : String {id}
+    - email : String
+    - displayName : String
+    - firstName : String
+    - middleName : String
+    - lastName : String
+    - nameExtension : String
+    - photoURL : String
+    - status : AccountStatus
+    - emailVerified : Boolean
+    - createdBy : ProvisioningSource
+    - createdAt : DateTime
+    - updatedAt : DateTime
+    --
+    + signIn(credentials) : Session
+    + updateProfile(changes) : void
+    + isActive() : Boolean
+    {abstract} + role() : Role
+  }
+
+  class Administrator extends User {
+    + createUser(details, role) : User
+    + setAccountStatus(user, status) : void
+    + promoteToTrainer(user) : void
+    + manageSector(sector) : void
+    + reviewIdRequest(request, decision) : void
+    + purgeActivityLogs(range) : void
+  }
+
+  class Trainer extends User {
+    - specialization : String
+    --
+    + createClass(template, sector) : Class
+    + approveEnrollment(enrollment) : void
+    + publishItem(item) : void
+    + gradeAttempt(attempt, marks) : void
+    + graduate(enrollment) : Certificate
+  }
+
+  class Student {
+    - idNumber : String
+    --
+    + joinClassByCode(code) : Enrollment
+    + submitAttempt(item, answers) : Attempt
+    + submitDeliverable(assignment, files) : Submission
+    + requestIdCard(details) : IdRequest
+  }
+  User <|-- Student
+
+  class PrivateProfile <<PII>> {
+    - phone : String
+    - address : String
+    - birthDate : Date
+    - emergencyContact : String
+    - updatedAt : DateTime
+  }
+  note right of PrivateProfile
+    Segregated from the directory-readable
+    profile. Visible only to the owner and
+    to an Administrator.
+  end note
+
+  class LmsExperience {
+    - headline : String
+    - about : String
+    - skills : String[]
+    - education : String[]
+    - certifications : String[]
+    - visibility : Visibility
+  }
+
+  class AppSettings <<Singleton>> {
+    - branding : Branding
+    - allowSelfRegistration : Boolean
+    - requireEnrollmentApproval : Boolean
+    - notificationToggles : Map<String, Boolean>
+    --
+    + selfRegistrationAllowed() : Boolean
+    + enrollmentApprovalRequired() : Boolean
+  }
+
+  User "1" *-- "1" PrivateProfile
+  User "1" *-- "0..1" LmsExperience
+}
+
+' ============================================================================
+'  CATALOG
+' ============================================================================
+package "Catalog" <<Frame>> {
+
+  class Sector {
+    - sectorId : String {id}
+    - name : String
+    - description : String
+    - icon : String
+    - colour : String
+    - bannerImage : String
+    - status : PublicationStatus
+    --
+    + activate() : void
+    + listTemplates() : CourseTemplate[]
+  }
+  note bottom of Sector
+    TESDA-aligned grouping
+    (e.g. "Food & Beverage Services").
+  end note
+
+  class CourseTemplate {
+    - courseId : String {id}
+    - name : String
+    - level : QualificationLevel
+    - description : String
+    - subjects : String[]
+    - bannerImage : String
+    - available : Boolean
+    --
+    + hasFullContent() : Boolean
+    + cloneInto(target : Class) : void
+  }
+
+  Sector "1" o-- "0..*" CourseTemplate : categorises >
+}
+
+' ============================================================================
+'  CLASS DELIVERY
+' ============================================================================
+package "Class Delivery" <<Frame>> {
+
+  class Class {
+    - classId : String {id}
+    - name : String
+    - nameKey : String {unique}
+    - classCode : String {unique}
+    - level : QualificationLevel
+    - description : String
+    - schedule : String
+    - status : ClassStatus
+    - creationMode : CreationMode
+    - currentEnrollments : Integer
+    - createdAt : DateTime
+    --
+    + generateClassCode() : String
+    + addCoTrainer(t : Trainer) : void
+    + transferOwnership(t : Trainer) : void
+    + roster() : Student[]
+    + archive() : void
+  }
+
+  class Topic {
+    - topicId : String {id}
+    - title : String
+    - description : String
+    - order : Integer
+    - isPublished : Boolean
+  }
+
+  class Material {
+    - materialId : String {id}
+    - title : String
+    - description : String
+    - fileUrl : String
+    - fileType : String
+    - fileSize : Long
+    - externalLink : String
+    - uploadedAt : DateTime
+    --
+    + download() : Blob
+  }
+
+  class Announcement {
+    - announcementId : String {id}
+    - title : String
+    - message : String
+    - attachments : Attachment[]
+    - postedAt : DateTime
+    --
+    + edit(message) : void
+  }
+
+  class Comment {
+    - commentId : String {id}
+    - message : String
+    - postedAt : DateTime
+  }
+
+  class ActivityEvent <<immutable>> {
+    - eventId : String {id}
+    - type : EngagementType
+    - occurredAt : DateTime
+    - context : Map
+  }
+  note right of ActivityEvent
+    Engagement telemetry: class opened/closed,
+    window blurred during an assessment.
+    Append-only; used for integrity review.
+  end note
+
+  Class "1" *-- "0..*" Topic
+  Class "1" *-- "0..*" Material
+  Class "1" *-- "0..*" Announcement
+  Class "1" *-- "0..*" ActivityEvent
+  Announcement "1" *-- "0..*" Comment
+  Topic "1" o-- "0..*" Material : groups >
+}
+
+' ============================================================================
+'  ASSESSMENT & GRADING
+' ============================================================================
+package "Assessment & Grading" <<Frame>> {
+
+  abstract class GradedItem {
+    - itemId : String {id}
+    - title : String
+    - instructions : String
+    - points : Integer
+    - passingScore : Integer
+    - status : PublicationStatus
+    - acceptResponses : Boolean
+    - required : Boolean
+    - availableFrom : DateTime
+    - dueAt : DateTime
+    - timeLimitMinutes : Integer
+    - attemptLimit : Integer
+    - oneResponsePerUser : Boolean
+    - allowLateSubmissions : Boolean
+    --
+    + publish() : void
+    + isOpen(at : DateTime) : Boolean
+    + isOverdue(at : DateTime) : Boolean
+    {abstract} + evaluate(s : Student) : Result
+  }
+
+  class Assessment extends GradedItem {
+    - shuffleQuestions : Boolean
+    - showCorrectAnswers : Boolean
+    --
+    + evaluate(s : Student) : Result
+  }
+  note right of Assessment
+    Authored with the assessment builder.
+    Auto-graded server-side.
+  end note
+
+  class Assignment extends GradedItem {
+    - type : AssignmentType
+    --
+    + evaluate(s : Student) : Result
+  }
+  note right of Assignment
+    Authored with the form builder. A
+    "Submission" assignment collects uploaded
+    work and is graded manually; other types
+    behave like a quiz.
+  end note
+
+  class Question {
+    - questionId : String {id}
+    - type : QuestionType
+    - prompt : String
+    - options : String[]
+    - points : Integer
+    - order : Integer
+    --
+    + isAutoGradable() : Boolean
+  }
+
+  class AnswerKey <<restricted>> {
+    - correctAnswers : Map<QuestionId, Answer>
+    - rubric : String
+    --
+    + score(answers) : ScoreBreakdown
+  }
+  note bottom of AnswerKey
+    Never delivered to a learner's browser.
+    Stored in a private child document and
+    read only by the grading service.
+  end note
+
+  class Attempt <<immutable>> {
+    - attemptId : String {id}
+    - answers : Map<QuestionId, Answer>
+    - score : Integer
+    - earnedPoints : Integer
+    - totalPoints : Integer
+    - correctCount : Integer
+    - totalQuestions : Integer
+    - timeTaken : Integer
+    - passed : Boolean
+    - requiresManualGrading : Boolean
+    - timedOut : Boolean
+    - status : AttemptStatus
+    - submittedAt : DateTime
+    --
+    + finalise(marks, feedback) : void
+  }
+  note right of Attempt
+    Created exclusively by the grading service.
+    Clients can neither create nor alter an
+    attempt (anti-tampering).
+  end note
+
+  class Submission {
+    - studentId : String {id}
+    - files : Attachment[]
+    - note : String
+    - submittedAt : DateTime
+    - grade : Integer
+    - feedback : String
+    - gradedBy : String
+    - gradedAt : DateTime
+    - status : SubmissionStatus
+    --
+    + isLate(item : GradedItem) : Boolean
+  }
+
+  GradedItem "1" *-- "0..*" Question
+  GradedItem "1" *-- "0..1" AnswerKey
+  GradedItem "1" *-- "0..*" Attempt
+  Assignment "1" *-- "0..*" Submission
+}
+
+' ============================================================================
+'  ENROLMENT & ACADEMIC RECORDS
+' ============================================================================
+package "Enrolment & Records" <<Frame>> {
+
+  class Enrollment {
+    - enrollmentId : String {id}
+    - status : EnrollmentStatus
+    - requestedAt : DateTime
+    - joinedAt : DateTime
+    - completedAt : DateTime
+    --
+    + approve() : void
+    + reject(reason) : void
+    + graduate() : Certificate
+    + withdraw() : void
+  }
+  note right of Enrollment
+    Identity is (Class, Student) - a learner
+    holds at most one enrolment per class.
+  end note
+
+  class Progress <<derived>> {
+    - completedItems : Integer
+    - totalItems : Integer
+    - overallProgress : Percentage
+    - requirementsSatisfied : Boolean
+    - lastUpdated : DateTime
+    --
+    + recalculate() : Progress
+  }
+
+  class Certificate <<immutable>> {
+    - certificateId : String {id}
+    - certificateNumber : String {unique}
+    - verificationToken : String
+    - qualificationSnapshot : Progress
+    - issuedAt : DateTime
+    - issuedBy : String
+    - status : CertificateStatus
+    --
+    + verify(token) : VerificationResult
+    + revoke(reason) : void
+  }
+}
+
+' ============================================================================
+'  SUPPORT & COMPLIANCE
+' ============================================================================
+package "Support & Compliance" <<Frame>> {
+
+  class IdRequest {
+    - requestId : String {id}
+    - type : IdRequestType
+    - details : IdCardDetails
+    - notes : String
+    - status : RequestStatus
+    - reviewedBy : String
+    - reviewedAt : DateTime
+    --
+    + approve(reviewer) : void
+    + reject(reviewer, reason) : void
+    + complete(reviewer) : void
+  }
+
+  class IncidentForm {
+    - incidentId : String {id}
+    - type : IncidentType
+    - severity : Severity
+    - description : String
+    - occurredOn : Date
+    - status : IncidentStatus
+    - reviewedBy : String
+    - reviewedAt : DateTime
+    --
+    + advanceTo(status, reviewer) : void
+  }
+
+  class Notification {
+    - notificationId : String {id}
+    - type : NotificationType
+    - text : String
+    - metadata : Map
+    - unread : Boolean
+    - createdAt : DateTime
+    --
+    + markRead() : void
+  }
+
+  class ActivityLog <<append-only>> {
+    - logId : String {id}
+    - action : ActivityAction
+    - entityType : String
+    - entityId : String
+    - metadata : Map
+    - timestamp : DateTime
+  }
+
+  class SecurityLog <<append-only>> {
+    - logId : String {id}
+    - actorUid : String
+    - actorRole : Role
+    - action : String
+    - entityType : String
+    - entityId : String
+    - timestamp : DateTime
+  }
+  note bottom of SecurityLog
+    Written only by trusted server code and
+    readable only by an Administrator.
+  end note
+}
+
+' ============================================================================
+'  CROSS-PACKAGE ASSOCIATIONS
+' ============================================================================
+Trainer "1" --> "0..*" Class : leads >
+Trainer "0..*" -- "0..*" Class : co-teaches
+CourseTemplate "0..1" <.. Class : instantiated from
+Sector "0..1" <-- "0..*" Class : categorised by
+
+Student "1" -- "0..*" Enrollment
+Enrollment "0..*" -- "1" Class
+Enrollment "1" *-- "1" Progress
+Enrollment "1" o-- "0..1" Certificate
+
+Class "1" *-- "0..*" Assessment
+Class "1" *-- "0..*" Assignment
+Student "1" -- "0..*" Attempt : produces >
+Student "1" -- "0..*" Submission : produces >
+Student "1" -- "0..*" ActivityEvent : generates >
+
+User "1" -- "0..*" Announcement : authors >
+User "1" -- "0..*" Comment : authors >
+User "1" -- "0..*" Notification : receives >
+User "1" -- "0..*" ActivityLog : generates >
+
+Student "1" -- "0..*" IdRequest : raises >
+Administrator "1" -- "0..*" IdRequest : adjudicates >
+User "1" -- "0..*" IncidentForm : files >
+
+Trainer "1" -- "0..*" Attempt : finalises >
+Trainer "1" -- "0..*" Submission : grades >
+
+' ============================================================================
+'  ENUMERATIONS
+' ============================================================================
+package "Enumerations" <<Frame>> {
+  enum Role {
+    ADMIN
+    TRAINER
+    STUDENT
+  }
+  enum AccountStatus {
+    ACTIVE
+    INACTIVE
+    SUSPENDED
+  }
+  enum ProvisioningSource {
+    SELF_REGISTRATION
+    ADMIN
+  }
+  enum ClassStatus {
+    DRAFT
+    PROVISIONING
+    ACTIVE
+    ARCHIVED
+  }
+  enum CreationMode {
+    EMPTY
+    TEMPLATE
+  }
+  enum PublicationStatus {
+    DRAFT
+    ACTIVE
+    CLOSED
+  }
+  enum EnrollmentStatus {
+    PENDING
+    ACTIVE
+    ONGOING
+    COMPLETED
+    REJECTED
+  }
+  enum QuestionType {
+    MULTIPLE_CHOICE
+    CHECKBOX
+    TRUE_FALSE
+    SHORT_ANSWER
+    PARAGRAPH
+  }
+  enum AttemptStatus {
+    SUBMITTED
+    PENDING_REVIEW
+    GRADED
+  }
+  enum SubmissionStatus {
+    SUBMITTED
+    ACCEPTED
+    RETURNED
+  }
+  enum AssignmentType {
+    QUIZ
+    SUBMISSION
+  }
+  enum QualificationLevel {
+    NC_I
+    NC_II
+    NC_III
+    NC_IV
+  }
+  enum RequestStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    COMPLETED
+  }
+  enum IncidentStatus {
+    OPEN
+    REVIEWED
+    RESOLVED
+  }
+  enum Severity {
+    LOW
+    MEDIUM
+    HIGH
+  }
+  enum CertificateStatus {
+    VALID
+    REVOKED
+  }
+}
+
+legend right
+  |= Stereotype |= Meaning |
+  | <<immutable>> | Written once by trusted server code; clients cannot modify |
+  | <<restricted>> | Never transmitted to a learner's client |
+  | <<derived>> | Computed from other entities, not authored |
+  | <<append-only>> | Audit record; no update path |
+  | <<PII>> | Personally identifiable information, access-segregated |
+endlegend
+
+@enduml

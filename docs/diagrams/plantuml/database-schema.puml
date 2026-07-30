@@ -1,0 +1,512 @@
+@startuml HYTech_LMS_Database_Schema
+' ============================================================================
+'  HYTech LMS - Database Schema (design-level, normalised logical model)
+'  HYT Global Institute
+'
+'  The production store is Cloud Firestore, a document database. This diagram
+'  presents the NORMALISED LOGICAL schema - one entity per concept, explicit
+'  keys, no denormalised display copies. It is the model to reason about and
+'  the model to migrate toward.
+'
+'  Where Firestore nests data physically, the parent key is shown as part of
+'  the primary key (e.g. attempt is identified by class + item + attempt).
+'  For the literal as-built layout, including legacy and duplicated fields,
+'  see as-built-schema.puml.
+' ============================================================================
+
+hide circle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam nodesep 45
+skinparam ranksep 60
+skinparam entity {
+  BackgroundColor #FDFDFD
+  BorderColor #4A5568
+}
+
+' ============================================================== identity ====
+package "Identity" <<Frame>> {
+
+  entity "user" as user {
+    * uid : string <<PK>>
+    --
+    * email : string <<unique>>
+    * role : enum(admin, trainer, student)
+    * status : enum(Active, Inactive, Suspended)
+    --
+    display_name : string
+    first_name : string
+    middle_name : string
+    last_name : string
+    name_extension : string
+    id_number : string <<unique>>
+    photo_url : string
+    profile_complete : boolean
+    created_by : enum(self-registration, admin)
+    * created_at : timestamp
+    * updated_at : timestamp
+  }
+
+  entity "user_private" as user_private {
+    * uid : string <<PK>> <<FK>>
+    --
+    phone : string
+    address : string
+    birth_date : date
+    emergency_name : string
+    emergency_relation : string
+    emergency_phone : string
+    updated_at : timestamp
+  }
+  note bottom of user_private
+    Split from **user** so that a roster read
+    cannot expose contact details.
+  end note
+
+  entity "lms_experience" as lms_exp {
+    * uid : string <<PK>> <<FK>>
+    --
+    headline : string
+    about : string
+    skills : string[]
+    education : json[]
+    certifications : json[]
+    visibility : enum(private, public)
+  }
+
+  entity "app_settings" as settings {
+    * id : string <<PK>>  ' always 'appSettings'
+    --
+    branding : json
+    allow_self_registration : boolean
+    require_enrollment_approval : boolean
+    notification_toggles : json
+    updated_at : timestamp
+  }
+}
+
+user ||--o| user_private
+user ||--o| lms_exp
+
+' ============================================================== catalogue ===
+package "Catalogue" <<Frame>> {
+
+  entity "sector" as sector {
+    * sector_id : string <<PK>>
+    --
+    * name : string
+    * status : enum(Active, Inactive)
+    description : text
+    icon : string
+    color : string
+    bg_image : string
+    created_at : timestamp
+    updated_at : timestamp
+  }
+
+  entity "course_template" as course {
+    * course_id : string <<PK>>
+    --
+    * sector_id : string <<FK>>
+    * name : string
+    level : enum(NC I, NC II, NC III, NC IV)
+    description : text
+    subjects : string[]
+    bg_image : string
+    available : boolean
+    created_at : timestamp
+    updated_at : timestamp
+  }
+}
+
+sector ||--o{ course
+
+' ========================================================= class delivery ===
+package "Class Delivery" <<Frame>> {
+
+  entity "class" as class {
+    * class_id : string <<PK>>
+    --
+    * name : string
+    * name_key : string <<unique>>
+    * class_code : string <<unique>>
+    * trainer_id : string <<FK>>
+    sector_id : string <<FK>>
+    course_id : string <<FK>>
+    --
+    * status : enum(Draft, Provisioning, Active, Archived)
+    level : string
+    description : text
+    schedule : string
+    bg_image : string
+    creation_mode : enum(empty, template)
+    current_enrollments : integer
+    created_at : timestamp
+    updated_at : timestamp
+  }
+
+  entity "class_co_trainer" as cotrainer {
+    * class_id : string <<PK>> <<FK>>
+    * trainer_id : string <<PK>> <<FK>>
+    --
+    added_at : timestamp
+  }
+  note right of cotrainer
+    Normalised from the `coTrainerIds`
+    array on the class document.
+  end note
+
+  entity "topic" as topic {
+    * class_id : string <<PK>> <<FK>>
+    * topic_id : string <<PK>>
+    --
+    * title : string
+    description : text
+    order : integer
+    is_published : boolean
+    author_id : string <<FK>>
+    created_at : timestamp
+  }
+
+  entity "material" as material {
+    * class_id : string <<PK>> <<FK>>
+    * material_id : string <<PK>>
+    --
+    topic_id : string <<FK>>
+    * title : string
+    description : text
+    file_url : string
+    file_type : string
+    file_size : bigint
+    external_link : string
+    author_id : string <<FK>>
+    created_at : timestamp
+  }
+
+  entity "announcement" as announcement {
+    * class_id : string <<PK>> <<FK>>
+    * announcement_id : string <<PK>>
+    --
+    * author_id : string <<FK>>
+    title : string
+    message : text
+    attachments : json[]
+    created_at : timestamp
+    updated_at : timestamp
+  }
+
+  entity "comment" as comment {
+    * class_id : string <<PK>> <<FK>>
+    * announcement_id : string <<PK>> <<FK>>
+    * comment_id : string <<PK>>
+    --
+    * author_id : string <<FK>>
+    message : text
+    created_at : timestamp
+    updated_at : timestamp
+  }
+
+  entity "class_activity" as activity {
+    * class_id : string <<PK>> <<FK>>
+    * event_id : string <<PK>>
+    --
+    * student_id : string <<FK>>
+    * type : enum(class_opened, class_closed, tab_switch)
+    assessment_id : string <<FK>>
+    created_at : timestamp
+  }
+}
+
+class ||--o{ cotrainer
+class ||--o{ topic
+class ||--o{ material
+class ||--o{ announcement
+announcement ||--o{ comment
+class ||--o{ activity
+topic ||--o{ material
+course ||--o{ class
+sector ||--o{ class
+user ||--o{ class : "leads"
+user ||--o{ cotrainer
+
+' ============================================================ enrolment =====
+package "Enrolment & Records" <<Frame>> {
+
+  entity "enrollment" as enrollment {
+    * enrollment_id : string <<PK>>  ' {class_id}_{student_id}
+    --
+    * class_id : string <<FK>>
+    * student_id : string <<FK>>
+    trainer_id : string <<FK>>
+    course_id : string <<FK>>
+    --
+    * status : enum(pending, active, ongoing, completed, rejected)
+    requested_at : timestamp
+    joined_at : timestamp
+    completed_at : timestamp
+    certificate_id : string <<FK>>
+    updated_at : timestamp
+    --
+    <<unique (class_id, student_id)>>
+  }
+
+  entity "progress" as progress {
+    * student_id : string <<PK>> <<FK>>
+    * class_id : string <<PK>> <<FK>>
+    --
+    completed_items : integer
+    total_items : integer
+    overall_progress : integer
+    requirements_satisfied : boolean
+    source : string
+    last_updated : timestamp
+  }
+  note bottom of progress
+    Derived. Written only by the
+    authoritative recalculation routine.
+  end note
+
+  entity "certificate" as certificate {
+    * certificate_id : string <<PK>>
+    --
+    * certificate_number : string <<unique>>
+    * verification_token : string <<unique>>
+    * student_id : string <<FK>>
+    * class_id : string <<FK>>
+    course_id : string <<FK>>
+    qualification_snapshot : json
+    * status : enum(valid, revoked)
+    issued_at : timestamp
+    issued_by : string <<FK>>
+    revoked_at : timestamp
+    revoked_reason : text
+  }
+}
+
+class ||--o{ enrollment
+user ||--o{ enrollment : "enrols as"
+enrollment ||--|| progress
+enrollment ||--o| certificate
+user ||--o{ certificate
+
+' ================================================= assessment & grading ====
+package "Assessment & Grading" <<Frame>> {
+
+  entity "graded_item" as item {
+    * class_id : string <<PK>> <<FK>>
+    * item_id : string <<PK>>
+    --
+    * kind : enum(assessment, assignment)
+    * title : string
+    * status : enum(draft, active, closed)
+    instructions : text
+    type : enum(Quiz, Submission)
+    points : integer
+    passing_score : integer
+    required : boolean
+    accept_responses : boolean
+    available_from : timestamp
+    due_at : timestamp
+    time_limit_minutes : integer
+    attempt_limit : integer
+    one_response_per_user : boolean
+    allow_late_submissions : boolean
+    shuffle_questions : boolean
+    show_correct_answers : boolean
+    created_by : string <<FK>>
+    created_at : timestamp
+  }
+  note right of item
+    Unifies what the application currently
+    splits across two sibling collections
+    (`assessments` and `assignments`),
+    discriminated by **kind**.
+  end note
+
+  entity "question" as question {
+    * class_id : string <<PK>> <<FK>>
+    * item_id : string <<PK>> <<FK>>
+    * question_id : string <<PK>>
+    --
+    * type : enum(multiple_choice, checkbox, true_false, short_answer, paragraph)
+    * prompt : text
+    options : string[]
+    points : integer
+    order : integer
+  }
+
+  entity "answer_key" as answerkey {
+    * class_id : string <<PK>> <<FK>>
+    * item_id : string <<PK>> <<FK>>
+    --
+    correct_answers : json
+    rubric : text
+    updated_at : timestamp
+  }
+  note bottom of answerkey
+    Restricted. Never readable by a
+    class member, only by trusted
+    server code.
+  end note
+
+  entity "attempt" as attempt {
+    * class_id : string <<PK>> <<FK>>
+    * item_id : string <<PK>> <<FK>>
+    * attempt_id : string <<PK>>
+    --
+    * student_id : string <<FK>>
+    answers : json
+    score : integer
+    earned_points : integer
+    total_points : integer
+    correct_count : integer
+    total_questions : integer
+    time_taken : integer
+    passing_score : integer
+    passed : boolean
+    requires_manual_grading : boolean
+    timed_out : boolean
+    * status : enum(submitted, pending_review, graded)
+    submitted_at : timestamp
+    graded_by : string <<FK>>
+    graded_at : timestamp
+  }
+  note right of attempt
+    Immutable. Created only by the
+    grading service; no client write path.
+  end note
+
+  entity "submission" as submission {
+    * class_id : string <<PK>> <<FK>>
+    * item_id : string <<PK>> <<FK>>
+    * student_id : string <<PK>> <<FK>>
+    --
+    files : json[]
+    note : text
+    submitted_at : timestamp
+    * status : enum(submitted, accepted, returned)
+    grade : integer
+    feedback : text
+    graded_by : string <<FK>>
+    graded_at : timestamp
+  }
+}
+
+class ||--o{ item
+item ||--o{ question
+item ||--o| answerkey
+item ||--o{ attempt
+item ||--o{ submission
+user ||--o{ attempt : "attempts"
+user ||--o{ submission : "submits"
+
+' ============================================== support, audit, messaging ===
+package "Support & Audit" <<Frame>> {
+
+  entity "id_request" as idreq {
+    * request_id : string <<PK>>
+    --
+    * student_id : string <<FK>>
+    class_id : string <<FK>>
+    trainer_id : string <<FK>>
+    * type : enum(New, Replacement, Renewal)
+    * status : enum(pending, approved, rejected, completed)
+    details : json
+    notes : text
+    reviewed_by : string <<FK>>
+    reviewed_at : timestamp
+    created_at : timestamp
+  }
+
+  entity "incident_form" as incident {
+    * incident_id : string <<PK>>
+    --
+    * filed_by : string <<FK>>
+    filed_by_role : enum(admin, trainer, student)
+    involved_student_id : string <<FK>>
+    class_id : string <<FK>>
+    * type : string
+    * severity : enum(Low, Medium, High)
+    * status : enum(open, reviewed, resolved)
+    description : text
+    occurred_on : date
+    reviewed_by : string <<FK>>
+    reviewed_at : timestamp
+    created_at : timestamp
+  }
+
+  entity "notification" as notification {
+    * notification_id : string <<PK>>
+    --
+    * to_uid : string <<FK>>
+    from_uid : string <<FK>>
+    * type : string
+    text : text
+    metadata : json
+    unread : boolean
+    created_at : timestamp
+  }
+
+  entity "activity_log" as actlog {
+    * log_id : string <<PK>>
+    --
+    * user_id : string <<FK>>
+    * action : enum(user_signup, user_login, join_class, id_request, incident_filed)
+    entity_type : string
+    entity_id : string
+    metadata : json
+    timestamp : timestamp
+  }
+
+  entity "security_log" as seclog {
+    * log_id : string <<PK>>
+    --
+    * actor_uid : string <<FK>>
+    actor_role : enum(admin, trainer, student)
+    * action : string
+    entity_type : string
+    entity_id : string
+    metadata : json
+    timestamp : timestamp
+  }
+  note bottom of seclog
+    Append-only, server-written,
+    admin-readable. No update or
+    delete path exists.
+  end note
+}
+
+user ||--o{ idreq
+user ||--o{ incident
+user ||--o{ notification
+user ||--o{ actlog
+user ||--o{ seclog
+class ||--o{ idreq
+class ||--o{ incident
+
+legend right
+  |= Marker |= Meaning |
+  | * | Required (not null) |
+  | <<PK>> | Primary key component |
+  | <<FK>> | Foreign key |
+  | <<unique>> | Uniqueness constraint |
+  ||--o{ | one-to-many |
+  ||--|| | one-to-one, mandatory |
+  ||--o| | one-to-one, optional |
+endlegend
+
+note as N_KEY
+  **Composite keys reflect physical nesting.**
+  Firestore stores topics, materials, items,
+  attempts and submissions as child documents
+  of their class, so the parent identifier is
+  genuinely part of the key rather than a
+  conventional foreign key alone.
+
+  **enrollment_id is deterministic:**
+  `{class_id}_{student_id}` - this is what
+  enforces one enrolment per learner per class
+  in a store with no unique constraints.
+end note
+
+@enduml

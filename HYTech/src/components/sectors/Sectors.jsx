@@ -16,7 +16,18 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { getSectors, createSector, updateSector, deleteSector, getCourses, getCoursesTemplates, createCourseTemplate, updateCourseTemplate, updateCourse, deleteCourse, reconcileSectorStatuses } from '../../utils/firestoreService';
+import { getSectors, createSector, updateSector, deleteSector, getCourses, getCoursesTemplates, createCourseTemplate, updateCourseTemplate, deleteCourse, reconcileSectorStatuses } from '../../utils/firestoreService';
+
+// `available` is the switch that exposes a program to trainers, and a sector is
+// Active iff it has at least one available program. So a course that is not
+// Active must never stay available. Re-activating switches it back on;
+// an edit that leaves the status Active keeps whatever the Programs page set.
+const withAvailability = (updates, previousCourse) => {
+  if (updates.status === undefined) return updates;
+  if (updates.status !== 'Active') return { ...updates, available: false };
+  if (previousCourse?.status === 'Active') return updates;
+  return { ...updates, available: true };
+};
 
 const Sectors = () => {
   // Helper function to convert Tailwind gradient classes to inline CSS
@@ -274,10 +285,7 @@ const Sectors = () => {
     try {
       setSaving(true);
       const newStatus = course.status === 'Active' ? 'Inactive' : 'Active';
-      await updateCourse(course.id, {
-        status: newStatus,
-        available: newStatus === 'Active',
-      });
+      await updateCourseTemplate(course.id, withAvailability({ status: newStatus }, course));
       addToast(`Course marked ${newStatus}!`, 'success');
       // Refresh courses list - use getCoursesTemplates for consistency
       const courses = await getCoursesTemplates({ sectorId: selectedSector.id });
@@ -304,13 +312,14 @@ const Sectors = () => {
 
     try {
       setSaving(true);
-      await updateCourseTemplate(selectedCourse.id, {
+      const previousCourse = selectedSectorCourses.find((c) => c.id === selectedCourse.id);
+      await updateCourseTemplate(selectedCourse.id, withAvailability({
         name: selectedCourse.name,
         description: selectedCourse.description,
         level: selectedCourse.level,
         status: selectedCourse.status,
         bgImage: selectedCourse.bgImage,
-      });
+      }, previousCourse));
       
       // Refresh courses list BEFORE closing modal - use getCoursesTemplates for consistency
       const courses = await getCoursesTemplates({ sectorId: selectedSector.id });
