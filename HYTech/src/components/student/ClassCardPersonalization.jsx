@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, Loader, Pencil, RotateCcw, X } from 'lucide-react';
 import { setClassPref } from '../../utils/firestoreService';
 import { COLOR_PALETTE, getGradientStyle } from '../../utils/courseColors';
@@ -16,6 +17,23 @@ const ClassCardPersonalization = ({ userId, classId, preference = {}, className 
     setNickname(preference.nickname || '');
     setColor(preference.color || '');
   }, [open, preference.nickname, preference.color]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
 
   const save = async () => {
     try {
@@ -71,18 +89,29 @@ const ClassCardPersonalization = ({ userId, classId, preference = {}, className 
         </span>
       </button>
 
-      {open && (
-        <>
+      {open && createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          role="presentation"
+          onClick={(event) => event.stopPropagation()}
+        >
           <button
             type="button"
-            className="fixed inset-0 z-40 cursor-default bg-black/20 sm:bg-transparent"
+            className="absolute inset-0 cursor-default bg-black/30"
             onClick={() => setOpen(false)}
             aria-label="Close personalization"
           />
-          <div className="fixed inset-x-4 top-1/2 z-50 max-h-[85vh] -translate-y-1/2 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 sm:translate-y-0">
+          <div
+            className="relative z-10 w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`personalize-class-title-${classId}`}
+          >
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <h4 className="font-bold text-gray-900">Personalize class</h4>
+                <h4 id={`personalize-class-title-${classId}`} className="font-bold text-gray-900">
+                  Personalize class
+                </h4>
                 <p className="mt-1 text-xs text-gray-500">Only you can see these changes.</p>
               </div>
               <button
@@ -153,7 +182,8 @@ const ClassCardPersonalization = ({ userId, classId, preference = {}, className 
               </button>
             </div>
           </div>
-        </>
+        </div>,
+        document.body,
       )}
     </div>
   );
