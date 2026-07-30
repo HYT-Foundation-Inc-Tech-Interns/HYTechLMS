@@ -257,22 +257,26 @@ The application will be available at `http://localhost:5174`
 
 ## ⚡ Quick Start
 
-### Test Credentials
+### Disposable QA Accounts
 
-Use these credentials to test different roles (seeded in the dev Firebase project):
+Never publish or reuse account passwords. Provision disposable accounts only in
+the staging project using credentials supplied through the approved secret
+store:
 
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@hyt.com | admin1234 |
-| Trainer | trainer@hyt.com | trainer1234 |
-| Student | student1@hyt.com | student1234 |
-| Student | student2@hyt.com | student1234 |
+```bash
+npm run qa:seed:identities
+npm run qa:credentials
+npm run qa:seed:data
+npm run qa:verify-seed
+npm run qa:cleanup:apply
+```
 
-A sample class **"Barista Class - Batch 1"** (class code `HYT101`) is seeded and owned by the test trainer. Students with no enrollment land in a waiting room where they can notify a trainer or join with a class code.
+See `docs/QA_AUTOMATION.md` for the required environment variables and cleanup
+procedure. Do not run QA mutation tooling against the production project.
 
 ### First Steps
 
-1. **Sign In**: Use test credentials above
+1. **Sign In**: Use a disposable staging QA account
 2. **Navigate Dashboard**: Based on your role
 3. **Create Content**: (Trainer/Admin) Create courses, assignments, assessments
 4. **Enroll Students**: (Admin/Trainer) Add students to courses
@@ -435,6 +439,17 @@ UI Components (Tailwind + Lucide)
 ---
 
 ## 🗄 Database Schema
+
+> ⚠️ **The shapes below are out of date.** They still show a `supervisor` role
+> (there are only three roles — admin, trainer, student) and an
+> `enrolledCourses` array that the current `users` document does not have.
+>
+> For the **accurate, verified** schema use the diagrams instead:
+> - [As-built schema](../docs/diagrams/as-built/database-schema.md) — the real
+>   collection tree, legacy fields, and a ranked list of gotchas
+> - [Design-level schema](../docs/diagrams/mermaid/database-schema.md) — the
+>   normalised target model
+> - [Diagram index](../docs/diagrams/README.md)
 
 ### Collections
 

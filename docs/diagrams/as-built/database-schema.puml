@@ -1,0 +1,582 @@
+@startuml HYTech_LMS_AsBuilt_Schema
+' ============================================================================
+'  HYTech LMS - Firestore schema AS BUILT
+'  HYT Global Institute
+'
+'  This is the literal collection layout, with legacy fields, duplicated data
+'  and confusing names left in place. It is the reference for writing a query,
+'  a security rule, or a migration.
+'
+'  The cleaned-up target model is in ../plantuml/database-schema.puml.
+'  Verified against firestore.rules, src/utils/firestoreService.js and
+'  functions/src/index.js on branch security/hardening-remediation.
+' ============================================================================
+
+hide circle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam nodesep 40
+skinparam ranksep 55
+skinparam entity {
+  BackgroundColor #FDFDFD
+  BorderColor #4A5568
+}
+
+!define LEGACY #FEF2F2
+!define SERVER #F0FDF4
+
+' ============================================================= identity =====
+package "users/{uid} and children" <<Frame>> {
+
+  entity "users/{uid}" as users {
+    * uid : string <<PK>>
+    --
+    * email : string
+    * role : string  ' admin | trainer | student
+    * status : string  ' 'Active' - CAPITAL A
+    createdBy : string  ' self-registration | admin
+    --
+    .. name, stored four times ..
+    displayName : string  ' DUP
+    name : string  ' DUP
+    firstName : string  ' DUP with profile.firstName
+    middleName : string  ' DUP
+    lastName : string  ' DUP
+    nameExtension : string  ' DUP
+    profile : map  ' NESTED COPY of the four above
+    --
+    .. avatar, stored four times + a fallback collection ..
+    photoURL : string
+    avatarUrl : string
+    avatarBase64 : string
+    avatarPreview : string
+    --
+    idNumber : string
+    profileComplete : boolean
+    createdAt : timestamp
+    updatedAt : timestamp
+  }
+  note right of users
+    Rules restrict a self-update to an
+    allowlist of name/profile/avatar keys.
+    role, status and createdBy are never
+    self-writable - createdBy waives the
+    email-verification gate.
+  end note
+
+  entity "users/{uid}/private/profile" as uprivate {
+    * docId : string <<PK>>  ' always 'profile'
+    --
+    phone : string
+    address : string
+    birthDate : string
+    emergencyName : string
+    emergencyRelation : string
+    emergencyPhone : string
+  }
+
+  entity "users/{uid}/lmsExperience/profile" as ulms {
+    * docId : string <<PK>>  ' always 'profile'
+    --
+    headline : string
+    about : string
+    skills : array
+    experience : array
+    education : array
+    certifications : array
+    achievements : map
+    visibility : string
+  }
+
+  entity "users/{uid}/calendarEvents/{eventId}" as ucal {
+    * eventId : string <<PK>>
+    --
+    title : string
+    startsAt : string
+    endsAt : string
+  }
+
+  entity "users/{uid}/classPrefs/{classId}" as uprefs {
+    * classId : string <<PK>>
+    --
+    nickname : string  ' max 100 chars, rule-enforced
+    color : string  ' allowlisted gradient only
+    updatedAt : timestamp
+  }
+
+  entity "userSettings/{uid}" as usettings LEGACY {
+    * uid : string <<PK>>
+    --
+    //SECOND home for avatar and preferences.//
+    //Read as a fallback when users/{uid} has none.//
+    avatar : string
+    preferences : map
+  }
+}
+
+users ||--o| uprivate
+users ||--o| ulms
+users ||--o{ ucal
+users ||--o{ uprefs
+users ||..o| usettings : "duplicate store"
+
+' ============================================================ catalogue =====
+package "Catalogue" <<Frame>> {
+
+  entity "sectors/{sectorId}" as sectors {
+    * sectorId : string <<PK>>
+    --
+    name : string
+    description : string
+    status : string  ' 'Active' capital
+    icon : string
+    color : string
+    bgImage : string
+  }
+
+  entity "courses/{courseId}" as courses LEGACY {
+    * courseId : string <<PK>>
+    --
+    //THESE ARE COURSE TEMPLATES, NOT CLASSES//
+    sectorId : string <<FK>>
+    name : string
+    level : string
+    description : string
+    subjects : array  ' seeds the class's topics
+    bgImage : string
+    available : boolean  ' NOT `status`
+  }
+  note bottom of courses
+    **The naming trap.**
+    getCoursesTemplates() reads THIS.
+    getCourses() and getCourseById() read
+    **classes** instead. A template is not
+    visible on the admin Classes page until
+    a trainer creates a class from it.
+  end note
+
+  entity "courses/{courseId}/topics|materials|assignments|assessments" as ctpl {
+    * docId : string <<PK>>
+    --
+    //Template content, admin-write, staff-read.//
+    //assessments/{id}/private/answerKey is//
+    //unreadable from ANY browser, including admin.//
+  }
+}
+
+sectors ||--o{ courses
+courses ||--o{ ctpl
+
+' ========================================================= class delivery ===
+package "Class delivery" <<Frame>> {
+
+  entity "classes/{classId}" as classes {
+    * classId : string <<PK>>
+    --
+    name : string
+    nameKey : string  ' lowercased duplicate guard
+    classCode : string  ' join code
+    trainerId : string <<FK>>  ' lead
+    coTrainerIds : array  ' denormalised, not a join table
+    sectorId : string <<FK>>
+    courseId : string <<FK>>
+    --
+    .. legacy aliases still read ..
+    courseTemplateId : string  ' LEGACY -> courseId
+    maxStudents : integer  ' LEGACY -> capacity
+    expiryDate : string  ' LEGACY -> expiresAt
+    endDate : string  ' LEGACY -> expiresAt
+    --
+    status : string  ' 'Active' OR 'active' OR 'Provisioning' OR 'Archived'
+    creationMode : string  ' empty | template
+    templateCloneStatus : string  ' complete | failed
+    currentEnrollments : integer  ' trigger-maintained
+    trainerName : string  ' denormalised copy
+    level : string
+    capacity : integer
+    expiresAt : string
+    bgImage : string
+    color : string
+  }
+
+  entity "classDirectory/{classId}" as cdir SERVER {
+    * classId : string <<PK>>
+    --
+    //Sanitised mirror written by the//
+    //syncClassDirectory onWrite trigger.//
+    //allow write: if false for all clients.//
+    name, nameKey, classCode : string
+    courseId, sectorId, trainerId : string
+    trainerName, level, status : string
+    bgImage, color : string
+    capacity : integer  ' coalesced from maxStudents
+    currentEnrollments : integer
+    enrollmentDeadline : string
+    expiresAt : string  ' coalesced from expiryDate/endDate
+    updatedAt : timestamp
+  }
+  note right of cdir
+    Written with **merge: false** on every
+    class write - any field absent from
+    toClassDirectoryEntry() is destroyed.
+  end note
+
+  entity "classes/{classId}/members/{studentId}" as members LEGACY {
+    * studentId : string <<PK>>
+    --
+    studentId : string <<FK>>
+    enrollmentId : string <<FK>>
+    status : string  ' lowercased
+    updatedAt : timestamp
+  }
+  note bottom of members
+    Duplicates enrolment membership.
+    classMember() in the rules accepts
+    EITHER this doc OR an active
+    enrollment - an orphaned member doc
+    still grants class access.
+  end note
+
+  entity "classes/{classId}/topics/{topicId}" as topics {
+    * topicId : string <<PK>>
+    --
+    title, description : string
+    order : integer
+    isPublished : boolean
+    author, authorId : string
+  }
+  note right of topics
+    This is what the Modules tab and the
+    student view actually render.
+  end note
+
+  entity "classes/{classId}/modules/{moduleId}" as modules LEGACY {
+    * moduleId : string <<PK>>
+    --
+    title, description : string
+    order : integer
+    //Effectively dead - never displayed.//
+  }
+
+  entity "classes/{classId}/materials/{materialId}" as materials {
+    * materialId : string <<PK>>
+    --
+    topicId : string <<FK>>
+    title, description : string
+    fileUrl, fileType : string
+    fileSize : integer
+    link : string
+    attachments : array
+  }
+
+  entity "classes/{classId}/modules/{moduleId}/materials/{materialId}" as modmat LEGACY {
+    * materialId : string <<PK>>
+    --
+    //SECOND material home. Written by//
+    //uploadMaterial(), rendered nowhere.//
+  }
+
+  entity "classes/{classId}/announcements/{announcementId}" as announcements {
+    * announcementId : string <<PK>>
+    --
+    authorId : string <<FK>>
+    title, message : string
+    attachments : array
+  }
+
+  entity "classes/{classId}/announcements/{id}/comments/{commentId}" as comments {
+    * commentId : string <<PK>>
+    --
+    authorId : string <<FK>>
+    message : string
+  }
+
+  entity "classes/{classId}/activity/{eventId}" as activity {
+    * eventId : string <<PK>>
+    --
+    studentId : string <<FK>>
+    type : string  ' class_opened | class_closed | tab_switch
+    assessmentId, assessmentTitle : string
+    //Immutable: allow update: if false.//
+  }
+}
+
+courses ||--o{ classes : "courseId"
+sectors ||--o{ classes : "sectorId"
+users ||--o{ classes : "trainerId"
+classes ||--|| cdir : "trigger mirror"
+classes ||--o{ members
+classes ||--o{ topics
+classes ||--o{ modules
+classes ||--o{ materials
+modules ||--o{ modmat
+classes ||--o{ announcements
+announcements ||--o{ comments
+classes ||--o{ activity
+
+' ======================================== assessment - the dual path =======
+package "Graded items - TWO parallel collections" <<Frame>> {
+
+  entity "classes/{classId}/assessments/{assessmentId}" as assessments {
+    * assessmentId : string <<PK>>
+    --
+    //PATH A - written by the assessment builder.//
+    title, description : string
+    status : string  ' draft | active
+    points, passingScore : integer
+    required, acceptResponses : boolean
+    availableFrom : string  ' ISO instant OR bare YYYY-MM-DD
+    dueDate : string  ' ISO instant OR bare YYYY-MM-DD
+    timeLimit : integer
+    settings : map  ' oneResponsePerUser, attemptLimit, shuffle
+    showCorrectAnswers : boolean
+    questions : array  ' EMBEDDED, not a subcollection
+  }
+
+  entity "classes/{classId}/assignments/{assignmentId}" as assignments {
+    * assignmentId : string <<PK>>
+    --
+    //PATH B - written by the form builder.//
+    title, instructions : string
+    type : string  ' Quiz | Submission
+    status : string  ' draft | active
+    acceptResponses : boolean
+    allowLateSubmissions : boolean
+    dueDate : string
+    questions : array  ' EMBEDDED when quiz-like
+  }
+
+  entity ".../private/answerKey" as answerkey SERVER {
+    * docId : string <<PK>>  ' always 'answerKey'
+    --
+    answers : map
+    //Exists under BOTH parents.//
+    //Never in the trainee-readable doc.//
+  }
+
+  entity ".../attempts/{attemptId}" as attempts SERVER {
+    * attemptId : string <<PK>>
+    --
+    //Doc id = studentId IF settings.oneResponsePerUser,//
+    //otherwise an auto-id. The path is not stable.//
+    studentId : string <<FK>>
+    answers : map
+    score, earnedPoints, totalPoints : integer
+    correctCount, totalQuestions : integer
+    timeTaken, passingScore : integer
+    passed, requiresManualGrading, timedOut : boolean
+    status : string  ' submitted | pending_review
+    submittedAt : timestamp
+    --
+    //allow create: if false / allow update: if false.//
+    //Written ONLY by submitAssessmentAttempt.//
+  }
+
+  entity ".../submissions/{studentId}" as submissions {
+    * studentId : string <<PK>>
+    --
+    //Assignments only, type = Submission.//
+    files, attachments : array
+    status : string
+    grade : integer
+    feedback, gradedBy : string
+    gradedAt : timestamp
+    //Student create/update forbidden from//
+    //touching grade|feedback|gradedBy|gradedAt.//
+  }
+}
+
+classes ||--o{ assessments
+classes ||--o{ assignments
+assessments ||--o| answerkey
+assignments ||--o| answerkey
+assessments ||--o{ attempts
+assignments ||--o{ attempts
+assignments ||--o{ submissions
+
+note as N_DUAL
+  **Every consumer must check BOTH collections.**
+  Gradebook, progress calculation and the student
+  view all resolve a graded item across
+  `assessments` and `assignments`, and attempts
+  must be read from the same parent that authored
+  the item. submitAssessmentAttempt returns a
+  **kind** field so the client knows which.
+
+  A missed deadline scores 0, but that zero is
+  **derived** from "no attempt + deadline passed" -
+  no zero attempt document is ever written.
+end note
+N_DUAL .. assessments
+N_DUAL .. assignments
+
+' ====================================== enrolment, progress, records =======
+package "Enrolment and records" <<Frame>> {
+
+  entity "enrollments/{classId}_{studentId}" as enrollments {
+    * enrollmentId : string <<PK>>  ' COMPOSED id, not auto
+    --
+    classId, studentId : string <<FK>>
+    trainerId, courseId : string <<FK>>
+    status : string  ' pending | active | ongoing | completed - lowercase
+    --
+    .. denormalised snapshots ..
+    className : string
+    trainerName : string
+    level : string
+    bgImage : string
+    color : string
+    --
+    progress : map  ' COPY of students/{uid}/progress/{classId}
+    requestedAt : string  ' ISO STRING, not Timestamp
+    joinedAt : string  ' ISO STRING, not Timestamp
+    completedAt : timestamp  ' Timestamp - inconsistent
+    certificateId : string <<FK>>
+  }
+  note right of enrollments
+    The composed document id is what enforces
+    one enrolment per learner per class -
+    Firestore has no unique constraints.
+  end note
+
+  entity "students/{studentId}/progress/{classId}" as progress SERVER {
+    * classId : string <<PK>>
+    --
+    completedItems, totalItems : integer
+    overallProgress : integer
+    requirementsSatisfied : boolean
+    source : string
+    lastUpdated : timestamp
+    //allow write: if false. Derived only.//
+  }
+
+  entity "certificates/{certificateId}" as certificates SERVER {
+    * certificateId : string <<PK>>  ' randomUUID
+    --
+    certificateNumber : string  ' HYT-YYYY-XXXXXXXX
+    verificationToken : string
+    studentId, classId, courseId : string <<FK>>
+    studentName, className : string  ' denormalised
+    qualificationSnapshot : map
+    status : string  ' valid | revoked
+    issuedAt : timestamp
+    issuedBy : string <<FK>>
+    //allow create, update, delete: if false.//
+  }
+}
+
+classes ||--o{ enrollments
+users ||--o{ enrollments
+enrollments ||..|| progress : "same data, two places"
+enrollments ||--o| certificates
+
+' ============================================= support, audit, messaging ===
+package "Support and audit" <<Frame>> {
+
+  entity "idRequests/{id}" as idreq {
+    * id : string <<PK>>
+    --
+    studentId : string <<FK>>
+    studentName, studentEmail : string  ' denormalised
+    classId, className, trainerId : string
+    type : string  ' New | Replacement | Renewal
+    status : string  ' pending | approved | rejected | completed
+    details : map  ' PII SNAPSHOT copied from users/{uid}/private
+    notes : string
+    //Create forced to status == 'pending'.//
+    //Only admin may update.//
+  }
+
+  entity "incidentForms/{id}" as incidents {
+    * id : string <<PK>>
+    --
+    filedBy : string <<FK>>
+    filedByName, filedByRole : string
+    involvedStudentId, involvedStudentName : string
+    classId, className : string
+    type : string
+    severity : string  ' Low | Medium | High
+    status : string  ' open | reviewed | resolved
+    description : string
+    date : string  ' bare YYYY-MM-DD
+    //Trainer may change ONLY status/reviewedBy/reviewedAt.//
+  }
+
+  entity "notifications/{notificationId}" as notifications {
+    * notificationId : string <<PK>>
+    --
+    toUid, fromUid : string <<FK>>
+    fromName, type, text : string
+    metadata : map
+    unread : boolean
+    //A student may only notify staff.//
+    //Recipient may only flip `unread`.//
+  }
+
+  entity "activityLogs/{logId}" as actlogs {
+    * logId : string <<PK>>
+    --
+    userId : string <<FK>>
+    action : string  ' only 5 values accepted from a client
+    entityType, entityId : string
+    metadata : map
+    timestamp : timestamp
+    //Immutable; admin may purge.//
+  }
+
+  entity "securityLogs/{logId}" as seclogs SERVER {
+    * logId : string <<PK>>
+    --
+    actorUid, actorRole : string
+    action, entityType, entityId : string
+    metadata : map
+    //Admin read only.//
+    //allow create, update, delete: if false.//
+  }
+
+  entity "config/appSettings" as appsettings {
+    * docId : string <<PK>>  ' always 'appSettings'
+    --
+    branding : map
+    access : map  ' allowSelfRegistration, requireEnrollmentApproval
+    notifications : map
+    //PUBLIC READ - pre-auth pages need branding//
+    //and the self-registration gate.//
+  }
+}
+
+users ||--o{ idreq
+users ||--o{ incidents
+users ||--o{ notifications
+users ||--o{ actlogs
+users ||--o{ seclogs
+classes ||--o{ idreq
+classes ||--o{ incidents
+
+' ============================================================================
+legend right
+  |= Shading |= Meaning |
+  | <back:#FEF2F2>red</back> | Legacy, duplicated or effectively dead |
+  | <back:#F0FDF4>green</back> | Server-write-only; no client write path |
+  | plain | Normal client-writable data, rule-guarded |
+endlegend
+
+note as N_GOTCHA
+  **Top gotchas**
+
+  1. `courses` = templates. `getCourses()` reads `classes`.
+  2. Graded items live in TWO collections; check both.
+  3. `status` casing is split - 17x 'Active' vs 16x 'active'
+     in firestoreService.js alone. Rules use
+     `in ['Active','active']` to compensate.
+  4. Progress and membership are each stored twice.
+  5. Dates are a mix of ISO instants, bare YYYY-MM-DD
+     and Firestore Timestamps. A bare date means
+     end-of-day for a deadline, start-of-day for an
+     open date - client and Function must agree.
+  6. Deletes are disabled in rules for sectors,
+     courses, classes and assessments. Deletion goes
+     through the delete*Secure callables, which cascade.
+end note
+
+@enduml

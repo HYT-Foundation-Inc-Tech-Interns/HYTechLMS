@@ -3,8 +3,9 @@ name: Deploy Firebase
 # Every push to main deploys all resources declared in HYTech/firebase.json:
 # Hosting, Firestore rules/indexes, Storage rules, and Cloud Functions.
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: ["QA"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -12,8 +13,20 @@ permissions:
 
 jobs:
   build-and-deploy:
+    # workflow_dispatch is the rollback escape hatch and does not wait for QA,
+    # so restrict it to main. The production environment approval still gates
+    # both paths.
+    if: >-
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment: production
+    concurrency:
+      group: firebase-production
+      cancel-in-progress: false
     defaults:
       run:
         working-directory: HYTech
@@ -21,6 +34,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -49,6 +64,16 @@ jobs:
           VITE_FIREBASE_APP_ID: "1:671829419730:web:705e9bcc9e8c32df562f0b"
           VITE_RECAPTCHA_SITE_KEY: ${{ vars.VITE_RECAPTCHA_SITE_KEY }}
         run: npm run build
+
+      - name: Require production App Check configuration
+        shell: bash
+        env:
+          VITE_RECAPTCHA_SITE_KEY: ${{ vars.VITE_RECAPTCHA_SITE_KEY }}
+        run: |
+          if [ -z "$VITE_RECAPTCHA_SITE_KEY" ]; then
+            echo "Production VITE_RECAPTCHA_SITE_KEY is not configured."
+            exit 1
+          fi
 
       - name: Validate Firebase deployment
         env:

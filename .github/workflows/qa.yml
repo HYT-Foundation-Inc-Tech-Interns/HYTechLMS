@@ -12,6 +12,61 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  security:
+    name: Build, unit, and authorization security checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: HYTech
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            HYTech/package-lock.json
+            HYTech/functions/package-lock.json
+      - name: Set up Java for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install frontend and Functions dependencies
+        run: |
+          npm ci
+          npm ci --prefix functions
+      - name: Scan for blocked secret patterns
+        run: npm run security:secrets
+      - name: Run unit tests
+        run: npm run test:unit
+      - name: Run Firestore and Storage authorization tests
+        run: npm run test:rules
+      # A syntax check alone passes on code that cannot load: a firebase-admin
+      # major bump removed the namespaced API and `node --check` still succeeded.
+      # Requiring the module is what catches that before a deploy does.
+      - name: Validate Functions syntax and runtime load
+        run: |
+          node --check functions/src/index.js
+          node -e "require('./functions/src/index.js')"
+      - name: Build production bundle
+        env:
+          VITE_FIREBASE_API_KEY: test-api-key
+          VITE_FIREBASE_AUTH_DOMAIN: demo-hytech-lms.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: demo-hytech-lms
+          VITE_FIREBASE_STORAGE_BUCKET: demo-hytech-lms.appspot.com
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "123456789"
+          VITE_FIREBASE_APP_ID: "1:123456789:web:test"
+        run: npm run build
+      - name: Audit production dependency baseline
+        continue-on-error: true
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm audit --prefix functions --omit=dev --audit-level=high
+
   playwright:
     name: Build and Playwright QA
     runs-on: ubuntu-latest
@@ -24,6 +79,10 @@ jobs:
 
     env:
       CI: true
+      # This job serves a staging-configured build from a local preview server.
+      # It exercises the staging Firebase project but NOT the deployed staging
+      # site; run the suite against https://hytech-lms-staging.web.app
+      # separately before a production release.
       E2E_BASE_URL: http://127.0.0.1:4173
       E2E_ALLOW_LOCAL: true
       E2E_REQUIRE_AUTH: true
@@ -34,6 +93,7 @@ jobs:
       VITE_FIREBASE_STORAGE_BUCKET: hytech-lms-staging.firebasestorage.app
       VITE_FIREBASE_MESSAGING_SENDER_ID: 551641776522
       VITE_FIREBASE_APP_ID: 1:551641776522:web:8f532131be7dd993dd0873
+      VITE_RECAPTCHA_SITE_KEY: ${{ vars.VITE_RECAPTCHA_SITE_KEY }}
 
       E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
       E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}

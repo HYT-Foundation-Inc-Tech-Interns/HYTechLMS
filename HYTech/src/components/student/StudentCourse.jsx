@@ -30,7 +30,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, downloadAttachment, submitQuizAttempt, getStudentQuizAttempts, attemptLimitFor, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments, submitAssignment, getMySubmission, logClassActivity, updateEnrollmentProgress, updateStudentProgress, updateComment, deleteComment } from '../../utils/firestoreService';
+import { getAnnouncements, getModules, getClassMaterials, getAssessments, getAssignments, subscribeToAssessments, subscribeToAssignments, subscribeToAnnouncements, subscribeToClassMaterials, updateAnnouncement, deleteAnnouncement, getCourseByName, getStudentProgress, getStudentEnrollments, addCommentToAnnouncement, getAnnouncementComments, createAnnouncement, storeAnnouncementAttachment, compressAndStoreFile, downloadAttachment, submitQuizAttempt, getStudentQuizAttempts, attemptLimitFor, getCourseEnrollments, getUserProfile, subscribeToClassTopics, subscribeToComments, submitAssignment, getMySubmission, logClassActivity, updateStudentProgress, updateComment, deleteComment } from '../../utils/firestoreService';
 // Quiz answer helpers, shared with the trainer response viewer so both sides
 // render every question type the builders can produce.
 import { isRequiredAnswerMissing, describeAnswer, describeCorrect } from '../../utils/answerFormat';
@@ -1021,12 +1021,8 @@ const StudentCourse = ({ previewMode = false }) => {
     const pct = Math.round((done / total) * 100);
     if (lastProgressRef.current === pct) return; // avoid redundant writes
     lastProgressRef.current = pct;
-    updateEnrollmentProgress(enrollmentData.id, {
-      ...(enrollmentData.progress || {}),
-      overallProgress: pct,
-      completedItems: done,
-      totalItems: total,
-    }).catch(() => {});
+    // The client only requests a recalculation. The Function derives completion
+    // from trusted attempts/submissions and writes both progress records.
     updateStudentProgress(user.uid, courseId, { modulesCompleted: done, progressPercentage: pct }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attemptedAssessmentIds, submittedTaskIds, assessmentItems.length, submissionTasks.length, enrollmentData?.id, courseId, user?.uid, previewMode]);

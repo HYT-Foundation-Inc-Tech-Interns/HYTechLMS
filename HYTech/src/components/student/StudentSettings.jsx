@@ -157,15 +157,12 @@ const StudentSettings = () => {
         await setDoc(
           doc(db, 'users', uid),
           {
-            uid,
             firstName,
             middleName,
             lastName,
             nameExtension,
             name: fullName,
             displayName: fullName,
-            profileComplete: true,
-            email: auth?.currentUser?.email || profileForm.email,
             updatedAt: serverTimestamp(),
             avatarBase64: avatarBase64 || null,
           },

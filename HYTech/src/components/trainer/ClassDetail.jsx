@@ -9,6 +9,7 @@ import { getCourseByName, getCourseTemplateById, getCourseEnrollmentsWithAvatars
 // reads the same way in both places instead of as a raw index map here.
 import { evaluateAnswer, hasAnswerKey, describeAnswer, describeCorrect } from '../../utils/answerFormat';
 import { useToast } from '../../context/ToastContext';
+import { toCsvDocument } from '../../utils/csv';
 
 const FORM_QUESTION_TYPES = [
   { type: 'short-answer', label: 'Short answer', icon: 'Aa', desc: 'Brief text response' },
@@ -2094,13 +2095,12 @@ const ClassDetail = () => {
   const exportGradebookCsv = () => {
     if (!gradebook) return;
     const header = ['Trainee', ...gradebook.columns.map((c) => c.title), 'Average'];
-    const lines = [header.join(',')];
+    const rows = [header];
     gradebook.rows.forEach((row) => {
       const cells = row.cells.map((c) => (c.score === null || c.score === undefined ? '' : c.score));
-      const escapedName = `"${String(row.studentName).replace(/"/g, '""')}"`;
-      lines.push([escapedName, ...cells, row.average ?? ''].join(','));
+      rows.push([row.studentName, ...cells, row.average ?? '']);
     });
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const blob = new Blob([toCsvDocument(rows)], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

@@ -1,0 +1,463 @@
+' ============================================================================
+'  HYTech LMS - Use Case Diagrams (design-level)
+'  HYT Global Institute
+'
+'  This file contains SEVEN diagrams. PlantUML emits one image per @startuml
+'  block, named by the block's title:
+'
+'    uc-0-context              actors and capability areas
+'    uc-1-account-access       registration, sign-in, profile
+'    uc-2-catalogue-admin      sectors, templates, users, system settings
+'    uc-3-class-management     classes, co-trainers, enrolment
+'    uc-4-learning-content     topics, materials, announcements
+'    uc-5-assessment-grading   authoring, attempts, grading, progress
+'    uc-6-records-support      certification, ID cards, incidents
+'
+'  Rendering all of them:
+'    java -jar plantuml.jar -tsvg use-case-diagram.puml
+'
+'  Actor generalisation applies throughout: every role is an Authenticated
+'  User, and an Administrator inherits everything a Trainer can do. Each
+'  sub-diagram repeats only the actors it needs.
+' ============================================================================
+
+
+' ============================================================================
+@startuml uc-0-context
+title HYTech LMS - Actors and capability areas
+
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+actor "Guest" as Guest
+actor "Authenticated User" as Base
+actor "Trainee\n(Student)" as Student
+actor "Trainer" as Trainer
+actor "Administrator" as Admin
+
+Base <|-- Student
+Base <|-- Trainer
+Trainer <|-- Admin
+
+actor "Identity Provider" as Auth <<system>>
+actor "Grading Service" as Grader <<system>>
+actor "Notification Service" as Notifier <<system>>
+
+rectangle "HYTech Learning Management System" {
+  usecase "Account & Access" as A
+  usecase "Catalogue &\nSystem Administration" as B
+  usecase "Class Management" as C
+  usecase "Learning Content" as D
+  usecase "Assessment & Grading" as E
+  usecase "Records & Certification" as F
+  usecase "Learner Support" as G
+}
+
+Guest --> A
+Base --> A
+Base --> D
+Base --> G
+Student --> D
+Student --> E
+Student --> F
+Student --> G
+Trainer --> C
+Trainer --> D
+Trainer --> E
+Trainer --> F
+Admin --> B
+
+A ..> Auth
+E ..> Grader
+F ..> Grader
+A ..> Notifier
+D ..> Notifier
+E ..> Notifier
+
+note bottom of E
+  **Grading is server-authoritative.**
+  A trainee never scores their own work.
+end note
+
+@enduml
+
+
+' ============================================================================
+@startuml uc-1-account-access
+title Account & Access
+
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+actor "Guest" as Guest
+actor "Authenticated User" as Base
+actor "Administrator" as Admin
+actor "Identity Provider" as Auth <<system>>
+
+rectangle "Account & Access" {
+  usecase "Register as a trainee" as UC_Register
+  usecase "Verify email address" as UC_Verify
+  usecase "Sign in" as UC_SignIn
+  usecase "Authenticate credentials" as UC_Authn
+  usecase "Enforce role and\naccount status" as UC_Guard
+  usecase "Sign out" as UC_SignOut
+  usecase "Manage own profile" as UC_Profile
+  usecase "Change password" as UC_Password
+  usecase "View notifications" as UC_Notifications
+  usecase "View public\ncourse catalogue" as UC_Catalogue
+}
+
+Guest --> UC_Register
+Guest --> UC_SignIn
+Guest --> UC_Catalogue
+
+Base --> UC_SignOut
+Base --> UC_Profile
+Base --> UC_Password
+Base --> UC_Notifications
+
+Admin --> UC_Guard
+
+UC_Authn --> Auth
+
+UC_SignIn ..> UC_Authn : <<include>>
+UC_SignIn ..> UC_Guard : <<include>>
+UC_Register ..> UC_Authn : <<include>>
+UC_Verify ..> UC_Register : <<extend>>
+
+note right of UC_Guard
+  Re-applied independently by the
+  security rules and by every
+  privileged server operation.
+  A route guard is never the control.
+end note
+
+note right of UC_Register
+  Self-registration always produces a
+  **student**. Trainer and admin accounts
+  are created or promoted by an
+  administrator, and can be disabled
+  entirely in system settings.
+end note
+
+@enduml
+
+
+' ============================================================================
+@startuml uc-2-catalogue-admin
+title Catalogue & System Administration
+
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+actor "Administrator" as Admin
+actor "Trainer" as Trainer
+
+rectangle "Catalogue Administration" {
+  usecase "Manage sectors" as UC_Sectors
+  usecase "Manage course templates" as UC_Templates
+  usecase "Publish course\nto catalogue" as UC_PublishCourse
+  usecase "Promote class to template" as UC_Promote
+}
+
+rectangle "User & System Administration" {
+  usecase "Create user account" as UC_CreateUser
+  usecase "Assign or change role" as UC_AssignRole
+  usecase "Activate or\ndeactivate account" as UC_SetStatus
+  usecase "Configure system settings" as UC_Settings
+  usecase "Review activity logs" as UC_Logs
+  usecase "Review security\naudit trail" as UC_SecurityLogs
+}
+
+Admin --> UC_Sectors
+Admin --> UC_Templates
+Admin --> UC_PublishCourse
+Admin --> UC_CreateUser
+Admin --> UC_AssignRole
+Admin --> UC_SetStatus
+Admin --> UC_Settings
+Admin --> UC_Logs
+Admin --> UC_SecurityLogs
+Trainer --> UC_Promote
+
+note bottom of UC_Settings
+  Controls self-registration and whether
+  enrolment requires trainer approval -
+  both change how other use cases behave.
+end note
+
+note bottom of UC_SecurityLogs
+  Written only by trusted server code.
+  Admin-readable, never client-writable.
+end note
+
+@enduml
+
+
+' ============================================================================
+@startuml uc-3-class-management
+title Class Management
+
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+actor "Trainee\n(Student)" as Student
+actor "Trainer" as Trainer
+actor "Administrator" as Admin
+
+rectangle "Class Management" {
+  usecase "Create class" as UC_CreateClass
+  usecase "Clone template content" as UC_Clone
+  usecase "Generate class code" as UC_ClassCode
+  usecase "Manage co-trainers" as UC_CoTrainers
+  usecase "Transfer class ownership" as UC_Transfer
+  usecase "Enrol by class code" as UC_Join
+  usecase "Approve enrolment request" as UC_Approve
+  usecase "Enrol trainee directly" as UC_DirectEnrol
+  usecase "View class roster" as UC_Roster
+  usecase "Remove trainee from class" as UC_Remove
+  usecase "Archive class" as UC_Archive
+}
+
+Student --> UC_Join
+
+Trainer --> UC_CreateClass
+Trainer --> UC_CoTrainers
+Trainer --> UC_Transfer
+Trainer --> UC_Approve
+Trainer --> UC_DirectEnrol
+Trainer --> UC_Roster
+Trainer --> UC_Remove
+Trainer --> UC_Archive
+
+Admin --> UC_CreateClass
+Admin --> UC_DirectEnrol
+
+UC_CreateClass ..> UC_ClassCode : <<include>>
+UC_Clone ..> UC_CreateClass : <<extend>>
+UC_Join ..> UC_Approve : <<include>>
+
+note right of UC_Join
+  Includes approval under the default
+  policy. When an administrator turns
+  enrolment approval off, the enrolment
+  activates immediately and this step
+  is skipped.
+end note
+
+note right of UC_Clone
+  Template content is copied
+  **server-side** so private answer
+  keys never reach the trainer's browser.
+end note
+
+note bottom of UC_CoTrainers
+  Co-trainers gain full content powers.
+  Managing co-trainers and transferring
+  ownership stay with the lead trainer.
+end note
+
+@enduml
+
+
+' ============================================================================
+@startuml uc-4-learning-content
+title Learning Content
+
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+actor "Trainee\n(Student)" as Student
+actor "Trainer" as Trainer
+actor "Notification Service" as Notifier <<system>>
+
+rectangle "Learning Content" {
+  usecase "Organise topics\nand modules" as UC_Topics
+  usecase "Upload learning material" as UC_Upload
+  usecase "Post announcement" as UC_Announce
+  usecase "Comment on announcement" as UC_Comment
+  usecase "Browse class content" as UC_Browse
+  usecase "Download material" as UC_Download
+}
+
+Trainer --> UC_Topics
+Trainer --> UC_Upload
+Trainer --> UC_Announce
+
+Student --> UC_Browse
+Student --> UC_Download
+Student --> UC_Comment
+Student --> UC_Announce
+
+UC_Announce --> Notifier
+
+note bottom of UC_Announce
+  Trainees may post to the class feed
+  and edit their own post. Staff may
+  remove an inappropriate post but
+  cannot rewrite someone else's.
+end note
+
+@enduml
+
+
+' ============================================================================
+@startuml uc-5-assessment-grading
+title Assessment & Grading
+
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+actor "Trainee\n(Student)" as Student
+actor "Trainer" as Trainer
+actor "Grading Service" as Grader <<system>>
+actor "Notification Service" as Notifier <<system>>
+
+rectangle "Authoring" {
+  usecase "Author assessment" as UC_Author
+  usecase "Define answer key" as UC_AnswerKey
+  usecase "Set availability window\nand deadline" as UC_Window
+  usecase "Publish assessment" as UC_Publish
+}
+
+rectangle "Taking & grading" {
+  usecase "Take assessment" as UC_Take
+  usecase "Submit deliverable" as UC_SubmitWork
+  usecase "Validate eligibility\nand window" as UC_Eligibility
+  usecase "Grade attempt automatically" as UC_AutoGrade
+  usecase "Record immutable attempt" as UC_RecordAttempt
+  usecase "Review pending\nparagraph answers" as UC_Review
+  usecase "Grade submission manually" as UC_ManualGrade
+  usecase "View gradebook" as UC_Gradebook
+  usecase "View own results" as UC_OwnResults
+  usecase "Track learning progress" as UC_Progress
+}
+
+Trainer --> UC_Author
+Trainer --> UC_Publish
+Trainer --> UC_Review
+Trainer --> UC_ManualGrade
+Trainer --> UC_Gradebook
+
+Student --> UC_Take
+Student --> UC_SubmitWork
+Student --> UC_OwnResults
+Student --> UC_Progress
+
+UC_AutoGrade --> Grader
+UC_RecordAttempt --> Grader
+UC_Publish --> Notifier
+
+UC_Author ..> UC_AnswerKey : <<include>>
+UC_Author ..> UC_Window : <<include>>
+UC_Take ..> UC_Eligibility : <<include>>
+UC_Take ..> UC_AutoGrade : <<include>>
+UC_AutoGrade ..> UC_RecordAttempt : <<include>>
+UC_SubmitWork ..> UC_Eligibility : <<include>>
+UC_Review ..> UC_AutoGrade : <<extend>>
+UC_ManualGrade ..> UC_Gradebook : <<include>>
+
+note right of UC_AnswerKey
+  Correct answers live in a private
+  document, never in the
+  trainee-readable assessment.
+end note
+
+note right of UC_RecordAttempt
+  Attempts are created only by the
+  Grading Service and are immutable
+  afterwards. Browser clients cannot
+  create or alter one.
+end note
+
+note bottom of UC_Eligibility
+  Checks caller, enrolment, publication
+  state, availability window, attempt
+  limit and time limit. A missed deadline
+  scores zero without a stored attempt.
+end note
+
+@enduml
+
+
+' ============================================================================
+@startuml uc-6-records-support
+title Records, Certification & Learner Support
+
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+actor "Guest" as Guest
+actor "Trainee\n(Student)" as Student
+actor "Trainer" as Trainer
+actor "Administrator" as Admin
+actor "Grading Service" as Grader <<system>>
+
+rectangle "Records & Certification" {
+  usecase "Recalculate\nauthoritative progress" as UC_Recalc
+  usecase "Graduate trainee" as UC_Graduate
+  usecase "Issue certificate" as UC_Issue
+  usecase "Revoke certificate" as UC_Revoke
+  usecase "Verify certificate" as UC_VerifyCert
+}
+
+rectangle "Learner Support" {
+  usecase "Request ID card" as UC_IdRequest
+  usecase "Process ID card request" as UC_IdProcess
+  usecase "File incident report" as UC_Incident
+  usecase "Review incident report" as UC_IncidentReview
+  usecase "Manage personal calendar" as UC_Calendar
+}
+
+Guest --> UC_VerifyCert
+Student --> UC_IdRequest
+Student --> UC_Calendar
+Student --> UC_Incident
+Trainer --> UC_Graduate
+Trainer --> UC_Incident
+Trainer --> UC_IncidentReview
+Admin --> UC_IdProcess
+Admin --> UC_Revoke
+
+UC_Recalc --> Grader
+UC_Issue --> Grader
+
+UC_Graduate ..> UC_Recalc : <<include>>
+UC_Graduate ..> UC_Issue : <<include>>
+UC_Revoke ..> UC_Issue : <<extend>>
+UC_IdProcess ..> UC_IdRequest : <<extend>>
+UC_IncidentReview ..> UC_Incident : <<extend>>
+
+note right of UC_Graduate
+  Refuses unless every required item is
+  satisfied by recalculated progress.
+  Certificate issue and enrolment
+  completion happen in one transaction.
+end note
+
+note bottom of UC_IncidentReview
+  A trainer may only move a report
+  through the workflow; they cannot
+  rewrite the incident details.
+end note
+
+note bottom of UC_IdProcess
+  Approve, reject or complete. The
+  trainer is not involved in this flow.
+end note
+
+@enduml

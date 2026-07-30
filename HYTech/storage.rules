@@ -5,7 +5,12 @@ service firebase.storage {
     function canUseLms() {
       return request.auth != null
         && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
-        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.status == 'Active';
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.status == 'Active'
+        && (
+          request.auth.token.email_verified == true
+          || firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer']
+          || firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.get('createdBy', '') == 'admin'
+        );
     }
 
     function isAdmin() {
@@ -41,6 +46,27 @@ service firebase.storage {
       ];
     }
 
+    function isAllowedLmsFile() {
+      return request.resource.contentType in [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'text/plain',
+        'text/csv',
+        'image/png',
+        'image/jpeg',
+        'image/webp',
+        'image/gif',
+        'audio/mpeg',
+        'audio/mp4',
+        'video/mp4'
+      ];
+    }
+
     match /userAvatars/{uid}/{role}/{fileName} {
       allow read: if canUseLms();
       allow write: if canUseLms()
@@ -55,7 +81,8 @@ service firebase.storage {
       allow write: if canUseLms()
         && request.auth.uid == uid
         && (isAdmin() || classTrainer(classId) || classMember(classId))
-        && request.resource.size < 25 * 1024 * 1024;
+        && request.resource.size < 25 * 1024 * 1024
+        && isAllowedLmsFile();
     }
     // Public branding assets (site logo). Readable by everyone, including
     // unauthenticated visitors on the landing/sign-in pages; admin-write only.

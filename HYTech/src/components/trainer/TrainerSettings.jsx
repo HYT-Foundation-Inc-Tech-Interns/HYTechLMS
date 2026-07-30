@@ -169,14 +169,12 @@ const handleSave = async () => {
       await setDoc(
         doc(db, 'users', uid),
         {
-          uid,
           firstName: normalizedName.firstName,
           middleName: normalizedName.middleName,
           lastName: normalizedName.lastName,
           nameExtension: normalizedName.nameExtension,
           name: fullName,
           displayName: fullName,
-          email: auth?.currentUser?.email || profileForm.email,
           bio: profileForm.bio.trim(),
           updatedAt: serverTimestamp(),
           avatarBase64: avatarBase64 || null,
